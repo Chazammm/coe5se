@@ -40,6 +40,12 @@ jobs:
           if found:
               sys.exit("This pull request adds executables, which CONTRIBUTING.md doesn't take: " + ", ".join(found))
           PY
+      - name: Ask for a dev notes line
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$changed" | grep -q '^src/' && ! echo "$changed" | grep -qx '.github/DEV_NOTES.md'; then
+            echo "::notice title=Dev notes::This pull request changes src/ and adds no line to .github/DEV_NOTES.md. If a modder or player gets something from it, add one (CONTRIBUTING.md, Dev notes)."
+          fi
       - name: Download the pinned compilers
         run: |
           cd "$RUNNER_TEMP"

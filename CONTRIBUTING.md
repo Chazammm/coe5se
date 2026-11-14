@@ -7,7 +7,8 @@ Pull requests are welcome. For anything bigger than a fix, open an issue first, 
 1. Fork this repository and branch from `dev`.
 2. Build with `src/build.sh` for Windows and `src/build_mac.sh` for Mac. Each names the compiler it needs.
 3. Both write into the repository's root. Copy what they build into your installed CoE5SE folder, and test in the game on the CoE5 patch named in the latest release's title.
-4. [Sign off](#signing-off) every commit, then open a pull request. GitHub sets its base branch to `main`, so change it to `dev`.
+4. Add your change's line, if it has one, to [`.github/DEV_NOTES.md`](#dev-notes).
+5. [Sign off](#signing-off) every commit, then open a pull request. GitHub sets its base branch to `main`, so change it to `dev`.
 
 I build and test each pull request before I merge it into `dev`, and it ships in the next release. I squash your commits into one, with you as its author. `main` holds only releases.
 
@@ -15,7 +16,7 @@ I build and test each pull request before I merge it into `dev`, and it ships in
 
 I look for these in every pull request. When one doesn't fit your change, say why in its description.
 
-- **Vanilla stays vanilla.** With only CoE5SE installed, the game should play as vanilla. A balance change, an AI change or a fix to a game bug typically belongs in a "Community Patch" I am happy to endorse. Graphics and turn optimizations, multiplayer through Steam relay, and further game mappings or mod commands are great examples of what CoE5SE takes as contributions.
+- **Vanilla stays vanilla.** With only CoE5SE installed, the game should play as vanilla. A balance change, an AI change or a fix to a game bug typically belongs in a "Community Patch" I am happy to endorse. Graphics and turn optimizations, multiplayer through Steam relay, and further game mappings or mod commands are great examples of what CoE5SE takes as contributions. The game's own defaults stay the defaults.
 - **Everything dynamic.** CoE5SE tries to set a standard similar to vanilla's rituals, where the strings are the unique ids and all else is managed by `modprio` and CoE5SE. This is broken on occasion, but it is the end goal for all extended functionality.
 - **Follow vanilla patterns.** When CoE5SE is implementing a new feature and its behaviour is in question, the answer is almost always to follow how vanilla patterns its tables, commands, savegames, mod loading, etc. For example, vanilla prioritizes a mod's local copy and ignores its duplicate on Steam. CoE5SE will not change this behaviour.
 - **Extend before inventing.** Give an existing mod command a new argument, or raise a limit, before you add a new command. `spawnoffs`, for example, takes a monster's name as well as the game's offset. A new command should look and behave like what's expected in vanilla.
@@ -38,6 +39,8 @@ These take longer to merge:
 
 - A change tested on only Windows or only Mac.
 - Big blocks of comments in the code (see [Comments](#comments)).
+- A change to drawing, timing or the game's screens with no switch in CoE5SE's Mod Settings. Off means nothing installs at launch: no import redirects, call patches, menu entries or hooks.
+- A setting saved beside the DLL, where an update or reinstall loses it. It goes in the user folder, under `coe5seModMenu/`.
 
 ## Comments
 
@@ -61,6 +64,17 @@ Not:
 // `gameDir` named steamapps (in any case), plus workshop/content/<app id>, so a game moved deeper
 // (a Mac .app bundle) still finds it.
 ```
+
+## Dev notes
+
+Your line shows on the [dev build](https://github.com/musical-pianist/coe5se/releases/tag/dev-build)'s page and goes into the next release's notes. Add it to `.github/DEV_NOTES.md`, under Features, Commands, Lua, Mappings or Bugs:
+
+```
+Lua
+- coe5.nearestUnitAbilityIs: any ability
+```
+
+A refactor needs no line.
 
 ## Adding a game address
 
