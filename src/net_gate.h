@@ -2,7 +2,7 @@
 
 typedef enum { LUA_CLASS_CONTENT, LUA_CLASS_PERSONAL, LUA_CLASS_OFF } LuaClass;
 
-// ---- The sites a personal script may wrap -----------------------------------------------------
+// ---- The sites a personal script may reach: one table, every site a row ---------------------------
 #define PERSONAL_SITES(X) \
     X(SITE_ARMY_WAIT) X(SITE_BATTLE_DRAW) X(SITE_BATTLE_WAIT) X(SITE_FILE_BROWSER_HOVERED) X(SITE_FILE_BROWSER_WAIT) \
     X(SITE_FILE_BROWSER_ROW_DATE) X(SITE_GAME_MENU_SAVING_SECTION_END) X(SITE_GAME_MENU_WAIT) X(SITE_GAME_OVER_WAIT) \
@@ -20,6 +20,108 @@ static int isPersonalSite(CallSite site) {
         return 0;
     }
 #undef PERSONAL_CASE
+}
+
+#define PERSONAL_OBSERVE_SITES(X) \
+    X(SITE_MODS_READ, "", '-') X(SITE_RITUAL_SCREEN_LOCATION_CHECK, "c---", '-') X(SITE_RITUAL_SCREEN_CAN_CAST, "c-", '-') X(SITE_CLIENT_TURN, "-", '-') \
+    X(SITE_GAME_SAVE, "--", '-') X(SITE_CONQUER_SQUARE, "xy-", '-') X(SITE_BATTLE_ROUND, "", '-') X(SITE_DAMAGE_UNIT, "u-", '-') \
+    X(SITE_DOATTACK, "u--", '-') X(SITE_EXECUTE_RITUAL, "u-xy--", '-') X(SITE_NEW_UNIT, "xy-c-", 'u') \
+    X(SITE_REMOVE_UNIT, "u", '-') X(SITE_SQUARE_UPKEEP, "--xy", '-') X(SITE_RECRUIT_BUY, "--xy", '-') \
+    X(SITE_PROMOTE_UNIT, "-u--", '-') X(SITE_MASTERY_TRANSFORM, "c", '-') X(SITE_BATTLE_SETUP, "xy-", '-') \
+    X(SITE_BATTLE_SETUP_SIDE, "-xy--", '-') X(SITE_BATTLE_SETUP_AMBUSH, "-xy--", '-') X(SITE_BATTLE_ADVANCE_UNIT, "u-", '-') \
+    X(SITE_BATTLE_TURN_EFFECTS, "u-", '-') X(SITE_BATTLE_TRANSFORM, "u--", '-') X(SITE_FOUND_ITEM, "xy-", '-') \
+    X(SITE_REMOVE_DEAD_PLAYERS, "", '-') X(SITE_INQUISITION_SPAWN, "-", '-') X(SITE_ANIMAL_SUMMONING, "c-", '-') \
+    X(SITE_ORDER_SLAVE_HUNT, "c", '-') X(SITE_ORDER_EAT_VILLAGE, "c", '-') X(SITE_PLANESHIFT_UNIT, "u--", '-') \
+    X(SITE_NEW_PORTAL_PAIR, "xyxy-", '-') X(SITE_GEN_FLOOD_PLANE, "-", '-') X(SITE_UNIT_ADD_XP, "u-", '-') \
+    X(SITE_USE_SPECIAL_SITE, "xyc", '-') X(SITE_REMOVE_TEMP_MEN, "", '-') X(SITE_OVERRUN_CHECK, "-xy", '-') \
+    X(SITE_KILL_UNIT_999, "u", '-') X(SITE_CONTINUE_MOVE_ORDERS, "-c", '-') X(SITE_HUMAN_MULTI_MOVE, "cxy-", '-') \
+    X(SITE_GROUP_MOVE, "-xy", '-') X(SITE_MOVE_ORDER_ROUTE, "cxy", '-') X(SITE_UNIT_REMOVE_ITEM, "u-", '-') \
+    X(SITE_MEMORIZE_SPELL, "u-", '-') X(SITE_LEARN_RANDOM_SPELL, "u--", '-') X(SITE_GET_START_RITUALS, "c", '-') \
+    X(SITE_COMMANDER_LEARN_RITUAL, "c-", '-') X(SITE_BOLSTER_BLESSING, "---", '-') X(SITE_ADD_PLAYER_BLESSING, "----", '-') \
+    X(SITE_REMOVE_ENCHANT, "--xy", '-') X(SITE_RITUAL_PAY_COSTS, "-c---", '-') X(SITE_RITUAL_FAR_SUMMON_UNITS, "----xy", 'u') \
+    X(SITE_EVENT_KILL_SQUARE, "xy", '-') X(SITE_GIVE_ITEM_BY_NAME, "u-", '-') X(SITE_TAKE_ITEM_BY_NAME, "u-", '-') \
+    X(SITE_GIVE_RANDOM_ITEM, "u---", '-') X(SITE_SQUAREEVENT_START, "", '-') X(SITE_TERRAIN_PRESENT_RESCAN, "", '-') \
+    X(SITE_EVENT_VAR_CHANGED, "-", '-') X(SITE_ALTER_TERRAIN, "-xy---", '-') X(SITE_RUIN_SQUARE, "-xy", '-') \
+    X(SITE_DESTROY_GATEWAY, "-xy-", '-') X(SITE_DIG_TUNNEL_SQUARE, "-xy", '-') X(SITE_RESET_INCOME_CACHES, "", '-') \
+    X(SITE_PLANESHIFT_COMMANDER, "c-", '-') X(SITE_UNIT_SWALLOW, "uu", '-') X(SITE_UNIT_UNSWALLOW, "u", '-') \
+    X(SITE_LIFEFORCE_DRAIN_UNIT, "uu-", '-') X(SITE_UNIT_CRUSH, "u", '-') X(SITE_REMOVE_BAD_FOLLOWERS, "", '-') \
+    X(SITE_RANDOM_TELEPORT, "u--", '-') X(SITE_KILL_SUNKEN_SHIPS, "xy", '-') X(SITE_CREATE_BOATS, "", '-') \
+    X(SITE_BATTLE_TRAPS, "", '-') X(SITE_BATTLE_ENCHANT_TRAPS, "", '-') X(SITE_BATTLE_SUMMON_STRING, "", '-') \
+    X(SITE_PAY_SPELL_LIFEFORCE, "", '-') X(SITE_CHECK_GAME_WON, "", '-') X(SITE_SPY_CAUGHT, "", '-') \
+    X(SITE_TOGGLE_AUTO_RECRUIT, "-xy-", '-') X(SITE_BATTLE_SIEGE_UNIT, "u", '-') X(SITE_GATHER_SHIPS, "", '-') \
+    X(SITE_ADVANCE_SHIPS, "", '-') X(SITE_TAINTED_RITUAL_EFFECT, "c-", '-') X(SITE_LOCATION_SWAP, "xyxy", '-') \
+    X(SITE_RITUAL_ASK_HEMISPHERE, "", '-') X(SITE_ELIMINATE_PLAYER, "-", '-') X(SITE_CHECK_FOLLOWER_LINKS, "c", '-') \
+    X(SITE_STEP_BURN_FOREST, "-xy", '-') X(SITE_ORDER_BURN_FOREST, "-c", '-') X(SITE_ORDER_CHOP_FOREST, "-c", '-') \
+    X(SITE_LIFEFORCE_DRAIN_SQUARE, "-xy-", '-') X(SITE_SPEND_ALL_AP_AT, "-xy", '-') X(SITE_TELEPORT_UNIT, "uxy", '-') \
+    X(SITE_UNIT_CLEAR_BENEFITS, "u", '-') X(SITE_GAME_MENU, "", '-') X(SITE_ARMY_COMMANDS_MENU, "c", '-') \
+    X(SITE_CEREMONY_SCREEN, "c", '-') X(SITE_INCOME_DETAIL_SCREEN, "--", '-') X(SITE_BATTLE_CREATE_TREES, "xy", '-') \
+    X(SITE_BATTLE_DEPLOY, "---", '-') X(SITE_BATTLE_FIGHT_MOVE, "u----", '-') X(SITE_BATTLE_FLY_MOVE, "u", '-') \
+    X(SITE_BATTLE_FLEE, "u", '-') X(SITE_BATTLE_FEAR_CHECK, "u", '-') X(SITE_BATTLE_CLOUD_STEP, "u", '-') \
+    X(SITE_BATTLE_ENSNARE_CHECK, "u", '-') X(SITE_BATTLE_ENSNARE_RELEASE, "u", '-') X(SITE_BATTLE_WALL_ENCHANTS, "", '-') \
+    X(SITE_BATTLE_WALL_EFFECTS, "", '-') X(SITE_BATTLE_START_SETUP, "", '-') X(SITE_BATTLE_TUNNEL_MOVE, "u", '-') \
+    X(SITE_BATTLE_BANISH, "u", '-') X(SITE_BATTLE_DEPLOY_UNIT, "u--", '-') X(SITE_BATTLE_AFTER_FIGHT_UPKEEP, "xy", '-') \
+    X(SITE_BATTLE_MR_ROLL, "u", '-') X(SITE_BATTLE_SUMMON_WEAPON, "", '-') X(SITE_BATTLE_GATE_SWAP, "", '-') \
+    X(SITE_BATTLE_SPREAD_COLLAPSE, "", '-') X(SITE_UNIT_CURE_AFFLICTION, "u", '-') X(SITE_UNIT_HP_SHAPE_CHANGE, "u", '-') \
+    X(SITE_BERSERK_END, "u", '-') X(SITE_UNIT_RANDOM_AFFLICTION, "u", '-') X(SITE_REVEAL_TERRAIN_ON_PLANE, "---", '-') \
+    X(SITE_PLAY_SAMPLE, "--", '-') X(SITE_RANDOM_ITEM_PICK, "-----", '-') X(SITE_GEN_UPDATE_MOIST_WALLS, "-", '-') \
+    X(SITE_USE_LIBRARY, "c", '-') X(SITE_VOID_INSANITY, "uxy", '-') X(SITE_LIBRARY_SCREEN, "c", '-') \
+    X(SITE_CHOP_BURN_SCREEN, "", '-') X(SITE_SLAVE_HUNT_SCREEN, "", '-') X(SITE_UNIT_STATS_SCREEN, "u", '-') \
+    X(SITE_ITEM_INFO_SCREEN, "-", '-') X(SITE_WEAPON_INFO_WINDOW, "-", '-') X(SITE_PLANE_INFO_SCREEN, "-", '-') \
+    X(SITE_COMMANDER_SET_DONE, "", '-') X(SITE_SELECT_NEXT_COMMANDER, "", '-') X(SITE_SELECT_PREV_COMMANDER, "", '-') \
+    X(SITE_CLEAN_SQUARE, "xy", '-') X(SITE_ADJUST_FOR_SNOW, "xy--", '-') X(SITE_START_TUNE, "--", '-') \
+    X(SITE_SQUARE_SET_OWNER, "xy-", '-') X(SITE_ADD_BENEFIT, "u", '-') X(SITE_MOVE_STEP_AFTER, "", '-') \
+    X(SITE_NUMBER_BOX, "--", '-') X(SITE_ENCHANTS_DESTROYED_AT, "-xy", '-')
+
+#define PERSONAL_CLOSED_SITES(X) \
+    X(SITE_MAIN_MENU_WAIT) X(SITE_MAIN_MENU_PLAY_GAME) X(SITE_PLAY_GAME_NEW_WORLD) X(SITE_NEW_WORLD_MAP_SCREEN) \
+    X(SITE_NEW_WORLD_INIT_PARTICIPANTS) X(SITE_NEW_WORLD_CREATING_WORLD) X(SITE_MAP_SETTINGS_WAIT) X(SITE_PARTICIPANTS_WAIT) \
+    X(SITE_PARTICIPANTS_DIFFICULTY_WAIT) X(SITE_PARTICIPANTS_BUTTON_ROW) X(SITE_LOAD_GAME_BROWSER) X(SITE_MAP_EDITOR_WAIT) \
+    X(SITE_BATTLE_EDITOR_WAIT) X(SITE_AI_EXPLORE) X(SITE_AI_RALLY) X(SITE_AI_FRIENDLY_MOVE) X(SITE_AI_CONQUER) \
+    X(SITE_AI_FAR_EXPLORE) X(SITE_AI_RITUAL_CANDIDATE) X(SITE_AI_RECRUIT) X(SITE_AI_GATHER_TROOPS) X(SITE_AI_PICK_UP_LONER) \
+    X(SITE_AI_SPLIT_ARMY) X(SITE_AI_MOVE_COMSTR) X(SITE_AI_DANGEROUS_STEP) X(SITE_AI_MAKE_GUARDS) X(SITE_AI_RITUAL_TARGET) \
+    X(SITE_DECORATE_SQUARE) X(SITE_CEREMONY_PERFORM) X(SITE_CEREMONY_COSTS) X(SITE_SEAL_BREAK) X(SITE_SEAL_EVENT) \
+    X(SITE_MAP_EDITOR) X(SITE_MAP_EDITOR_DRAW) X(SITE_UNIT_ARMOR) X(SITE_UNIT_RETURNS) X(SITE_AI_COUNT_CITADELS) \
+    X(SITE_MOVE_INDEPENDENT_ARMY) X(SITE_SQUARE_CITADEL) X(SITE_SQUARE_FORT_PARTS) X(SITE_SQUARE_WATERLIKE) \
+    X(SITE_SQUARE_OPEN_LAND) X(SITE_SQUARE_LIBRARY_LEVEL) X(SITE_GAME_START) X(SITE_MONTH_START) X(SITE_PLAYER_TURN_START) \
+    X(SITE_HUMAN_TURN) X(SITE_AI_TURN) X(SITE_PLAYER_TURN_END) X(SITE_GAME_OVER) X(SITE_GAME_LOAD) X(SITE_AFTER_GAME_TURN) \
+    X(SITE_DO_ALL_FIGHTS) X(SITE_MOVE_ALL_INDEPENDENTS) X(SITE_FIGHT_THE_FIGHT) X(SITE_BATTLE_SPELL_PICK) X(SITE_WEAPON_HIT) \
+    X(SITE_BATTLE_TARGET_CHECK) X(SITE_TURN_UNIT_UPKEEP) X(SITE_CREATE_CITADEL) X(SITE_UPDATE_VOID) X(SITE_VOID_SHUFFLE) \
+    X(SITE_PLANE_DISCOVERED_PASS) X(SITE_MOVE_INFERNO_PLAYER) X(SITE_MOVE_HADES_PLAYER) X(SITE_MOVE_CELESTIAL_PLAYER) \
+    X(SITE_POPULATE_CELESTIAL) X(SITE_POPULATE_SKY) X(SITE_POPULATE_AGARTHA) X(SITE_POPULATE_INFERNO) X(SITE_POPULATE_HADES) \
+    X(SITE_POPULATE_AZTLAN) X(SITE_POPULATE_PRIMAL) X(SITE_POPULATE_ELEMENTAL) X(SITE_PLANE_RISE_TO_ELYSIUM) X(SITE_ENLARGE_PLANE) \
+    X(SITE_ADDPLANE) X(SITE_LOAD_MAP_PLANE) X(SITE_LONER_STEP) X(SITE_MOVE_WANDERING_MONSTERS) X(SITE_MOVE_PLAYER_STUPIDS) \
+    X(SITE_DAMAGE_UNIT_PLAIN) X(SITE_PRIEST_FREESPAWN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_CONSCRIPTION) \
+    X(SITE_GAME_STATISTICS) X(SITE_MONTH_SQUARE_RESET) X(SITE_ROLL_CLASS) X(SITE_TEAM_START_LOCATIONS) X(SITE_TRIM_TEAM_LOCATIONS) \
+    X(SITE_SWAP_TEAM_LOCATIONS) X(SITE_CREATE_CITADELS_STEP) X(SITE_FIX_PORTALS) X(SITE_VOID_FLUCTUATIONS) X(SITE_MIST_SPREAD) \
+    X(SITE_TEMPERATURE_CHANGE) X(SITE_SPECIAL_SITE_POPULATE) X(SITE_UNIT_CATCH_FIRE) X(SITE_OVERPOP_CULL) X(SITE_MONKEY_CLOAK) \
+    X(SITE_RECYCLE_UNITS) X(SITE_POP_HORRORS) X(SITE_KILL_TERRAIN_UNITS) X(SITE_WORLD_NEWS) X(SITE_SEASON_NEWS) \
+    X(SITE_CHANGE_LOYALTY) X(SITE_ALTER_TERRAIN_RECT) X(SITE_RESPAWN_VOID) X(SITE_MOVE_ENCHANTS) X(SITE_MOVE_GEMS) \
+    X(SITE_APE_POSSESSION) X(SITE_GET_TITHES) X(SITE_FIND_START_SQUARE) X(SITE_TROLL_FOREST_SPAWN) X(SITE_AI_MAKE_DEFENDERS) \
+    X(SITE_AI_REDISTRIBUTE_ITEMS) X(SITE_AI_SHIPS) X(SITE_AI_SHIP_DROP_CREW) X(SITE_AI_SHIP_TAKE_BOAT) X(SITE_AI_SHIP_TAKE_CREW) \
+    X(SITE_SWAP_SQUARES) X(SITE_BATTLE_AFTERMATH_RETURN) X(SITE_NEAR_TERRAIN_SQUARE) X(SITE_GROVE_REVERSION) \
+    X(SITE_PUT_RARE_SQUARE) X(SITE_CREATE_RANDOM_MAP) X(SITE_WORLD_PART_TERRAIN) X(SITE_MAPGEN_REMOVE_SMALL_ISLANDS) \
+    X(SITE_MAPGEN_RIVER_CROSSINGS) X(SITE_MAPGEN_ANCIENT_FOREST) X(SITE_MAPGEN_CLEAR_AREA) X(SITE_MAPGEN_ADJUST_TEMPERATURE) \
+    X(SITE_MARK_RIVER) X(SITE_GEN_DIAGONAL_FIX) X(SITE_GEN_TERRAIN_BLOB) X(SITE_CREATE_CELESTIAL_PLANE) X(SITE_CREATE_SKY_PLANE) \
+    X(SITE_CREATE_AGARTHA_PLANE) X(SITE_CREATE_INFERNO_PLANE) X(SITE_CREATE_HADES_PLANE) X(SITE_CREATE_ELEMENTAL_PLANE) \
+    X(SITE_LOAD_AZTLAN_PLANE) X(SITE_LOAD_PRIMAL_PLANE) X(SITE_AUTO_RECRUIT) X(SITE_ADD_GROUND_ITEMS) X(SITE_WANDERER_PICK_TARGET) \
+    X(SITE_WANDERER_PICK_UP) X(SITE_SET_HOLDIT) X(SITE_BATTLE_INTRO_SCREEN) X(SITE_RUN_HATREDS) X(SITE_SANDSTORM_CLOUD_UPDATE) \
+    X(SITE_TAINTED_MAGIC_PASS) X(SITE_HERO_ARRIVAL) X(SITE_TEAMLESS_OWN_TEAM) X(SITE_SOCIETY_PRESETS) X(SITE_STORM_SPAWN) \
+    X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_UNIT_STRENGTH) X(SITE_SQUARE_STRENGTH) \
+    X(SITE_COMMANDER_STRENGTH) X(SITE_PLAYER_ABILITY) X(SITE_UNIT_STATE_FLAGS) X(SITE_ARMY_MOVE_FLAGS) X(SITE_UNIT_PATH_LEVEL) \
+    X(SITE_UNIT_VISIBLE_TO) X(SITE_RESOURCE_AVAILABLE) X(SITE_UNIT_RESISTANCES) X(SITE_UNIT_FLAGS) \
+    X(SITE_RITUAL_CAN_CAST) X(SITE_RITUAL_LOCATION_CHECK)
+
+static const char *personalObserveKinds(CallSite site, char *result) {
+#define PERSONAL_OBSERVE_CASE(s, kinds, res) \
+    case s:                                 \
+        if (result) *result = res;          \
+        return kinds;
+    switch (site) {
+    PERSONAL_OBSERVE_SITES(PERSONAL_OBSERVE_CASE)
+    default:
+        return NULL;
+    }
+#undef PERSONAL_OBSERVE_CASE
 }
 
 // ---- The calls a personal script may make ---------------------------------------------------------
@@ -83,6 +185,49 @@ static const char *const PERSONAL_CALLS[] = {
     "coe5.weaponExtra", "coe5.weaponRangeFor", "coe5.wetNeighbours", "coe5.wrap", "coe5.writeIni", "require",
 };
 #define PERSONAL_CALL_COUNT ((int)(sizeof PERSONAL_CALLS / sizeof PERSONAL_CALLS[0]))
+static const char *const PERSONAL_CLOSED_CALLS[] = {
+    "coe5.addAffliction", "coe5.addBattleMap", "coe5.addBenefit", "coe5.addFaction", "coe5.addMapEditorLine", "coe5.addPlane",
+    "coe5.addPlayerBlessing", "coe5.addShopOffer", "coe5.addTestFieldUnits", "coe5.aiBuyOffer", "coe5.aiConquerStep",
+    "coe5.aiExploreStep", "coe5.aiFarExploreStep", "coe5.aiFriendlyMoveStep", "coe5.aiMakeDefenders", "coe5.aiMakeGuardsAt",
+    "coe5.aiRallyStep", "coe5.aiRandomEnemy", "coe5.aiRedistributeItems", "coe5.aiShipDropCrew", "coe5.aiShipTakeBoat",
+    "coe5.aiShipTakeCrew", "coe5.aiShips", "coe5.aiUpdateStrengthMemory", "coe5.alterTerrain", "coe5.autoName",
+    "coe5.bolsterBlessing", "coe5.changeLoyalty", "coe5.checkFollowerLinks", "coe5.chooseMemorized", "coe5.cleanSquare",
+    "coe5.clearPlaneTint", "coe5.closeTestField", "coe5.commanderLearnRitual", "coe5.commanderUseItems", "coe5.conscription",
+    "coe5.damageUnitPlain", "coe5.declaredPlanes", "coe5.destroyEnchantsAt", "coe5.destroyGateway", "coe5.digTunnelSquare",
+    "coe5.drawTestField", "coe5.endPreviewWorld", "coe5.fightTestField", "coe5.fireTestField", "coe5.fixPortals",
+    "coe5.forestShepherdSpawn", "coe5.gen.addGroundItems", "coe5.gen.decorateSquare", "coe5.gen.drawRiver",
+    "coe5.gen.findCaveSpot", "coe5.gen.findSpotByNeighbours", "coe5.gen.fixDiagonals", "coe5.gen.floodPlane",
+    "coe5.gen.heatBlob", "coe5.gen.linkNewPortal", "coe5.gen.markAt", "coe5.gen.markBlob", "coe5.gen.markNearTerrain",
+    "coe5.gen.markRect", "coe5.gen.markRiver", "coe5.gen.markVoidNear", "coe5.gen.markWalk", "coe5.gen.marksToTerrain",
+    "coe5.gen.marksToTerrainChance", "coe5.gen.random", "coe5.gen.randomMarkedSquare", "coe5.gen.randomSquareOfTerrain",
+    "coe5.gen.reachesElysium", "coe5.gen.refuseSmallPlane", "coe5.gen.setFixedTemperature", "coe5.gen.setGround",
+    "coe5.gen.setMark", "coe5.gen.setPortalPair", "coe5.gen.setTemperatures", "coe5.gen.setTerrain", "coe5.gen.specBlob",
+    "coe5.gen.spreadTerrain", "coe5.gen.stampPiece", "coe5.gen.terrainBlob", "coe5.gen.terrainFlags", "coe5.gen.terrainNear",
+    "coe5.gen.updateMoistWalls", "coe5.getStartRituals", "coe5.giveItem", "coe5.giveRandomItem", "coe5.groveReversion",
+    "coe5.heroArrival", "coe5.initSquareCorpses", "coe5.initSquareGems", "coe5.inquisitionSpawn", "coe5.keepTraceLines",
+    "coe5.killSquare", "coe5.killUnit", "coe5.learnLevelRituals", "coe5.learnRandomSpell", "coe5.learnStartSpells",
+    "coe5.loadGame", "coe5.memorizeSpell", "coe5.modEvents", "coe5.moveEnchants", "coe5.moveGems", "coe5.moveTestFieldUnit",
+    "coe5.newPortalPair", "coe5.newUnits", "coe5.onPortalCrossing", "coe5.openTestField", "coe5.orderBurnForest",
+    "coe5.orderChopForest", "coe5.orderEatVillage", "coe5.orderSlaveHunt", "coe5.planRitual", "coe5.planeRiseToElysium",
+    "coe5.planeShiftUnit", "coe5.popHorrors", "coe5.previewArmySource", "coe5.previewEventResults", "coe5.previewLineIndex",
+    "coe5.previewLineResults", "coe5.previewScriptResults", "coe5.previewSquareSource", "coe5.previewWorldActive",
+    "coe5.priestFreespawn", "coe5.putRareSquare", "coe5.randomMemorizedSpell", "coe5.randomRitual", "coe5.randomSpell",
+    "coe5.randomSpellNotKnown", "coe5.randomSquareOfTerrain", "coe5.randomTeleport", "coe5.recruitScreen",
+    "coe5.releaseFollower", "coe5.removeBadFollowers", "coe5.removeEnchant", "coe5.repickMemorized", "coe5.replaceBuiltinOffer",
+    "coe5.reportBattlesTo", "coe5.restartGame", "coe5.restartPhase", "coe5.restoreSight", "coe5.revealDisc", "coe5.revealMap",
+    "coe5.revealPortalExits", "coe5.revealTerrainOnPlane", "coe5.revelsSpawn", "coe5.ruinSquare", "coe5.runAiTurn",
+    "coe5.runHatreds", "coe5.runModEvent", "coe5.sandstormCloudUpdate", "coe5.saveNewMod",
+    "coe5.scrapRitualPlan", "coe5.selectedCommanderDone", "coe5.sendMessage", "coe5.setBattleScatter", "coe5.setPlaneShape",
+    "coe5.setPlaneTint", "coe5.setPreviewDocks", "coe5.setPreviewHoverText", "coe5.setPreviewKeyField",
+    "coe5.setPreviewLineEdits", "coe5.setRandomEventsOff", "coe5.setSeenDisc", "coe5.setSetupAutomated", "coe5.setSquareOwner",
+    "coe5.setTerrainLooks", "coe5.setupAutomated", "coe5.showSight", "coe5.spawnCommander", "coe5.spawnUnit",
+    "coe5.spendAllApAt", "coe5.squareHold", "coe5.startPreviewWorld", "coe5.stopTestFight", "coe5.stormSpawn",
+    "coe5.swapLocations", "coe5.swapSquares", "coe5.takeItem", "coe5.takePreviewFieldKeys", "coe5.teleportCommander",
+    "coe5.teleportSquare", "coe5.teleportUnit", "coe5.testBattle", "coe5.toggleAutoRecruit", "coe5.transferFollower",
+    "coe5.trollForestSpawn", "coe5.unitAddXp", "coe5.unitRandomAffliction", "coe5.unitRemoveItem", "coe5.unitRemoveTempAbility",
+    "coe5.unmemorizeSpell", "coe5.useSpecialSite", "coe5.wildSpawn", "coe5.worldNews",
+};
+#define PERSONAL_CLOSED_CALL_COUNT ((int)(sizeof PERSONAL_CLOSED_CALLS / sizeof PERSONAL_CLOSED_CALLS[0]))
 
 static int isPersonalCall(const char *name) {
     int low = 0, high = PERSONAL_CALL_COUNT - 1;
@@ -134,30 +279,39 @@ static int luaStartsFor(NetRole role, LuaClass cls) {
     }
 }
 
-static int luaSiteOpenFor(NetRole role, LuaClass cls, CallSite site, int loading, int replay) {
+static int luaSiteOpenFor(NetRole role, LuaClass cls, CallSite site, int loading) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
     case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT;
     case NET_ROLE_CLIENT:
         if (loading) return 0;
-        return cls == LUA_CLASS_PERSONAL ? isPersonalSite(site) : cls == LUA_CLASS_CONTENT && !replay;
+        return cls == LUA_CLASS_PERSONAL ? isPersonalSite(site) : cls == LUA_CLASS_CONTENT;
     default: return 0;
     }
 }
 
-static int luaCallbackOpenFor(NetRole role, LuaClass cls, int loading, int replay) {
+static int luaCallbackOpenFor(NetRole role, LuaClass cls, int loading) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
     case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT;
-    case NET_ROLE_CLIENT: return !loading && (cls == LUA_CLASS_PERSONAL || (cls == LUA_CLASS_CONTENT && !replay));
+    case NET_ROLE_CLIENT: return !loading && (cls == LUA_CLASS_PERSONAL || cls == LUA_CLASS_CONTENT);
     default: return 0;
     }
+}
+
+static int luaObserverOpenFor(NetRole role, LuaClass cls, CallSite site, int loading) {
+    if (role == NET_ROLE_CLIENT && cls == LUA_CLASS_PERSONAL && !personalObserveKinds(site, NULL)) return 0;
+    return luaCallbackOpenFor(role, cls, loading);
 }
 
 static int luaGameLogicOpenFor(NetRole role, LuaClass cls, int loading, int inTurn) {
     return role == NET_ROLE_SINGLE || (role == NET_ROLE_HOST && cls == LUA_CLASS_CONTENT) ||
            (role == NET_ROLE_CLIENT && cls == LUA_CLASS_CONTENT && !loading && inTurn);
 }
+
+static int luaModsReadOpenFor(NetRole role, LuaClass cls) { return luaStartsFor(role, cls); }
+
+static int isDataFileRead(const char *name) { return !strcmp(name, "coe5.readIni") || !strcmp(name, "coe5.listIni"); }
 
 static int luaModCommandOpenFor(NetRole role, LuaClass cls, int level) {
     switch (role) {
@@ -177,6 +331,7 @@ static const char *luaCallRefusalFor(NetRole role, LuaClass cls, const char *nam
         if (!isPersonalCall(name)) return "personal_mod";
         return !inTurn && luaCallWaitsForPlayer(name) ? "wait_screen" : NULL;
     }
+    if (isDataFileRead(name)) return "lan_local_data";
     if (luaBlockingCallOf(name) == LUA_BLOCKING_NONE) return NULL;
     if (role == NET_ROLE_HOST) return "lan_host";
     return inTurn ? NULL : "content_on_client";
@@ -218,11 +373,12 @@ static const ClientWrite CLIENT_WRITE_CALLS[] = {
     WRITE_TRAVELS("coe5.useSpecialSite", COMMANDER, 3), WRITE_LOST("coe5.worldNews"),
 };
 static const ClientWrite CLIENT_SET_VALUES[] = {
-    WRITE_STAYS("aiMoveDelay"), WRITE_STAYS("bannerFade"), WRITE_STAYS("battleGrid"), WRITE_STAYS("bugChecksOff"), WRITE_STAYS("ceremonyCost"),
-    WRITE_STAYS("cliMapH"), WRITE_STAYS("cliMapW"), WRITE_STAYS("fullscreen"), WRITE_STAYS("hoveredId"), WRITE_STAYS("mouseButtons"),
-    WRITE_STAYS("newWorldUniqueRandom"), WRITE_TRAVELS("slotAi", PLAYER, 2), WRITE_TRAVELS("slotResource", PLAYER, 2),
+    WRITE_STAYS("aiLevelName"), WRITE_STAYS("aiMoveDelay"), WRITE_STAYS("bannerFade"), WRITE_STAYS("battleGrid"), WRITE_STAYS("bugChecksOff"),
+    WRITE_STAYS("ceremonyCost"), WRITE_STAYS("cliMapH"), WRITE_STAYS("cliMapW"), WRITE_STAYS("fullscreen"), WRITE_STAYS("hoveredId"),
+    WRITE_STAYS("incomeName"), WRITE_STAYS("keyHeld"), WRITE_STAYS("mouseButtons"), WRITE_STAYS("newWorldUniqueRandom"),
+    WRITE_STAYS("resourceName"), WRITE_STAYS("seasonName"), WRITE_TRAVELS("slotAi", PLAYER, 2), WRITE_TRAVELS("slotResource", PLAYER, 2),
     WRITE_TRAVELS("slotTradeType", PLAYER, 2), WRITE_STAYS("startDefault"), WRITE_STAYS("traceLevel"), WRITE_STAYS("uniqueRandomDefault"),
-    WRITE_TRAVELS("unitApUsed", UNIT, 2), WRITE_STAYS("weapon"), WRITE_STAYS("wilderDefault"),
+    WRITE_TRAVELS("unitApUsed", UNIT, 2), WRITE_STAYS("wilderDefault"),
 };
 #undef WRITE_TRAVELS
 #undef WRITE_LOST
@@ -250,12 +406,15 @@ static ClientWrite clientWriteOf(const char *name, const char *setValue) {
     return w ? *w : (ClientWrite){name, CLIENT_WRITE_STAYS, WRITE_OWNER_NONE, 0};
 }
 
-static const char *clientWriteRefusalFor(ClientWriteKind kind, int inTurn, int own) {
+static const char *clientWriteRefusalFor(ClientWriteKind kind, int inTurn, int own, int replay) {
     if (kind == CLIENT_WRITE_STAYS) return NULL;
+    if (replay) return "replay";
     if (kind == CLIENT_WRITE_LOST) return "client_write_lost";
     if (!inTurn) return "client_not_acting";
     return own == 0 ? "not_own_player" : NULL;
 }
+
+static const char *clientContentWriteRefusalFor(int modsReading) { return modsReading ? NULL : "client_write_lost"; }
 
 static int keyPickCountsFor(NetRole role, int fromPersonal) {
     return role == NET_ROLE_SINGLE || (role == NET_ROLE_CLIENT && fromPersonal);

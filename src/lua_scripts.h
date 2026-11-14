@@ -57,17 +57,28 @@ typedef struct {
     int gameDataHashKnown;
     int warnOff, warnContinued, warningLength, warningCapacity;
     char *warning;
+    unsigned battleRandomSerial;
+    unsigned loadRandomPass;
+    int loadRandomPhase;
+    unsigned unorderedKeysWarned;
 } LuaScript;
+static CallSite luaRunningSite = SITE_COUNT;
+static void noteBattleScriptCall(const LuaScript *s);
+
 static int netReplayRunning(void) {
     return *(const unsigned char *)GAME_PTR(RVA_IN_BATTLE) && *(const unsigned char *)GAME_PTR(RVA_BATTLE_IS_REPLAY);
 }
 static int luaSiteOpenNow(const LuaScript *s, CallSite site) {
     NetRole role = netRoleNow();
-    return role == NET_ROLE_SINGLE || luaSiteOpenFor(role, modClassNow(s->mod), site, netClientLoading, role == NET_ROLE_CLIENT && netReplayRunning());
+    return role == NET_ROLE_SINGLE || luaSiteOpenFor(role, modClassNow(s->mod), site, netClientLoading);
 }
 static int luaCallbackOpenNow(const LuaScript *s) {
     NetRole role = netRoleNow();
-    return role == NET_ROLE_SINGLE || luaCallbackOpenFor(role, modClassNow(s->mod), netClientLoading, role == NET_ROLE_CLIENT && netReplayRunning());
+    return role == NET_ROLE_SINGLE || luaCallbackOpenFor(role, modClassNow(s->mod), netClientLoading);
+}
+static int luaObserverOpenNow(const LuaScript *s, CallSite site) {
+    NetRole role = netRoleNow();
+    return role == NET_ROLE_SINGLE || luaObserverOpenFor(role, modClassNow(s->mod), site, netClientLoading);
 }
 static int luaGameLogicOpenNow(const LuaScript *s) {
     NetRole role = netRoleNow();

@@ -45,6 +45,57 @@ static UNUSED size_t buildSiteStub(unsigned char *code, const unsigned char *stu
     return (size_t)(p - code);
 }
 
+#define KEEP_THUNK_SLOT     0x100
+#define KEEP_THUNK_FUNCTION 0x70
+#define KEEP_THUNK_UNWIND   0x80
+#define KEEP_THUNK_FRAME    0x88
+#define KEEP_THUNK_CODES    20
+#define KEEP_THUNK_PROLOG   47
+
+static UNUSED size_t buildKeepThunk(unsigned char *code, const unsigned char *thunk, const unsigned char *stub) {
+    static const unsigned char PUSHES[] = {0x51, 0x52, 0x41, 0x50, 0x41, 0x51, 0x41, 0x52, 0x41, 0x53};
+    static const unsigned char SUB_RSP[] = {0x48, 0x81, 0xec, KEEP_THUNK_FRAME, 0x00, 0x00, 0x00};
+    static const unsigned char ADD_RSP[] = {0x48, 0x81, 0xc4, KEEP_THUNK_FRAME, 0x00, 0x00, 0x00};
+    static const unsigned char POPS[] = {0x41, 0x5b, 0x41, 0x5a, 0x41, 0x59, 0x41, 0x58, 0x5a, 0x59};
+    static const unsigned char MODRM[6] = {0x44, 0x4c, 0x54, 0x5c, 0x64, 0x6c};
+    unsigned char *p = code;
+    memcpy(p, PUSHES, sizeof PUSHES);
+    p += sizeof PUSHES;
+    memcpy(p, SUB_RSP, sizeof SUB_RSP);
+    p += sizeof SUB_RSP;
+    for (int i = 0; i < 6; i++) {
+        *p++ = 0x0f; *p++ = 0x11; *p++ = MODRM[i]; *p++ = 0x24; *p++ = (unsigned char)(0x20 + 0x10 * i);
+    }
+    *p++ = 0xe8;
+    int rel = (int)(stub - (thunk + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    for (int i = 0; i < 6; i++) {
+        *p++ = 0x0f; *p++ = 0x10; *p++ = MODRM[i]; *p++ = 0x24; *p++ = (unsigned char)(0x20 + 0x10 * i);
+    }
+    memcpy(p, ADD_RSP, sizeof ADD_RSP);
+    p += sizeof ADD_RSP;
+    memcpy(p, POPS, sizeof POPS);
+    p += sizeof POPS;
+    *p++ = 0xc3;
+    return (size_t)(p - code);
+}
+
+static UNUSED size_t buildKeepThunkUnwind(unsigned char *out) {
+    unsigned char *p = out;
+    *p++ = 1, *p++ = KEEP_THUNK_PROLOG, *p++ = KEEP_THUNK_CODES, *p++ = 0;
+    for (int i = 5; i >= 0; i--) {
+        *p++ = (unsigned char)(17 + 5 * (i + 1)), *p++ = (unsigned char)(0x08 | i << 4);
+        *p++ = (unsigned char)((0x20 + 0x10 * i) / 16), *p++ = 0;
+    }
+    *p++ = 17, *p++ = 0x01;
+    *p++ = KEEP_THUNK_FRAME / 8, *p++ = 0;
+    static const unsigned char PUSHED[6] = {11, 10, 9, 8, 2, 1};
+    static const unsigned char AFTER[6] = {10, 8, 6, 4, 2, 1};
+    for (int i = 0; i < 6; i++) *p++ = AFTER[i], *p++ = (unsigned char)(PUSHED[i] << 4);
+    return (size_t)(p - out);
+}
+
 static UNUSED void buildSiteCall(unsigned char code[6], const unsigned char *call, const unsigned char *stub, int tailJump) {
     int rel = (int)(stub - (call + 5));
     code[0] = tailJump ? 0xe9 : 0xe8;

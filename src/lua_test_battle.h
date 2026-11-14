@@ -185,13 +185,10 @@ static int openTestFieldFrom(lua_State *L, const char *call) {
     const char *reason = G32(RVA_ACTIVE_PLAYER) >= 0 ? "in_game" : testField.open ? "already_open" : readTestFieldSpec(L, spec);
     lua_Integer monster = spec->monster, spell = spec->spell, standIn = spec->standIn;
     int spellWeapon = spell >= 0 && spell < spellTableRecords() ? spellSlot((int)spell)->weapon : -1;
-    int standInMaker = standIn >= 0 && standIn < WEAPON_RECORDS_MOVED ? weaponMadeBy[standIn] - 1 : -1;
     if (!reason)
         reason = spell < -1 || spell >= spellTableRecords()                     ? "bad_spell"
                : standIn >= 0 && (spellWeapon < 0 || spellWeapon >= tableRecords(TABLE_WEAPON)) ? "no_spell_weapon"
-               : standIn >= 0 && (standInMaker < 0 || standInMaker > G32(RVA_MOD_LAST_INDEX) || _stricmp(modName(standInMaker), s->mod))
-                   ? "not_own_weapon"
-               : standIn < -1 ? "bad_weapon"
+               : standIn < -1 || standIn >= tableRecords(TABLE_WEAPON) ? "bad_weapon"
                               : NULL;
     if (reason) {
         refuseLuaCall(s->mod, call, reason, "monster=%lld spell=%lld friends=%d enemies=%d", (long long)monster, (long long)spell,

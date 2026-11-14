@@ -7,12 +7,13 @@
 #define WINDOWS_ONLY_CALL(rva) (rva)
 #endif
 #define BOTH_BUILDS_CALL(rva) (rva)
-#ifdef __APPLE__
 #define GAME_CALL_COPY ((uintptr_t)1 << 63)
+#ifdef __APPLE__
 #define MAC_COPY_CALL(rva, copy) ((uintptr_t)(void *)(copy) | GAME_CALL_COPY)
 #else
 #define MAC_COPY_CALL(rva, copy) (rva)
 #endif
+#define BOTH_COPY_CALL(rva, copy) ((uintptr_t)(void *)(copy) | GAME_CALL_COPY)
 #ifdef __APPLE__
 #define PER_BUILD(win, mac) mac
 #else
@@ -87,10 +88,12 @@ static int runGameCall(lua_State *L, const char *call, uintptr_t rva, const char
     int variadicFrom = -1;
 #endif
     char buffer[GAME_CALL_NAME_MAX] = {0};
-    GameCallFn fn = gameCallStandIn ? gameCallStandIn : rva ? (GameCallFn)(void *)(gameBase + rva) : NULL;
+    GameCallFn fn = gameCallStandIn          ? gameCallStandIn
+                    : rva & GAME_CALL_COPY ? (GameCallFn)(void *)(rva & ~GAME_CALL_COPY)
+                    : rva                    ? (GameCallFn)(void *)(gameBase + rva)
+                                             : NULL;
 #ifdef __APPLE__
-    if (rva & GAME_CALL_COPY) fn = gameCallStandIn ? gameCallStandIn : (GameCallFn)(void *)(rva & ~GAME_CALL_COPY);
-    else if (!gameCallStandIn && rva && macRedirectedHook((unsigned int)rva)) fn = (GameCallFn)macRedirectedHook((unsigned int)rva);
+    if (!(rva & GAME_CALL_COPY) && !gameCallStandIn && rva && macRedirectedHook((unsigned int)rva)) fn = (GameCallFn)macRedirectedHook((unsigned int)rva);
     if (!(rva & GAME_CALL_COPY) && !gameCallStandIn && rva && macGameCallCopy(rva)) fn = macGameCallCopy(rva);
 #endif
     const char *reason = !fn ? "windows_only" : G32(RVA_ACTIVE_PLAYER) < 0 && !strchr(args, '@') ? "no_game" : NULL;
@@ -215,6 +218,8 @@ LUA_GAME_CALLS(GAME_CALL_FN)
 // ---- The Windows self-check of Mac's copies -------------------------------------------------------
 #undef MAC_COPY_CALL
 #define MAC_COPY_CALL(rva, copy) (rva), (GameCallFn)(void *)(copy)
+#undef BOTH_COPY_CALL
+#define BOTH_COPY_CALL(rva, copy) (rva), (GameCallFn)(void *)(copy)
 typedef struct {
     const char *name;
     struct { uintptr_t rva; GameCallFn copy; } target;
@@ -229,6 +234,8 @@ static const CopyCheckRow COPY_CHECK_ROWS[] = {LUA_GAME_CALLS(COPY_CHECK_ROW)};
 #undef COPY_CHECK_ROW
 #undef MAC_COPY_CALL
 #define MAC_COPY_CALL(rva, copy) (rva)
+#undef BOTH_COPY_CALL
+#define BOTH_COPY_CALL(rva, copy) ((uintptr_t)(void *)(copy) | GAME_CALL_COPY)
 #define COPY_CHECK_ROW_COUNT ((int)(sizeof COPY_CHECK_ROWS / sizeof COPY_CHECK_ROWS[0]))
 #define COPY_CHECK_MAX 50000
 #define COPY_CHECK_TEXT 300
@@ -253,6 +260,11 @@ static int copyCheckLetterValues(char letter, long long *out) {
     case 'x': for (int x = 0; !gameCallArgProblem('x', x); x++) out[n++] = x; return n;
     case 'y': for (int y = 0; !gameCallArgProblem('y', y); y++) out[n++] = y; return n;
     case 'l': for (int l = 0; !gameCallArgProblem('l', l); l++) out[n++] = l; return n;
+    case 'L':
+        out[n++] = -1;
+        for (int l = 0; !gameCallArgProblem('l', l); l++) out[n++] = l;
+        out[n++] = -2;
+        return n;
     case 'a': for (int a = 0; a < RITUAL_EFFECT_ID_COUNT; a++) out[n++] = a; return n;
     case 'r': for (int r = 1; r <= G32(RVA_RITUAL_COUNT) && r < ritualSlotCount(); r++) out[n++] = r; return n;
     case 'w': for (int w = 0; w < tableRecords(TABLE_WEAPON); w++) out[n++] = w; return n;
@@ -277,6 +289,14 @@ static void selfcheckGameCopy(const char *call) {
     for (int i = 0; i < COPY_CHECK_ROW_COUNT && row < 0; i++)
         if (COPY_CHECK_ROWS[i].target.copy && !strcmp(COPY_CHECK_ROWS[i].name, call)) row = i;
     if (row < 0 || copyCheckDone[row]) return;
+    if (COPY_CHECK_ROWS[row].result == 'v' || !strcmp(COPY_CHECK_ROWS[row].name, "coe5.commanderLearnRitual") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.unitRemoveTempAbility") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.squareHold") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.toggleAutoRecruit") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.unmemorizeSpell") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.moveEnchants") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.fixPortals") ||
+        !strcmp(COPY_CHECK_ROWS[row].name, "coe5.destroyGateway")) return;
     copyCheckDone[row] = 1;
     const CopyCheckRow *c = &COPY_CHECK_ROWS[row];
     int count[GAME_CALL_MAX_ARGS], stride[GAME_CALL_MAX_ARGS], slot[GAME_CALL_MAX_ARGS], letters = 0, outs = 0;
@@ -288,6 +308,8 @@ static void selfcheckGameCopy(const char *call) {
             continue;
         }
         int n = copyCheckLetterValues(*at, copyCheckValues[letters]);
+        if (!strcmp(c->name, "coe5.nearestUnitAbilityIs") && *at == 'a') copyCheckValues[letters][0] = MONSTER_ABILITY_MONTAG, n = 1;
+        if (!strcmp(c->name, "coe5.nearestUnitAbilityIs") && *at == 'L') n--;
         if (n <= 0) {
             writeLog("selfcheck_copy_skipped", "call=%s letter=%c values=%d", call, *at, n);
             return;

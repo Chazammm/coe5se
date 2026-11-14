@@ -440,6 +440,7 @@ static int boundUnitListWait(int a, int b) {
 }
 
 static int dispatchCommanderLineClick(int id);
+static void showLanNotices(void);
 static int (*nextMapScreenWait)(int, int);
 static int boundMapScreenWait(int a, int b) {
     siteResultMod[SITE_MAP_SCREEN_WAIT] = NULL;
@@ -453,6 +454,7 @@ static int boundMapScreenWait(int a, int b) {
     }
     if (dispatchCommanderLineClick(id)) return 0;
     if (!id) showLuaNotices();
+    if (!id) showLanNotices();
     return id;
 }
 

@@ -145,10 +145,25 @@ static int isSplitSite(CallSite site) {
 }
 static int weaponHitDamageAsGame(int attacker, int target, int weapon, int damage, int value, int dmgtype);
 static int targetCheckAsGame(int unit, int type, int weapon, int value, int target);
+static unsigned long long unitResistancesAsGame(int unit), unitFlagsAsGame(int unit);
+static int ritualCanCastAsGame(int commander, int ritual);
+static int installComputedHook(CallSite site);
+static int siteHasCopyHooksMac(CallSite site) {
+    return site == SITE_AI_COUNT_CITADELS || site == SITE_SQUARE_OPEN_LAND || site == SITE_SQUARE_LIBRARY_LEVEL;
+}
+static int openLandOf(int x, int y);
+static int libraryLevelOf(int owner, int x, int y);
+static int installCopyHooksMac(CallSite site);
 static void *siteGameFunction(CallSite site) {
     if (isSplitSite(site)) return (void *)splitStepGame;
+    if (site == SITE_SQUARE_OPEN_LAND) return (void *)openLandOf;
+    if (site == SITE_SQUARE_LIBRARY_LEVEL) return (void *)libraryLevelOf;
     if (site == SITE_WEAPON_HIT) return (void *)weaponHitDamageAsGame;
     if (site == SITE_BATTLE_TARGET_CHECK) return (void *)targetCheckAsGame;
+    if (site == SITE_UNIT_RESISTANCES) return (void *)unitResistancesAsGame;
+    if (site == SITE_UNIT_FLAGS) return (void *)unitFlagsAsGame;
+    if (site == SITE_MODS_READ) return (void *)modsReadAsGame;
+    if (site == SITE_RITUAL_CAN_CAST) return (void *)ritualCanCastAsGame;
     if (isInlinedButtonRowSite(site)) return (void *)buttonRowMac;
     if (site == SITE_SEAL_EVENT) return (void *)sealEventStandInMac;
     if (site == SITE_NEW_WORLD_INIT_PARTICIPANTS) return (void *)initParticipantsMac;
@@ -620,8 +635,15 @@ static int installSite(CallSite site) {
     if (site == SITE_SEAL_EVENT) return installSealEventMac();
     if (site == SITE_NEW_WORLD_INIT_PARTICIPANTS) return installParticipantsMac();
     if (isSplitSite(site)) return installSplitSiteMac(site);
+    if (siteHasCopyHooksMac(site) && !info->rvas[0]) {
+        if (!installCopyHooksMac(site)) return 0;
+        siteInstalled[site] = 1;
+        return 1;
+    }
     if (site == SITE_SQUARE_PANEL_WRAP && !installSquarePanelIcons()) return 0;
-    if (site == SITE_BATTLE_DRAW || site == SITE_WEAPON_HIT || site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP) {
+    if ((site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS) && !installComputedHook(site)) return 0;
+    if (site == SITE_BATTLE_DRAW || site == SITE_WEAPON_HIT || site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP ||
+        site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST) {
         *siteHead(site) = siteGameFunction(site);
         siteInstalled[site] = 1;
         return 1;
@@ -656,6 +678,7 @@ static int installSite(CallSite site) {
             return 0;
         }
     }
+    if (siteHasCopyHooksMac(site) && !installCopyHooksMac(site)) return 0;
     siteInstalled[site] = 1;
     return 1;
 }

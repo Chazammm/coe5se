@@ -21,6 +21,7 @@ static const char *const SAVE_FILE_NAMES[] = {"save", "turn"};
 #define SAVE_PLATFORM 0
 #endif
 static const char *savePlatformName(int platform) { return platform == 0 ? "windows" : platform == 1 ? "mac" : "unknown"; }
+static int loadedSaveWrittenOn = -1;
 
 // ---- Payloads -----------------------------------------------------------------------------------
 typedef struct { unsigned char *bytes; size_t size, capacity; int failed; } SaveBuffer;
@@ -156,6 +157,9 @@ static void useCommanderCastsChunk(const SaveChunk *chunk, SaveFile kind);
 #define SAVE_TAG_ITMS SAVE_TAG('I', 'T', 'M', 'S')
 static void addItemSlotsChunk(SaveList *list);
 static void useItemSlotsChunk(const SaveChunk *chunk, SaveFile kind);
+#define SAVE_TAG_CWRT SAVE_TAG('C', 'W', 'R', 'T')
+static void addContentWritesChunk(SaveList *list);
+static void useContentWritesChunk(const SaveChunk *chunk, SaveFile kind);
 
 static int saveVanillaLastIndex(int kind) {
     if (kind == 0) return VANILLA_SPELL_COUNT - 1;
@@ -179,6 +183,7 @@ static void buildSaveList(SaveList *list, SaveNamesWritten *written) {
     addRandomEventsChunk(list);
     addCommanderCastsChunk(list);
     addItemSlotsChunk(list);
+    addContentWritesChunk(list);
     addHostSettingsChunk(list);
     addCoe5seVersionChunk(list);
     addFactionIndexChunk(list);
@@ -281,7 +286,7 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
     const char *versionResult = "none";
     char version[SAVE_STRING_MAX + 1] = "";
     const SaveChunk *modc = NULL, *modh = NULL, *vers = NULL, *gameData = NULL, *customCorpses = NULL, *randomEvents = NULL,
-                    *commanderCasts = NULL, *itemSlots = NULL;
+                    *commanderCasts = NULL, *itemSlots = NULL, *contentWritten = NULL;
     if (castCounts < 0) read->result = "bad_block", read->reason = "cast_counts_block";
     else if (castCounts > 0) {
         const char *failed = readSaveList(file, &list, &read->reason);
@@ -298,6 +303,7 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
                 else if (list.chunks[i].tag == SAVE_TAG_EVOF) randomEvents = &list.chunks[i];
                 else if (list.chunks[i].tag == SAVE_TAG_CMXC) commanderCasts = &list.chunks[i];
                 else if (list.chunks[i].tag == SAVE_TAG_ITMS) itemSlots = &list.chunks[i];
+                else if (list.chunks[i].tag == SAVE_TAG_CWRT) contentWritten = &list.chunks[i];
                 else if (!isSaveNameTag(list.chunks[i].tag) && list.chunks[i].tag != SAVE_TAG_PLNS && list.chunks[i].tag != SAVE_TAG_FCTN &&
                          list.chunks[i].tag != SAVE_TAG_FCDT && list.chunks[i].tag != SAVE_TAG_MSET)
                     read->unknown++;
@@ -312,6 +318,8 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
     useRandomEventsChunk(randomEvents, kind);
     useCommanderCastsChunk(commanderCasts, kind);
     useItemSlotsChunk(itemSlots, kind);
+    useContentWritesChunk(contentWritten, kind);
+    if (kind == SAVE_FILE_SAVE) loadedSaveWrittenOn = read->writtenOn;
     writeLog("save_names_read", "file=%s result=%s reason=%s skipped=%s written_on=%s chunks=%d unknown=%d", SAVE_FILE_NAMES[kind],
              read->result, read->reason, read->skipped[0] ? read->skipped : "-", savePlatformName(read->writtenOn), read->chunks,
              read->unknown);

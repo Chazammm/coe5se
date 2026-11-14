@@ -29,7 +29,7 @@ static int isGameWord(const char *word) {
     return 0;
 }
 
-static void noteWeaponMade(int mod);
+static void noteMonsterMade(int mod);
 static int modCommandMod = -1, modCommandLevel = -1;
 static void runModCommandLine(const char *line, int mod, int level) {
     modCommandMod = mod;
@@ -101,7 +101,7 @@ static void runModCommandLine(const char *line, int mod, int level) {
     if (copySource >= 0) carryCopiedMonsterWords(copySource, mod);
     if (copyItemSource >= 0) carryCopiedItemWords(copyItemSource, mod);
     if (copyRitualSource >= 0) carryCopiedRitualWords(copyRitualSource, mod);
-    if (len == sizeof "newweapon" - 1 && !strncmp(line, "newweapon", len)) noteWeaponMade(mod);
+    if (len == sizeof "newmonster" - 1 && !strncmp(line, "newmonster", len)) noteMonsterMade(mod);
 }
 
 // @platform-split preview_world: Windows only for now; on Mac coe5.setPreviewLineEdits doesn't exist, so nothing is ever armed

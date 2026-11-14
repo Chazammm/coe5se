@@ -133,12 +133,43 @@ static int commanderCastCheck(int commander, int ritual, int result) {
 
 static RitualCanCastFn nextCommanderCastScreenCheck;
 
-static int commanderCastScreenCheck(int commander, int ritual) {
-    return commanderCastCheck(commander, ritual, nextCommanderCastScreenCheck(commander, ritual));
+static int ritualCanCastFromScreen;
+
+static int ritualCanCastAsGame(int commander, int ritual) {
+    int screen = ritualCanCastFromScreen;
+    ritualCanCastFromScreen = 0;
+    RitualCanCastFn game = screen ? nextCommanderCastScreenCheck : commanderCastGameCheck;
+    int result = commanderCastCheck(commander, ritual, game(commander, ritual));
+    ritualCanCastFromScreen = screen;
+    return result;
 }
 
-static int commanderCastOtherCheck(int commander, int ritual) {
-    return commanderCastCheck(commander, ritual, commanderCastGameCheck(commander, ritual));
+static int ritualCanCastThrough(int commander, int ritual, int screen) {
+    int before = ritualCanCastFromScreen;
+    ritualCanCastFromScreen = screen;
+    int result = ((RitualCanCastFn)siteEntry(SITE_RITUAL_CAN_CAST, (void *)ritualCanCastAsGame))(commander, ritual);
+    ritualCanCastFromScreen = before;
+    return result;
+}
+
+static int commanderCastScreenCheck(int commander, int ritual) { return ritualCanCastThrough(commander, ritual, 1); }
+
+static int commanderCastOtherCheck(int commander, int ritual) { return ritualCanCastThrough(commander, ritual, 0); }
+
+// ---- The location check's site --------------------------------------------------------------------
+typedef int (*RitualLocationCheckFn)(int commander, int ritual, int x, int y, int *targets);
+static int luaSiteDepth[SITE_COUNT];
+static RitualLocationCheckFn nextRitualScreenLocationCheck;
+
+static int ritualScreenLocationThrough(int commander, int ritual, int x, int y, int *targets) {
+    if (!siteInstalled[SITE_RITUAL_LOCATION_CHECK] || luaSiteDepth[SITE_RITUAL_LOCATION_CHECK])
+        return nextRitualScreenLocationCheck(commander, ritual, x, y, targets);
+    return ((RitualLocationCheckFn)*siteHeadSlot(SITE_RITUAL_LOCATION_CHECK))(commander, ritual, x, y, targets);
+}
+
+static int wrapRitualScreenLocationCheck(void) {
+    return insertWrap(SITE_RITUAL_SCREEN_LOCATION_CHECK, (void *)ritualScreenLocationThrough, (void **)&nextRitualScreenLocationCheck,
+                      (WrapPlace){.priority = INT_MIN}, "coe5se", NULL);
 }
 
 // ---- The count ----------------------------------------------------------------------------------
@@ -282,4 +313,6 @@ static void commanderCastsInit(void) {
     }
     writeResultLog(word && screen && others && cast && newUnit && newWorld, "commander_casts_installed",
                    "word=%d screen=%d others=%d cast=%d new_unit=%d new_world=%d", word, screen, others, cast, newUnit, newWorld);
+    int location = wrapRitualScreenLocationCheck();
+    writeResultLog(location, "ritual_screen_location_through", "wrapped=%d", location);
 }

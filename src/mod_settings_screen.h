@@ -736,7 +736,10 @@ static void syncLuaScriptsAfterPass(int level);
 static void syncLuaScriptsBeforeSaveApplied(int level);
 static void finishStartupWithoutMenu(int level);
 static void modEventsBeforePass(int level);
+static void contentWritesBeforePass(int level);
+static void beginContentPass(void), endContentPass(void);
 static void modsRunHook(int level) {
+    if (level == 2) beginContentPass();
     loadLuaCommandsFiles();
     syncLuaScriptsBeforePass(level);
     unsigned int spellPasses = spellPassCount();
@@ -757,6 +760,7 @@ static void modsRunHook(int level) {
     killWordsBeforePass(level);
     aiClassBeforePass(level);
     modEventsBeforePass(level);
+    contentWritesBeforePass(level);
     nextModsRun(level);
     finishReading();
     spellsAfterPass(level, spellPasses);
@@ -775,5 +779,6 @@ static void modsRunHook(int level) {
     battleMapsAfterPass(level);
     syncLuaScriptsAfterPass(level);
     finishStartupWithoutMenu(level);
+    if (level == 2) endContentPass();
     if (level != 3) popupSettingErrors();
 }

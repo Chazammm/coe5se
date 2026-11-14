@@ -296,6 +296,48 @@ static int lArmiesSeen(lua_State *L, int viewer) {
 }
 
 // ---- The gate ---------------------------------------------------------------------------------------
+// ---- Observers ---------------------------------------------------------------------------------------
+static int observedValueSeen(char kind, const unsigned long long *args, int at, int viewer) {
+    int a = (int)args[at];
+    switch (kind) {
+    case 'u': return a < 0 || a >= UNIT_TABLE_MAX || readUnitSeen(viewer, a);
+    case 'c': {
+        if (a < 0 || a >= COMMANDER_TABLE_MAX) return 1;
+        int unit = G32(RVA_COMMANDERS + (size_t)a * COMMANDER_SIZE);
+        return unit >= 0 && unit < UNIT_TABLE_MAX && readUnitSeen(viewer, unit);
+    }
+    case 'x': {
+        int y = (int)args[at + 1];
+        if (!readSquareInArrays(a, y)) return 1;
+        return viewer >= 0 && readSquareSeen(viewer, a, y) >= SQUARE_SEEN_BEFORE;
+    }
+    default:
+        return 1;
+    }
+}
+
+static const CallInfo *observedCall;
+static CallSite observedSite = SITE_COUNT;
+static int observedSeen;
+static int personalObserverSees(CallSite site, const CallInfo *call, int after) {
+    char resultKind = '-';
+    const char *kinds = personalObserveKinds(site, &resultKind);
+    if (!kinds) return 0;
+    if (netClientGameOverSeen || netReplayRunning()) return 1;
+    int viewer = readViewer();
+    int seen = after && call == observedCall && site == observedSite ? observedSeen : -1;
+    if (seen < 0) {
+        seen = 1;
+        for (int k = 0; kinds[k] && k < 6 && seen; k++) seen = observedValueSeen(kinds[k], call->args, k, viewer);
+    }
+    if (!after) observedCall = call, observedSite = site, observedSeen = seen;
+    if (after && seen && resultKind != '-') {
+        unsigned long long result[1] = {call->result};
+        seen = observedValueSeen(resultKind, result, 0, viewer);
+    }
+    return seen;
+}
+
 static int runFilteredRead(lua_State *L, const luaL_Reg *fn, const char *name) {
     if (netClientGameOverSeen) return fn->func(L);
     int get = fn->func == lGet;

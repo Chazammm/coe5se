@@ -97,6 +97,8 @@ static void warnAllPlayersOfCheck(const char *text) {
 }
 
 static void takeClientScriptStop(const char *report);
+static void sendLanScriptSeed(void);
+static int readLanLobbyMessage(const char *message, int lists);
 
 static void readServerLobbyMessage(const char *message) {
     if (!runsNetworkChecks() || isNetworkClient()) return;
@@ -110,6 +112,7 @@ static void readServerLobbyMessage(const char *message) {
     if (why) warnAllPlayersOfCheck(why);
     why = networkCheckBody(message, NETWORK_SCRIPT_STOP);
     if (why) takeClientScriptStop(why);
+    if (networkCheckBody(message, "CoE5SE mods:")) sendLanScriptSeed();
 }
 
 static void readClientUnknownPacket(int type) {
@@ -119,6 +122,7 @@ static void readClientUnknownPacket(int type) {
     for (char ch; (ch = readNetworkCheckByte()) != '\0';)
         if (n + 1 < sizeof message) message[n++] = ch;
     message[n] = '\0';
+    if (readLanLobbyMessage(message, 1)) return;
     const char *why = networkCheckBody(message, NETWORK_CHECK_END);
     if (!why) return;
     writeLogWarning("network_check_received", "reason=mod_files_differ side=client");

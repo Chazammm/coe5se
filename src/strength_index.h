@@ -70,7 +70,8 @@ static int strengthFromLists(int team, int x, int y) {
 static int strengthQuery(int team, int x, int y) {
     if (!strengthGame) return GAME_FN(SquareStrengthFn, RVA_SQUARE_STRENGTH)(team, x, y);
     if (strengthIndex.off || isNetworkGame() || x < 0 || y < 0 || x >= G32(RVA_MAP_DEPTH) || y >= G32(RVA_MAP_H) ||
-        y >= MAP_COLUMN_SQUARES)
+        y >= MAP_COLUMN_SQUARES ||
+        siteInstalled[SITE_UNIT_STRENGTH])
         return strengthAskGame(team, x, y);
     if (strengthIndex.epoch != unitsChangeEpoch) {
         if (strengthIndex.firstEpoch != unitsChangeEpoch) {
@@ -96,6 +97,10 @@ static int strengthQuery(int team, int x, int y) {
 }
 
 static int strengthWindowQuery(int team, int x, int y) {
+    if (siteInstalled[SITE_SQUARE_STRENGTH] || siteInstalled[SITE_UNIT_STRENGTH]) {
+        strengthIndex.game++;
+        return ((SquareStrengthFn)siteEntry(SITE_SQUARE_STRENGTH, (void *)strengthGame))(team, x, y);
+    }
     return strengthIndex.depth > 0 ? strengthQuery(team, x, y) : strengthAskGame(team, x, y);
 }
 

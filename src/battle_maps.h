@@ -15,6 +15,7 @@
 #define BATTLE_SCATTER_OBJECTS_MAX   16
 #define BATTLE_SCATTER_CHANCE_MAX    1000
 #define BATTLE_COLUMNS_MAX           0x600
+#define BATTLE_DISPLACED_MAX         16
 #define BATTLE_CELL_SIZE             24
 #define BATTLE_CELL_OBJECT           4
 #define BATTLE_CELL_FLAGS            8
@@ -589,6 +590,26 @@ static int unitBattleCell(int unit, int *x, int *y) {
                 return 1;
             }
     return 0;
+}
+
+static const char *moveUnitBattleCell(int unit, int x, int y) {
+    int fromX, fromY;
+    if (!unitBattleCell(unit, &fromX, &fromY)) return "not_on_field";
+    if (x == fromX && y == fromY) return NULL;
+    int width = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE_2)(unit), height = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE)(unit);
+    int displaced[BATTLE_DISPLACED_MAX + 1], count = 0;
+    for (int cx = x; cx < x + width && cx < BATTLE_COLUMNS_MAX; cx++)
+        for (int cy = y; cy < y + height && cy < BATTLE_ROWS; cy++) {
+            int other = GAME_FN(int (*)(int, int), RVA_BATTLE_UNIT_AT)(cx, cy), seen = 0;
+            if (other < 0 || other == unit) continue;
+            for (int i = 0; i < count; i++) seen |= displaced[i] == other;
+            if (seen) continue;
+            if (count == BATTLE_DISPLACED_MAX) return "too_many_displaced";
+            displaced[count++] = other;
+        }
+    GAME_FN(void (*)(int), RVA_BATTLE_REMOVE_FROM_FIELD)(unit);
+    GAME_FN(void (*)(int, int, int), RVA_BATTLE_PLACE_UNIT)(unit, x, y);
+    return NULL;
 }
 
 static void battleSeedTraceHook(const char *format, ...) {
