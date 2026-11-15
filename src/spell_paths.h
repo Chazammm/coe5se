@@ -65,6 +65,7 @@ static void resetSpellPaths(const char *reason) {
     if (spellPaths.added) writeLog("spell_paths_reset", "removed=%d reason=%s", spellPaths.added, reason);
     spellPaths.added = 0;
     spellPaths.changed = 0;
+    contentOriginsResetPaths();
 }
 
 static int spellPathByName(const char *name) {
@@ -122,6 +123,7 @@ static void newspellpathLine(const char *args, int mod, int level) {
     }
     spellPathNames()[number] = kept;
     spellPaths.added++;
+    contentOriginNotePath(number,mod,1);
     spellPaths.changed = 1;
     writeLog("spell_path_added", "mod=%s number=%d name=%s line=%d", spellModName(mod), number, name, G32(RVA_MOD_LINE));
 }
@@ -164,6 +166,7 @@ static void spellPathNameLine(const char *args, int mod) {
     }
     spellPathNames()[number] = kept;
     spellPaths.changed = 1;
+    contentOriginNotePath(number,mod,0);
     writeLog("spell_path_renamed", "mod=%s number=%d name=%s line=%d", spellModName(mod), number, name, G32(RVA_MOD_LINE));
 }
 
