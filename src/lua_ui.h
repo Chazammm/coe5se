@@ -66,7 +66,9 @@ static int lBindKey(lua_State *L) {
 }
 static int lWait(lua_State *L) {
     checkLuaMainThread(L, "coe5.ui.wait");
+#ifndef __APPLE__
     testFieldTextReset();
+#endif
     closeLuaRow(L, "coe5.ui.wait");
     luaCodeRunning--;
     uiButtonsWaiting++;
@@ -510,7 +512,9 @@ static int lNameBox(lua_State *L) {
     lua_Integer max = luaL_optinteger(L, 4, 32);
     luaL_argcheck(L, max >= 1 && max <= NAME_BOX_LENGTH_MAX, 4, "maxLength must be 1 to 42");
     checkLuaMainThread(L, "coe5.ui.nameBox");
+#ifndef __APPLE__
     testFieldTextReset();
+#endif
     int held = 0, last = G32(RVA_MONSTER_COUNT);
     for (int m = 0; m <= last && monsterRecord(m) && !held; m++)
         held = *(const int *)(monsterRecord(m) + (RVA_MONSTER_SPRITES - RVA_MONSTER_TABLE)) == wanted;
