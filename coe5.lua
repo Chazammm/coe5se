@@ -5443,13 +5443,13 @@ function coe5.ui.drawMonsterIconFit(x, y, width, height, monster) end
 ---@return boolean drawn
 ---@return table|string metricsOrReason {sprite,sourceWidth,sourceHeight,x,y,width,height}, or refusal
 function coe5.ui.drawItemIconFit(x, y, width, height, item) end
--- Owned test-field editor APIs. Availability is capability- and platform-guarded.
+-- Observed loaded-content definition provenance. Availability is capability- and platform-guarded.
 
 ---LOCAL EXPERIMENT: observed loaded-definition provenance; never inferred from numeric ID ranges.
 ---Accepted level-2 parser writes/custom path registration, bound to the exact current record.
 ---baseline means unchanged captured metadata, not proof that all assets are vanilla. Unobserved
 ---changes become unknown; asset/description-only changes and full writer history are not covered.
----Main thread/code-matched Windows experiment. No file paths or script text are returned.
+---Main thread/code-matched query. Windows tested; Mac untested. No paths or script text returned.
 ---@param kind 'item'|'spell'|'spellschool'
 ---@param id integer
 ---@return table|nil origin {id,kind:'created_by_mod'|'modified_by_mod'|'baseline'|'unknown',modded:boolean,observed:boolean,definedBy?:string,lastModifiedBy?:string,historyComplete:false,scope:string}
