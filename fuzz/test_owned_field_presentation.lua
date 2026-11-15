@@ -47,7 +47,7 @@ api.wrap('BATTLE_DRAW',function(next,...)
         assert(monster.width>0 and monster.height>0 and monster.width<=64 and monster.height<=64)
         local itemOk,item=api.ui.drawItemIconFit(88,view.screenH-100,64,64,drawItem);assert(itemOk,tostring(item))
         assert(item.width>0 and item.height>0 and item.width<=64 and item.height<=64)
-        api.ui.drawText(16,view.screenH-20,12,'Owned field API projection and native sprite QA',1,1,1)
+        api.ui.drawText(16,view.screenH-20,12,'Owned field API projection and native sprite QA',1,1,1,1)
         frame={visible_roundtrips=checks,width=view.width,height=view.height,cell_size=view.cellSize,footprint_cells=#preview.cells,
             partial_geometry=1,edge_outside_cells=outside,monster_source_w=monster.sourceWidth,monster_source_h=monster.sourceHeight,
             item_source_w=item.sourceWidth,item_source_h=item.sourceHeight,pointer_buttons=buttons}
