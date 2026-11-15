@@ -1983,7 +1983,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_GAME_MENU)) installInlinedButtonRows();
     if (featureOn(FEATURE_MAP_EDITOR)) installMapEditorHooks();
 #ifndef __APPLE__
-    if (gameCodeMatches) installTestFieldLifecycle();
+    // Owned-field hooks install only when a caller explicitly opens a test field.
 #endif
     if (featureOn(FEATURE_COMMANDER_LINES)) installCommanderLineHooks();
 #ifndef __aarch64__
