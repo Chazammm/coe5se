@@ -7,6 +7,7 @@
 #endif
 
 static const luaL_Reg LUA_COE5[] = {
+    {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},

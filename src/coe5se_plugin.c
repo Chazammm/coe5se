@@ -144,6 +144,12 @@ static int refusedTableLine(const char *line, size_t len, int mod, int level);
 static void popupTablesLeftOut(void);
 static void drawTablesLeftOut(void);
 static int spellLineHook(const char *line, size_t len, int mod, int level);
+static void *contentOriginBeginLine(const char *line,int mod,int level);
+static void contentOriginEndLine(void *token);
+static void contentOriginsBeforePass(int level);
+static void contentOriginsResetPaths(void);
+static void contentOriginNotePath(int path,int mod,int created);
+static void contentOriginNoteSpell(int spell,int mod,int created);
 static int healArmyLineHook(const char *line, size_t len, const char *args, int mod, int level);
 static void healArmyReset(void);
 static void healArmyBlockStored(int slot);
@@ -1791,6 +1797,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "table_move.h"
 #include "spell_table.h"
 #include "spell_paths.h"
+#include "content_origin.h"
 #include "offset_names.h"
 #include "name_lists.h"
 #include "monster_flags.h"
@@ -1854,6 +1861,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "shop_offers.h"
 #include "rec_bonus.h"
 #include "lua_units.h"
+#include "lua_content_origin.h"
 #include "lua_data_files.h"
 #include "lua_test_battle.h"
 #include "lua_ui.h"
