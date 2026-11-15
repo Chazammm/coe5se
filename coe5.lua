@@ -2175,7 +2175,7 @@ function coe5.unitIsDemon(unit) end
 function coe5.unitAbilitySum(unit, ability, add) end
 
 ---Whether a monster has a ranged weapon or a spell attack.
----Windows only for now.
+---Windows only for now. Available at the main menu after mods are loaded.
 ---@param monster integer a monster
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.monsterHasRanged(monster) end
