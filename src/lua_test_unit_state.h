@@ -239,9 +239,9 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     lua_pushinteger(L, gameCodeMatches && testFieldMouseStateReader() ? 1 : 0);
 #endif
     lua_setfield(L, -2, "pointerButtons");
-    lua_pushinteger(L, testFieldLife.installed > 0 ? 1 : 0);
+    lua_pushinteger(L, gameCodeMatches && testFieldLife.installed >= 0 ? 1 : 0);
     lua_setfield(L, -2, "lifecycle");
-    lua_pushinteger(L, testFieldLife.installed > 0 ? 1 : 0);
+    lua_pushinteger(L, gameCodeMatches && testFieldLife.installed >= 0 ? 1 : 0);
     lua_setfield(L, -2, "multipleUnique");
 #ifdef __APPLE__
     lua_pushinteger(L, 0);
