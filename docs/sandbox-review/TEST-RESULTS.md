@@ -4,22 +4,22 @@ All native tests below ran in the owned Windows x64 CoE5 5.43 process, isolated 
 
 ## Exact accepted bindings
 
-The table preserves code/test source commits even when later commits only add review documentation. [Machine-readable sanitized bindings and group names](TEST-BINDINGS.json). FINISHED alone is not a pass: individual group results were checked. Earlier failures and incomplete starts were retained and are not in this accepted table.
+The table preserves code/test source commits even when later commits only add review documentation. [Machine-readable sanitized bindings and group names](TEST-BINDINGS.json). FINISHED alone is not a pass: individual group results were checked. Earlier failures and incomplete starts were retained and are not in this accepted table. Some later run contexts record pending edits only to these review-result documents; source_status and the exact working-tree hash are retained in the JSON. Compiled/runtime sources remained unchanged, and the final follow-up commit changes documentation only.
 
 | Test | Result | Source commit | Session | Plugin SHA256 |
 |---|---|---|---|---|
 | Ranged | Full catalog PASS:1879 records,721 ranged,0 mismatches in menu/field/after close; invalid/other no-game guards retained | `245307837306510e51bf56427add9c1ab003dc89` | `2518e863317f4c0693ce417333fb6be2` | `4496f6bdf80fe8f534a5bbc11387fe05d005c4d095d6c27a4b8660c240c6e875` |
-| Content origin | 0 groups PASS | `3adfd71d72a1477329482d01a0136c7504a4d5ad` | `ea242bf7b1a24cb4a4405b1595364b60` | `7fc80e9c45d220c6d2ab0b70863d83ba35f607999e1a927932a68c5ccdff3f14` |
-| Core | 0 groups PASS | `b67156dd852435ac0d3a4144a116519f1596c2bd` | `acb5f3096d52426cb6b6a12aecaa4e0c` | `b0522b820be99eca147c9361d6dcd93aa03a15b9a207954d57670b8701fecb4e` |
-| Presentation | 0 groups PASS | `c2c9c3a6ab2ac72d560f0bcc938b3cbf247e0dfe` | `886d6c1738b042d5a1fee239cd18f585` | `dc5a32dd66b922679ffdd18d37f73d701f5560e0a0a50052c33e9e29bc4e0f97` |
-| Configuration parser | 0 groups PASS | `fcc206fc2293af25d1878166392d476ef9aa9669` | `1ae6b9c648694f24b9db3c069d82826d` | `d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61` |
-| Configuration production | 0 groups PASS | `fcc206fc2293af25d1878166392d476ef9aa9669` | `066927aaf5804f46affbcf778de8229d` | `d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61` |
-| Combined standard (before lazy init) | 0 groups PASS | `019389868e9fe9a6269236b794d0107367204a26` | `b728fabe30f5435faf4633db368b8fad` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
-| Combined fixture (before lazy init) | 0 groups PASS | `019389868e9fe9a6269236b794d0107367204a26` | `4920a83ca30440ab9e85053d02df6e6e` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
-| Combined placement (before lazy init) | 0 groups PASS | `3ae06baebd6836ac628ec9b0cff898c329ebf6d5` | `b92ef5a2c7c54f868dea0fa9a26f3f64` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
-| Final combined standard | NOT RUN / pending archive | — | — | — |
-| Final combined fixture | NOT RUN / pending archive | — | — | — |
-| Final combined placement | NOT RUN / pending archive | — | — | — |
+| Content origin | 4 groups PASS | `3adfd71d72a1477329482d01a0136c7504a4d5ad` | `ea242bf7b1a24cb4a4405b1595364b60` | `7fc80e9c45d220c6d2ab0b70863d83ba35f607999e1a927932a68c5ccdff3f14` |
+| Core | 7 groups PASS | `b67156dd852435ac0d3a4144a116519f1596c2bd` | `acb5f3096d52426cb6b6a12aecaa4e0c` | `b0522b820be99eca147c9361d6dcd93aa03a15b9a207954d57670b8701fecb4e` |
+| Presentation | 4 groups PASS | `c2c9c3a6ab2ac72d560f0bcc938b3cbf247e0dfe` | `886d6c1738b042d5a1fee239cd18f585` | `dc5a32dd66b922679ffdd18d37f73d701f5560e0a0a50052c33e9e29bc4e0f97` |
+| Configuration parser | 3 groups PASS | `fcc206fc2293af25d1878166392d476ef9aa9669` | `1ae6b9c648694f24b9db3c069d82826d` | `d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61` |
+| Configuration production | 14 groups PASS | `fcc206fc2293af25d1878166392d476ef9aa9669` | `066927aaf5804f46affbcf778de8229d` | `d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61` |
+| Combined standard (before lazy init) | 21 groups PASS | `019389868e9fe9a6269236b794d0107367204a26` | `b728fabe30f5435faf4633db368b8fad` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
+| Combined fixture (before lazy init) | 14 groups PASS | `019389868e9fe9a6269236b794d0107367204a26` | `4920a83ca30440ab9e85053d02df6e6e` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
+| Combined placement (before lazy init) | 4 groups PASS | `3ae06baebd6836ac628ec9b0cff898c329ebf6d5` | `b92ef5a2c7c54f868dea0fa9a26f3f64` | `e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737` |
+| Final combined standard | 21 groups PASS | `bc273f4c26a73120827b0fa84d538fce7aaf5aad` | `1205b0ab8e8f4509afc951bb663a51ca` | `0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb` |
+| Final combined fixture | 14 groups PASS | `bc273f4c26a73120827b0fa84d538fce7aaf5aad` | `c48de6acd3b341aab3082b94fbb67172` | `0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb` |
+| Final combined placement | 4 groups PASS | `bc273f4c26a73120827b0fa84d538fce7aaf5aad` | `bc4298444d884d5da605b116d7f36a14` | `0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb` |
 
 ## What each branch established
 

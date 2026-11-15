@@ -5,9 +5,12 @@
     "source_commit": "245307837306510e51bf56427add9c1ab003dc89",
     "source_branch": "review/sandbox-ranged-20261115",
     "source_tree_sha256": "d8e1d3765517ffe3cd9d728380e0e0e4b172094002ee8dbe41f086890cc77625",
+    "source_status": "",
     "dll_sha256": "4496f6bdf80fe8f534a5bbc11387fe05d005c4d095d6c27a4b8660c240c6e875",
     "sandbox_source_sha256": "3c2f2d2a16f735b09e596499fad297b80726229624c8e668314c88eed84328d3",
-    "groups": {}
+    "groups": {
+      "results.ini": {}
+    }
   },
   {
     "test": "Content origin",
@@ -15,9 +18,17 @@
     "source_commit": "3adfd71d72a1477329482d01a0136c7504a4d5ad",
     "source_branch": "review/sandbox-content-origin-20261115",
     "source_tree_sha256": "4a03792a4a91e25d91bdccafda7ea91dc838bb148179ab1e7944c9e1e626aee0",
+    "source_status": "",
     "dll_sha256": "7fc80e9c45d220c6d2ab0b70863d83ba35f607999e1a927932a68c5ccdff3f14",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "results.ini": {
+        "current_upstream_independent_surface": "PASS",
+        "invalid_inputs_and_repeated_queries_are_read_only": "PASS",
+        "observed_active_mod_item_and_explicit_qa_spells": "PASS",
+        "unobserved_current_upstream_lua_content_write_becomes_unknown": "PASS"
+      }
+    }
   },
   {
     "test": "Core",
@@ -25,9 +36,20 @@
     "source_commit": "b67156dd852435ac0d3a4144a116519f1596c2bd",
     "source_branch": "review/sandbox-field-core-20261115",
     "source_tree_sha256": "a7518f2202dec496313bce95016be2659829e2473ed5b24b2d47d0e133d77ab4",
+    "source_status": "",
     "dll_sha256": "b0522b820be99eca147c9361d6dcd93aa03a15b9a207954d57670b8701fecb4e",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "results.ini": {
+        "capabilities_and_invalid_inputs_without_unrelated_modules": "PASS",
+        "empty_sides_delete_last_and_reuse": "PASS",
+        "large_footprint_rejected_move_cleanup_and_immediate_reuse": "PASS",
+        "legacy_commander_guard_and_repeated_real_battles": "PASS",
+        "reported_neutral_land_terrain_initialization_and_battles": "PASS",
+        "spell_identity_validation_and_other_actor_preservation": "PASS",
+        "unique_preflight_and_independent_native_records": "PASS"
+      }
+    }
   },
   {
     "test": "Presentation",
@@ -35,9 +57,17 @@
     "source_commit": "c2c9c3a6ab2ac72d560f0bcc938b3cbf247e0dfe",
     "source_branch": "review/sandbox-field-presentation-20261115",
     "source_tree_sha256": "0cc77591e5c5cce87bf41bdc000c4ebe21000408c5b9994106fdcab36ddadb28",
+    "source_status": "",
     "dll_sha256": "dc5a32dd66b922679ffdd18d37f73d701f5560e0a0a50052c33e9e29bc4e0f97",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "results.ini": {
+        "current_native_projection_footprint_pointer_and_mod_sprites": "PASS",
+        "scoped_surface_and_invalid_contexts": "PASS",
+        "text_focus_roundtrip_without_fabricating_typed_events": "PASS",
+        "timed_final_capture_readonly_and_upstream_observer_chain": "PASS"
+      }
+    }
   },
   {
     "test": "Configuration parser",
@@ -45,9 +75,16 @@
     "source_commit": "fcc206fc2293af25d1878166392d476ef9aa9669",
     "source_branch": "review/sandbox-field-configuration-20261115",
     "source_tree_sha256": "da7b6782e5dfd08e4af7d8460686a829821fd4a4883f777887bd56be720251df",
+    "source_status": "",
     "dll_sha256": "d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "configuration-contract-results.ini": {
+        "identity": "PASS",
+        "raw_school": "PASS",
+        "raw_top": "PASS"
+      }
+    }
   },
   {
     "test": "Configuration production",
@@ -55,9 +92,32 @@
     "source_commit": "fcc206fc2293af25d1878166392d476ef9aa9669",
     "source_branch": "review/sandbox-field-configuration-20261115",
     "source_tree_sha256": "da7b6782e5dfd08e4af7d8460686a829821fd4a4883f777887bd56be720251df",
+    "source_status": "",
     "dll_sha256": "d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "battlefield-results.ini": {},
+      "cursed-results.ini": {
+        "actual_diagnostic_crystal_heart_large_unit_removal_and_persistence": "PASS",
+        "mod_bonus_removal_refuses_invalid_memorization_and_keeps_known": "PASS"
+      },
+      "empty-editor-results.ini": {
+        "configured_caster_survives_other_removals_and_reuse": "PASS",
+        "empty_and_one_sided_guard_save_load": "PASS",
+        "empty_editor_unique_guard_before_allocation": "PASS",
+        "empty_to_battle_reset_rematch": "PASS",
+        "legacy_commander_slot_reuse_does_not_attach_empty_actors": "PASS"
+      },
+      "loadout-results.ini": {
+        "active_crabcult_item_cursed_guard_and_restore": "PASS",
+        "configuration_validation_and_lifecycle_guards": "PASS",
+        "copy_move_save_load_fight_reset_rematch_exact": "PASS",
+        "items_positions_replacement_incompatible_rollback": "PASS",
+        "multischool_unique_instances_independent": "PASS",
+        "school_limits_learning_random_spells_unchanged": "PASS",
+        "vertical_item_school_native_readback": "PASS"
+      }
+    }
   },
   {
     "test": "Combined standard (before lazy init)",
@@ -65,9 +125,42 @@
     "source_commit": "019389868e9fe9a6269236b794d0107367204a26",
     "source_branch": "review/sandbox-complete-20261115",
     "source_tree_sha256": "c04b61bbab3bb8c0b7df37ded17c1bb289883d49d8f982db82a84d01e935d619",
+    "source_status": "",
     "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
     "sandbox_source_sha256": "3c2f2d2a16f735b09e596499fad297b80726229624c8e668314c88eed84328d3",
-    "groups": {}
+    "groups": {
+      "battlefield-results.ini": {
+        "active_crabcult_units_search_placement_and_combat": "PASS",
+        "unit_filters_main_menu_and_native_field": "PASS"
+      },
+      "cursed-results.ini": {
+        "actual_diagnostic_crystal_heart_large_unit_removal_and_persistence": "PASS",
+        "mod_bonus_removal_refuses_invalid_memorization_and_keeps_known": "PASS"
+      },
+      "empty-editor-results.ini": {
+        "configured_caster_survives_other_removals_and_reuse": "PASS",
+        "empty_and_one_sided_guard_save_load": "PASS",
+        "empty_editor_unique_guard_before_allocation": "PASS",
+        "empty_to_battle_reset_rematch": "PASS",
+        "legacy_commander_slot_reuse_does_not_attach_empty_actors": "PASS"
+      },
+      "loadout-results.ini": {
+        "active_crabcult_item_cursed_guard_and_restore": "PASS",
+        "configuration_validation_and_lifecycle_guards": "PASS",
+        "copy_move_save_load_fight_reset_rematch_exact": "PASS",
+        "items_positions_replacement_incompatible_rollback": "PASS",
+        "multischool_unique_instances_independent": "PASS",
+        "school_limits_learning_random_spells_unchanged": "PASS",
+        "vertical_item_school_native_readback": "PASS"
+      },
+      "terrain-expansion-results.ini": {
+        "terrain0": "PASS",
+        "terrain107": "PASS",
+        "terrain117": "PASS",
+        "terrain12": "PASS",
+        "terrain2": "PASS"
+      }
+    }
   },
   {
     "test": "Combined fixture (before lazy init)",
@@ -75,9 +168,30 @@
     "source_commit": "019389868e9fe9a6269236b794d0107367204a26",
     "source_branch": "review/sandbox-complete-20261115",
     "source_tree_sha256": "c04b61bbab3bb8c0b7df37ded17c1bb289883d49d8f982db82a84d01e935d619",
+    "source_status": "",
     "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "battlefield-results.ini": {},
+      "loadout-results.ini": {
+        "active_crabcult_item_cursed_guard_and_restore": "PASS",
+        "configuration_validation_and_lifecycle_guards": "PASS",
+        "copy_move_save_load_fight_reset_rematch_exact": "PASS",
+        "custom_twenty_slots_mod_school_and_duplicate_names": "PASS",
+        "items_positions_replacement_incompatible_rollback": "PASS",
+        "multischool_unique_instances_independent": "PASS",
+        "school_limits_learning_random_spells_unchanged": "PASS",
+        "vertical_item_school_native_readback": "PASS"
+      },
+      "panel-results.ini": {
+        "configured_label_copy_move_save_load_fight_reset_rematch": "PASS",
+        "independent_multischool_levels_and_sandbox_labels": "PASS",
+        "lower_levels_preserve_known_and_refuse_invalid_memorization": "PASS",
+        "mod_school_selected_by_native_combat_and_restored": "PASS",
+        "modded_item_and_spellschool_filters_use_observed_sources": "PASS",
+        "native_item_icons_fit_their_rectangles": "PASS"
+      }
+    }
   },
   {
     "test": "Combined placement (before lazy init)",
@@ -85,8 +199,108 @@
     "source_commit": "3ae06baebd6836ac628ec9b0cff898c329ebf6d5",
     "source_branch": "review/sandbox-complete-20261115",
     "source_tree_sha256": "be622b141573bb180db1a7bfa8ea4b4d61f64b632879dbf0383e153dbb0ff180",
+    "source_status": "",
     "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
     "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
-    "groups": {}
+    "groups": {
+      "placement-results.ini": {
+        "forest_obstacle_rejection_and_afterwards_placement": "PASS",
+        "injected_cleanup_failure_locks_then_explicit_recovery": "PASS",
+        "large_placement_delete_reuse_spells_items": "PASS",
+        "unique_guards_prevent_alias_before_mutation": "PASS"
+      }
+    }
+  },
+  {
+    "test": "Final combined standard",
+    "session": "1205b0ab8e8f4509afc951bb663a51ca",
+    "source_commit": "bc273f4c26a73120827b0fa84d538fce7aaf5aad",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "7bd9dd3b929b12834990238a0839a074eecb620bd711cab128de320e0468ff0a",
+    "source_status": "",
+    "dll_sha256": "0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {
+      "battlefield-results.ini": {
+        "active_crabcult_units_search_placement_and_combat": "PASS",
+        "unit_filters_main_menu_and_native_field": "PASS"
+      },
+      "cursed-results.ini": {
+        "actual_diagnostic_crystal_heart_large_unit_removal_and_persistence": "PASS",
+        "mod_bonus_removal_refuses_invalid_memorization_and_keeps_known": "PASS"
+      },
+      "empty-editor-results.ini": {
+        "configured_caster_survives_other_removals_and_reuse": "PASS",
+        "empty_and_one_sided_guard_save_load": "PASS",
+        "empty_editor_unique_guard_before_allocation": "PASS",
+        "empty_to_battle_reset_rematch": "PASS",
+        "legacy_commander_slot_reuse_does_not_attach_empty_actors": "PASS"
+      },
+      "loadout-results.ini": {
+        "active_crabcult_item_cursed_guard_and_restore": "PASS",
+        "configuration_validation_and_lifecycle_guards": "PASS",
+        "copy_move_save_load_fight_reset_rematch_exact": "PASS",
+        "items_positions_replacement_incompatible_rollback": "PASS",
+        "multischool_unique_instances_independent": "PASS",
+        "school_limits_learning_random_spells_unchanged": "PASS",
+        "vertical_item_school_native_readback": "PASS"
+      },
+      "terrain-expansion-results.ini": {
+        "terrain0": "PASS",
+        "terrain107": "PASS",
+        "terrain117": "PASS",
+        "terrain12": "PASS",
+        "terrain2": "PASS"
+      }
+    }
+  },
+  {
+    "test": "Final combined fixture",
+    "session": "c48de6acd3b341aab3082b94fbb67172",
+    "source_commit": "bc273f4c26a73120827b0fa84d538fce7aaf5aad",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "ad575724045e5290438f9c4b9d806b4e4aac0267295f1100cdae102ca86cf0c7",
+    "source_status": "M docs/sandbox-review/TEST-BINDINGS.json |  M docs/sandbox-review/TEST-RESULTS.md",
+    "dll_sha256": "0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {
+      "battlefield-results.ini": {},
+      "loadout-results.ini": {
+        "active_crabcult_item_cursed_guard_and_restore": "PASS",
+        "configuration_validation_and_lifecycle_guards": "PASS",
+        "copy_move_save_load_fight_reset_rematch_exact": "PASS",
+        "custom_twenty_slots_mod_school_and_duplicate_names": "PASS",
+        "items_positions_replacement_incompatible_rollback": "PASS",
+        "multischool_unique_instances_independent": "PASS",
+        "school_limits_learning_random_spells_unchanged": "PASS",
+        "vertical_item_school_native_readback": "PASS"
+      },
+      "panel-results.ini": {
+        "configured_label_copy_move_save_load_fight_reset_rematch": "PASS",
+        "independent_multischool_levels_and_sandbox_labels": "PASS",
+        "lower_levels_preserve_known_and_refuse_invalid_memorization": "PASS",
+        "mod_school_selected_by_native_combat_and_restored": "PASS",
+        "modded_item_and_spellschool_filters_use_observed_sources": "PASS",
+        "native_item_icons_fit_their_rectangles": "PASS"
+      }
+    }
+  },
+  {
+    "test": "Final combined placement",
+    "session": "bc4298444d884d5da605b116d7f36a14",
+    "source_commit": "bc273f4c26a73120827b0fa84d538fce7aaf5aad",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "ad575724045e5290438f9c4b9d806b4e4aac0267295f1100cdae102ca86cf0c7",
+    "source_status": "M docs/sandbox-review/TEST-BINDINGS.json |  M docs/sandbox-review/TEST-RESULTS.md",
+    "dll_sha256": "0c7d40c491a64e6891bd6e0c7f87e6ef623a7eb2c960d89a2259636a6c8d8ebb",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {
+      "placement-results.ini": {
+        "forest_obstacle_rejection_and_afterwards_placement": "PASS",
+        "injected_cleanup_failure_locks_then_explicit_recovery": "PASS",
+        "large_placement_delete_reuse_spells_items": "PASS",
+        "unique_guards_prevent_alias_before_mutation": "PASS"
+      }
+    }
   }
 ]
