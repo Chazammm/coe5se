@@ -1,3 +1,4 @@
+icon "banner.tga"
 description "Explicit content-origin QA fixture; never enable in a normal campaign."
 
 selectitem "Amulet of Anti Magic"
