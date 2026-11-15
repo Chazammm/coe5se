@@ -587,8 +587,8 @@ function require(name) end
 ---| "commonCause"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "scoreGraphs"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "battleReports"         # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
----| "mapW"                  # integer: the map's width in squares, written at Ok (with a random ±1). At most 1000, the game's square arrays.
----| "mapH"                  # integer: the map's height in squares, written at Ok (with a random ±1). At most 160, the game's square arrays.
+---| "mapW"                  # integer: the map's width in squares, written at Ok (with a random ï¿½1). At most 1000, the game's square arrays.
+---| "mapH"                  # integer: the map's height in squares, written at Ok (with a random ï¿½1). At most 160, the game's square arrays.
 ---| "startFlags"            # integer: start positions, written at Ok: 8 clustered, 16 west/east, 0 random.
 ---| "wilder"                # integer: Wilder, written at Ok: 2 on, 1 off, 0 before the first game. 0 to 2, what the game stores.
 ---| "mapDepth"              # integer: despite the name, the width of the whole world: the map's width, raised as planes are added beside the map. At most 1000.
@@ -5049,13 +5049,13 @@ coe5.keyAction = {
 -- END key actions
 
 
--- Owned test-field editor APIs. Availability is capability- and platform-guarded.
+-- Observed loaded-content definition provenance. Availability is capability- and platform-guarded.
 
 ---LOCAL EXPERIMENT: observed loaded-definition provenance; never inferred from numeric ID ranges.
 ---Accepted level-2 parser writes/custom path registration, bound to the exact current record.
 ---baseline means unchanged captured metadata, not proof that all assets are vanilla. Unobserved
 ---changes become unknown; asset/description-only changes and full writer history are not covered.
----Main thread/code-matched Windows experiment. No file paths or script text are returned.
+---Main thread/code-matched query. Windows tested; Mac untested. No paths or script text returned.
 ---@param kind 'item'|'spell'|'spellschool'
 ---@param id integer
 ---@return table|nil origin {id,kind:'created_by_mod'|'modified_by_mod'|'baseline'|'unknown',modded:boolean,observed:boolean,definedBy?:string,lastModifiedBy?:string,historyComplete:false,scope:string}
