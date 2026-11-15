@@ -587,8 +587,8 @@ function require(name) end
 ---| "commonCause"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "scoreGraphs"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "battleReports"         # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
----| "mapW"                  # integer: the map's width in squares, written at Ok (with a random Â±1). At most 1000, the game's square arrays.
----| "mapH"                  # integer: the map's height in squares, written at Ok (with a random Â±1). At most 160, the game's square arrays.
+---| "mapW"                  # integer: the map's width in squares, written at Ok (with a random ±1). At most 1000, the game's square arrays.
+---| "mapH"                  # integer: the map's height in squares, written at Ok (with a random ±1). At most 160, the game's square arrays.
 ---| "startFlags"            # integer: start positions, written at Ok: 8 clustered, 16 west/east, 0 random.
 ---| "wilder"                # integer: Wilder, written at Ok: 2 on, 1 off, 0 before the first game. 0 to 2, what the game stores.
 ---| "mapDepth"              # integer: despite the name, the width of the whole world: the map's width, raised as planes are added beside the map. At most 1000.
@@ -3959,12 +3959,15 @@ function coe5.deleteIni(name) end
 ---With `standIn`, any weapon, the spell casts with that weapon's values in place of its
 ---own weapon's, for this battle only. Returns when the battle ends; the units are gone afterwards.
 ---It also takes coe5.openTestField's table in place of its arguments, for mixed groups.
+---Experimental Windows terrain option: the table accepts terrain, a numeric integer ID from
+---coe5.testFieldTerrains(). It uses neutral Elysium context, native fixed temperature 25 and
+---native ground/scatter setup. Omitting it (including the positional form) keeps legacy setup.
 ---@param monster integer a monster's index (coe5.findMonster)
 ---@param spell integer|nil -1 or nil for none
 ---@param enemy integer a monster's index
 ---@param count? integer 1 or more; 40 when left out
 ---@param standIn? integer a weapon your mod made
----@overload fun(field: {commander: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean
+---@overload fun(field: {commander: integer, terrain?: integer, allowMultipleUnique?: boolean, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean
 ---@return boolean shown false when refused (lua_refused): in_game, bad_monster, bad_enemy, bad_count, bad_spell, no_spell_weapon, bad_weapon, no_free_slot; with a table, also bad_friend, bad_list, no_enemies
 function coe5.testBattle(monster, spell, enemy, count, standIn) end
 
@@ -3990,30 +3993,59 @@ function coe5.spellInfo(spell) end
 ---group a monster's index and a count (1 when left out). Friends follow the commander. No count is capped, and the
 ---enemies need at least one unit; spell and standIn are optional fields. The units come back as the second value,
 ---and coe5.closeTestField takes every one of them off.
----@overload fun(field: {commander: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean, {commander: integer, friends: integer[], enemies: integer[]}|nil
+---Experimental commanderless editor: first require coe5.testFieldEditorCapabilities().emptyEditor == 1,
+---before closing an existing setup. Then use {emptyEditor=true, friends=groupsA, enemies=groupsB}.
+---Either list may be absent or empty; populated lists are also supported. No commander or dummy actor
+---is created. Every requested actor is an ordinary unit, follows no commander, and can later be removed,
+---including the last Team A actor. In this mode omit commander; spell/standIn must be absent or -1.
+---The result's commander is -1 and friends/enemies contain ALL actual A/B native unit IDs; in legacy
+---mode commander is the primary UNIT ID and friends excludes that primary. emptyEditor echoes the mode.
+---Adding works on either empty side. Native fight still requires at least one living own actor on EACH
+---side (missing_team_a/missing_team_b); terrain objects do not count. fireTestField refuses no_primary_unit.
+---Older Extenders may ignore unknown keys, so do not request this mode without the capability check.
+---With terrain, use an ID from coe5.testFieldTerrains(); numeric strings, fractional/nonfinite
+---numbers, out-of-range and empty records are bad_terrain. Named but unsupported terrain is
+---unsupported_terrain; explicit terrain on Mac is terrain_unavailable. terrain_init_failed
+---rolls back temporary square/plane/map context before returning false. Refusals are logged.
+---Water, forts, sieges, other planes and arbitrary campaign environments are not supported.
+---Experimental unique guard: before changing the field or allocating any unit, rejects unique_count
+---when the commander and both sides request more than one copy of a unique monster (ability 57),
+---or unique_exists when one already has a living unit anywhere in the world. Native newunit would
+---otherwise reinitialize that existing unit and return its handle. No existing unit is changed on
+---these refusals. The positional form and coe5.testBattle use the same guard.
+---@overload fun(field: {commander: integer, terrain?: integer, allowMultipleUnique?: boolean, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean, {emptyEditor: boolean, commander: integer, friends: integer[], enemies: integer[]}|string
+---@overload fun(field: {emptyEditor: true, terrain?: integer, allowMultipleUnique?: boolean, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[]}): boolean, {emptyEditor: boolean, commander: integer, friends: integer[], enemies: integer[]}|string
 ---@param monster integer
 ---@param spell integer|nil
 ---@param enemy integer
 ---@param count? integer
 ---@param standIn? integer a weapon your mod made
----@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies
----@return {commander: integer, friends: integer[], enemies: integer[]}|nil units the units made, in group order
+---@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies, bad_empty_editor, empty_editor_unavailable, empty_editor_commander, empty_editor_primary_attack
+---@return {emptyEditor: boolean, commander: integer, friends: integer[], enemies: integer[]}|string unitsOrReason the units made in group order, or a readable refusal code
 function coe5.openTestField(monster, spell, enemy, count, standIn) end
 
 ---Adds units to one side of the open test field, each group a monster's index and a count, as
 ---coe5.openTestField's table takes them. The game's own deploy places them, so the units already on the field
----keep their cells. "friends" follow the commander.
+---keep their cells. "friends" follow the commander in legacy mode; in emptyEditor mode both sides
+---follow no commander and either initially empty side can receive units.
+---The complete request is checked before its first allocation: unique_count for multiple copies
+---of a unique monster across groups, unique_exists for an already living unique anywhere in the
+---world. These refusals keep every existing unit and its randomized state unchanged.
 ---@param side "friends"|"enemies"
 ---@param groups {[1]: integer, [2]?: integer}[]
----@return integer[]|nil units the units made, nil when refused (lua_refused): not_open, bad_side, bad_friend, bad_enemy, bad_list, bad_count, no_free_slot (the game's unit table is full)
+---@return integer[]|nil units the units made, nil when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, bad_side, bad_friend, bad_enemy, bad_list, bad_count, unique_count, unique_exists, bad_unit_table, out_of_memory, no_free_slot (the game's unit table is full)
+---@return string|nil reason readable refusal code; omitted on success
 function coe5.addTestFieldUnits(side, groups) end
 
----Moves a unit on the open test field to battle cell (x, y), its top-left corner there, to place a group exactly
+---Moves a living unit on the calling mod's open test field to battle cell (x, y), its lower-left anchor there, to place a group exactly
 ---where an area attack lands. coe5.get("unitBattleX", unit) and "unitBattleY" read where a unit stands.
+---The native footprint extends towards increasing X and Y; one raw grid token is its anchor.
+---Unavailable during simulation; checks ownership, membership and a living unit before moving.
 ---@param unit integer
 ---@param x integer below battleWidth
 ---@param y integer 0 to 19
----@return boolean moved false when refused (lua_refused): not_open, not_on_field, off_field (the unit doesn't fit there), blocked (another unit, a tree or a boulder covers a cell of it)
+---@return boolean moved false when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, bad_unit, dead_unit, bad_monster, bad_field, not_on_field, off_field (the unit doesn't fit there), blocked (another unit, a tree or a boulder covers a cell of it)
+---@return string|nil reason readable refusal code; omitted on success
 function coe5.moveTestFieldUnit(unit, x, y) end
 
 ---One frame of the battle screen on the open test field, its speed arrows working. BATTLE_DRAW and
@@ -4033,6 +4065,10 @@ function coe5.fightTestField() end
 function coe5.stopTestFight() end
 
 ---Closes the test field: its units gone, and everything it borrowed put back.
+---Experimental cleanup follows test-field provenance/generations across combat location/owner
+---changes. On unverified cleanup/restoration, subsequent open refuses cleanup_unverified.
+---@return boolean closed
+---@return string|nil reason
 function coe5.closeTestField() end
 
 ---A weapon look's name in the game's visual effect table, the numbers look and flylook take ("Fireball").
@@ -5047,3 +5083,133 @@ coe5.keyAction = {
   fileBrowserCancel = 196,       -- Load game, Esc: Cancel
 }
 -- END key actions
+
+
+-- Owned test-field editor APIs: Windows only, except the two capability queries.
+-- Mac retains upstream legacy fields; editor capabilities are zero, terrains empty,
+-- and the new editor options are refused. A Mac build/runtime test is still required.
+
+---Experimental: supported numeric test-field terrain IDs, currently vanilla Plain and Forest
+---on Windows; empty on Mac. No field is opened. Use this to detect the extension before passing
+---terrain: older extenders may silently ignore unknown table keys. Mod overrides and campaign
+---climate/enchantments are not covered by the neutral-land validation.
+---@return integer[] terrains
+function coe5.testFieldTerrains() end
+
+---Experimental local Windows 5.43 editor API. Replaces exactly the two inline spell lists of a
+---living unit on the calling mod's own open main-menu test field, outside fire/fight simulation.
+---Both lists must be dense arrays of unique numeric integer IDs of named spells with a valid path.
+---At most 60 known and 30 memorized spells; memorized must be a subset of known and obey the native
+---per-school TOTAL memorizeAllowance (positive current path level + 1, otherwise 0), not an
+---additional allowance for each spell tier. Memorized spell levels must fit the current caster.
+---Known higher-level spells may remain known after a level debuff. Items/bonuses affect the native
+---level and allowance, so restore items first. Bytes after a native negative list terminator are
+---unused storage, not additional active spells.
+---Validates everything before writing, backs up both arrays and checks readback; does not learn
+---random spells, alter base magic levels, copy a unit record, or invoke learning hooks.
+---This is not a campaign unit snapshot or a guarantee of all randomized instance attributes.
+---@param unit integer
+---@param state {known: integer[], memorized: integer[]}
+---@return boolean restored
+---@return string|nil reason windows_only, game_code_differs, not_open, not_owner, in_fight, bad_unit, dead_unit, not_on_field, bad_state, bad_spell_list, too_many_spells, bad_spell, duplicate_spell, memorized_not_known, spell_level, memorize_limit, bad_item, restore_failed
+---@return table detail {stage,code?,path,spell,actual,allowed,allowance,level}; stage is validate/readback/committed
+function coe5.setTestFieldSpells(unit, state) end
+
+---Experimental local Windows 5.43 editor API. Removes one living temporary unit
+---from the calling mod's own open main-menu test field, outside simulation. Removes its anchor
+---token and marks HP zero using closeTestField's tombstone behavior, without death/kill hooks.
+---The legacy primary field commander cannot be removed. emptyEditor has no primary, so every
+---ordinary actor can be removed, including the last actor on either side. This does not compact the unit table.
+---Checks field membership, bounds and ambiguous tokens before writing; backs up/readbacks both
+---values. A newly allocated unit with no deployed token can also be cleaned up.
+---@param unit integer
+---@return boolean removed
+---@return string|nil reason windows_only, game_code_differs, not_open, not_owner, in_fight, bad_unit, dead_unit, not_on_field, primary_commander, bad_field, ambiguous_token, remove_failed
+function coe5.removeTestFieldUnit(unit) end
+
+---Experimental feature detection. No field is opened. Values are numeric 0 or 1: uniqueGuard
+---means openTestField/testBattle/addTestFieldUnits preflight unique requests; state means the two
+---readonly field snapshots are available; pointerButtons means the already loaded SDL2 exports
+---the local mouse-state getter. Snapshot and pointer features require supported Windows 5.43.
+---emptyEditor == 1 permits openTestField{emptyEditor=true}, with zero or populated sides and no
+---commander/dummy. Check this before replacing a field; it does not itself open one or certify a
+---battle-ready roster. Legacy opens without the flag retain their mandatory/protected primary.
+---cursedRemoval == 1 permits the explicit single-item override on an owned living editor actor.
+---@return {uniqueGuard:integer, state:integer, pointerButtons:integer, lifecycle:integer, multipleUnique:integer, emptyEditor:integer, cursedRemoval:integer} capabilities
+function coe5.testFieldEditorCapabilities() end
+
+---Experimental read-only snapshot of the calling mod's own main-menu test field, including during
+---simulation. Scans the bounded unit table and every raw field cell. units is sorted by native ID:
+---all living owned actor generations, including native owner/world-coordinate changes, plus every
+---nonempty raw unit-layer ID. Ownership follows tracked provenance, not current square alone.
+---Each readable row has unit,hp,monster,owner,worldX,worldY,alive,width,height,anchorCount,
+---anchors={{x,y},...},occupied={{x,y},...}; coordinates use named x/y keys. anchorX/anchorY exist
+---only for a single anchor. occupied uses native battleUnitAt, not a rectangular approximation.
+---Invalid/foreign raw IDs are retained with readable=false and sentinel values, without revealing
+---an unrelated army's records. Terrain objects appear separately as raw grid.object IDs.
+---grid contains all width*height cells, column first: {x,y,unit,object,flags,ground}, including -1
+---empty tokens and dead/invalid IDs. issues is a dense array of {code,unit?,x?,y?}. complete means
+---all requested evidence was safely read, not that it was consistent: dead_anchor, duplicate_anchor,
+---missing_anchor, footprint_outside and overlapping_footprint are explicit consistency issues.
+---Unsafe native hit testing is skipped with complete=false and hit_test_unavailable; occupied
+---arrays are then empty. Refuse editor mutations unless complete is true and issues is empty.
+---After a returned fight, cleared anchors are normal native cleanup; use testFieldFinalState for
+---the frozen result instead of interpreting this current-field view as a retained final scene.
+---No allocations of game units, death hooks, compaction, record copying, or state repair occur.
+---@return table|nil state {width:integer,height:integer,complete:boolean,units:table[],grid:table[],issues:table[]}
+---@return string|nil reason windows_only, game_code_differs, not_open, not_owner, not_main_menu, out_of_memory
+function coe5.testFieldState() end
+
+---A row with the same fields as testFieldState.units, also for a dead/retired ID with no anchor,
+---provided its bounded generation still belongs to the calling mod's tracked field provenance.
+---Includes complete and issues from the whole field. Does not expose unrelated campaign records.
+---@param unit integer
+---@return table|nil state
+---@return string|nil reason testFieldState's reasons, bad_unit, not_on_field, bad_field
+function coe5.testFieldUnitState(unit) end
+
+---Experimental read-only local mouse buttons, independent of the writable mouseButtons frame
+---field. Reads SDL_GetMouseState from the already loaded SDL2.dll; does not pump events, load a
+---library, install a hook, or write input state. Same game mask: 1 left, 2 right, 4 middle, added.
+---Main thread, calling mod's own main-menu field, within BATTLE_WAIT including code after next().
+---Use for press/hold/release gestures; consume the separate mouseButtons field for editor clicks.
+---@return integer|nil buttons 0 to 7
+---@return string|nil reason testFieldState's reasons, not_battle_frame, sdl_mouse_unavailable
+function coe5.testFieldPointerButtons() end
+
+---Experimental Windows 5.43 read-only caster snapshot for an owned living TestField generation.
+---Returns the active known/memorized prefixes and per-school CURRENT native level, bonus, TOTAL
+---allowance and known/memorized counts. complete means the data was readable; valid additionally
+---requires no duplicate/bad IDs, known-list violation, memorized-level violation or over-quota
+---school. A readable invalid snapshot is returned with valid=false and issues, not repaired.
+---A native array's first negative ID terminates its active prefix; unused tail bytes are ignored.
+---@param unit integer
+---@return table|nil state {unit,generation,complete,valid,known:integer[],memorized:integer[],schools:table[],issues:table[]}
+---@return string|nil reason ownership/readability refusal; validation failures instead appear in state.issues
+function coe5.testFieldSpellState(unit) end
+
+---Experimental guarded TestField memorization toggle, for an owned living generation outside
+---simulation. Selecting requires a currently valid state, known membership, sufficient CURRENT
+---native level, a free array slot and per-school total allowance. The known array is preserved.
+---Deselecting can explicitly reduce an over-quota/over-level set; other invalid states refuse.
+---A reduction may leave further violations: check testFieldSpellState().valid before proceeding.
+---Validates before mutation and verifies readback; never calls chooseMemorized or silently picks
+---replacement spells. On is a strict boolean. This does not alter general memorizeSpell.
+---@param unit integer
+---@param spell integer
+---@param on boolean
+---@return boolean changed accepted or refused; an already selected/deselected request may be a no-op
+---@return string|nil reason
+---@return table detail {stage,code?,path,spell,actual,allowed,allowance,level}
+function coe5.memorizeTestFieldSpell(unit, spell, on) end
+
+---Experimental provenance snapshot, available to the owning mod even after close. Tracks actual
+---test-field allocations by native ID and a generation assigned on every native initialization.
+---Combat changes to position/owner/form do not remove ownership; reused foreign generations are
+---never cleaned as old actors. Arrays: created, beforeCleanup, afterCleanup, issues. complete is
+---false when cleanup cannot be verified. Rows expose IDs/generation/HP/monster/owner/world coords;
+---this ledger is not a complete campaign snapshot. lifecycle and multipleUnique capability values
+---are 1 only after both checked hooks install successfully.
+---@return table|nil lifecycle
+---@return string|nil reason
+function coe5.testFieldLifecycle() end

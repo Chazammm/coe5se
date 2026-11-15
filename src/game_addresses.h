@@ -5740,6 +5740,8 @@ static const SiteInfo SITES[SITE_COUNT] = {
 #undef SITE_ON
 #undef SITE_FIRST_CALL
 #undef SITE_FIRST_CALL_
+// ---- Owned test-field editor (Windows 5.43; Mac addresses unverified) ----
+#define RVA_TEST_FIELD_NEW_UNIT_UNIQUE_CALL ADDR(0x129890, MAC_NOT_LOOKED_UP)
 #endif
 
 // ---- Code CoE5SE copied ---------------------------------------------------------------------------

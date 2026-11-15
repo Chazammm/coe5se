@@ -4304,3 +4304,6 @@
 #define RVA_SDL_SCALE_H                        RVA_SDL_WINDOW_H
 #define RVA_PLAYER1_NAME                       RVA_SLOT_NAME
 #define RVA_ELEMENT_AT                         RVA_FIND_HOVERED
+
+// ---- Owned test-field editor ----
+#define RVA_TEST_FIELD_NEW_UNIT_UNIQUE_CALL ADDRESS_ID_WINDOWS(0x60198f01u, "RVA_TEST_FIELD_NEW_UNIT_UNIQUE_CALL", MAC_NOT_LOOKED_UP)

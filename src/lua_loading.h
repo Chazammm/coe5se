@@ -7,6 +7,26 @@
 #endif
 
 static const luaL_Reg LUA_COE5[] = {
+#ifdef __APPLE__
+    {"testBattle", lTestBattleMac}, {"openTestField", lOpenTestFieldMac},
+#else
+    {"testBattle", lTestBattle}, {"openTestField", lOpenTestField},
+#endif
+#ifdef __APPLE__
+    {"testFieldTerrains", lTestFieldTerrains},
+    {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
+#else
+    {"testFieldTerrains", lTestFieldTerrains},
+    {"setTestFieldSpells", lSetTestFieldSpells},
+    {"removeTestFieldUnit", lRemoveTestFieldUnit},
+    {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
+    {"testFieldState", lTestFieldState},
+    {"testFieldUnitState", lTestFieldUnitState},
+    {"testFieldPointerButtons", lTestFieldPointerButtons},
+    {"testFieldSpellState", lTestFieldSpellState},
+    {"memorizeTestFieldSpell", lMemorizeTestFieldSpell},
+    {"testFieldLifecycle", lTestFieldLifecycle},
+#endif
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
@@ -23,7 +43,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"hideMainMenuButton", lHideMainMenuButton}, {"addScreen", lAddScreen}, {"rebindKey", lRebindKey},
     {"addActionKey", lAddActionKey}, {"actionKey", lActionKey}, {"findMonster", lFindMonster},
     {"dataFolder", lDataFolder}, {"readIni", lReadIni}, {"writeIni", lWriteIni}, {"listIni", lListIni},
-    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"testBattle", lTestBattle}, {"openTestField", lOpenTestField}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"newUnits", lNewUnits},
+    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"newUnits", lNewUnits},
     {"monsterVariant", lMonsterVariant}, {"portalExits", lPortalExits}, {"onPortalCrossing", lOnPortalCrossing}, {"squareUnits", lSquareUnits}, {"revealMap", lRevealMap}, {"modEvents", lModEvents}, {"runModEvent", lRunModEvent}, {"centerMap", lCenterMap}, {"viewArmy", lViewArmy}, {"armies", lArmies}, {"route", lRoute},
     {"scrapRitualPlan", lScrapRitualPlan}, {"planRitual", lPlanRitual}, {"aiRitualBad", lAiRitualBad}, {"aiRitualBadTime", lAiRitualBadTime}, {"aiItemValue", lAiItemValue}, {"aiItemUseRating", lAiItemUseRating}, {"aiRandomEnemy", lAiRandomEnemy}, {"terrainMatch", lTerrainMatch},
     {"releaseFollower", lReleaseFollower}, {"transferFollower", lTransferFollower},
