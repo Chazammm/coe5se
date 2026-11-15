@@ -42,7 +42,7 @@
     X(unitIsUndead, MAC_COPY_CALL(RVA_UNIT_IS_UNDEAD, unitIsUndeadCopy), "u", 'B') \
     X(unitIsDemon, MAC_COPY_CALL(RVA_UNIT_IS_DEMON, unitIsDemonCopy), "u", 'B') \
     X(unitAbilitySum, WINDOWS_ONLY_CALL(RVA_UNIT_ABILITY_SUM), "uai", 'i') \
-    X(monsterHasRanged, WINDOWS_ONLY_CALL(RVA_MONSTER_HAS_RANGED), "m", 'B') \
+    X(monsterHasRanged, WINDOWS_ONLY_CALL(RVA_MONSTER_HAS_RANGED), "@m", 'B') \
     X(monsterNameType, BOTH_BUILDS_CALL(RVA_MONSTER_NAME_TYPE), "m", 'i') \
     X(commanderLedCount, BOTH_BUILDS_CALL(RVA_COMMANDER_LED_COUNT), "c", 'i') \
     X(commanderApLeft, BOTH_BUILDS_CALL(RVA_COMMANDER_AP_LEFT), "c", 'i') \
