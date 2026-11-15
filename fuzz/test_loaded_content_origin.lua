@@ -17,7 +17,7 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         assert(api.monsterHasRanged(api.findMonster('Archer'))==nil,'Independent branch unexpectedly includes Ranged patch')
         assert(api.get('monsterMod',api.findMonster('Shell Priest'))=='CrabCult','Current upstream monster-origin getter was lost')
     end)
-    test('observed_active_mod_item_and_spells',function()
+    test('observed_active_mod_item_and_explicit_qa_spells',function()
         local item=itemNamed('Abyss Fragment');local origin=assert(api.loadedContentOrigin('item',item))
         assert(origin.id==item and origin.modded and origin.observed and origin.definedBy=='CrabCult' and origin.lastModifiedBy=='CrabCult' and not origin.historyComplete)
         out.crab_item={id=item,kind=origin.kind,creator=origin.definedBy,writer=origin.lastModifiedBy}
@@ -26,14 +26,15 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
             local info=api.spellInfo(spell)
             if info then
                 local s=assert(api.loadedContentOrigin('spell',spell))
-                if s.modded and s.lastModifiedBy=='CrabCult'then
+                if s.modded and s.lastModifiedBy=='ZZZContentOriginQA'then
                     count=count+1;schools[info.path]=true
                     out['mod_spell_'..count]={id=spell,path=info.path,name=info.name,kind=s.kind,writer=s.lastModifiedBy}
                 end
             end
         end
-        assert(count>0,'No observed CrabCult spell definitions');out.spells={observed_crabcult=count}
+        assert(count==2,'Explicit QA spell fixture missing or misattributed');out.spells={observed_qa=count,scope='Installed CrabCult has no custom spells; QA spells are separately authored'}
         for path in pairs(schools)do local s=assert(api.loadedContentOrigin('spellschool',path));assert(s.id==path and type(s.observed)=='boolean');out['school_'..path]={kind=s.kind,observed=s.observed and 1 or 0,modded=s.modded and 1 or 0,scope='School metadata and mod-spell membership are distinct'}end
+        local low=assert(api.loadedContentOrigin('item',itemNamed('Amulet of Anti Magic')));assert(low.modded and low.lastModifiedBy=='ZZZContentOriginQA' and low.definedBy==nil,'Low-ID override was not tracked independently of creator')
     end)
     test('unobserved_current_upstream_lua_content_write_becomes_unknown',function()
         local item=itemNamed('Amulet of Anti Magic');local name=api.get('itemName',item)

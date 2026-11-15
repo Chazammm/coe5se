@@ -1,0 +1,22 @@
+description "Explicit content-origin QA fixture; never enable in a normal campaign."
+
+selectitem "Amulet of Anti Magic"
+curseditem
+
+newweapon "Origin QA Bolt"
+range 5
+init 1
+dmgtype 2
+dmg 1
+
+newspellpath "Origin QA School"
+
+newspell "Origin QA Spell"
+path "Origin QA School"
+level 1
+weapon 1 "Origin QA Bolt"
+
+newspell "Origin QA Hydro"
+path "Hydromancy"
+level 1
+weapon 1 "Origin QA Bolt"
