@@ -2,6 +2,8 @@
 
 Prepared against actual official dev `df09497f04a39ff8fb7b0979dedde7dfed120c64` (3.4.4), rechecked before publication. Source review branches only, on the user's fork. Nothing was pushed upstream, merged or submitted as a PR. No Extender binary accompanies the mod.
 
+The fork's existing `dev` and `main` are deliberately untouched. For an independent review diff, compare the branch with the exact official base SHA above, rather than the fork's older `dev`. The eventual upstream PR base is official `dev`; dependent branches use the explicitly listed stack base while reviewing.
+
 | Order | Review branch | Intended review base | Code head |
 |---|---|---|---|
 | 1. ranged | [review/sandbox-ranged-20261115](https://github.com/Chazammm/coe5se/tree/review/sandbox-ranged-20261115) | `dev` | `245307837306510e51bf56427add9c1ab003dc89` |
