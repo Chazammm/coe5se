@@ -26,6 +26,17 @@ static const luaL_Reg LUA_COE5[] = {
     {"testFieldSpellState", lTestFieldSpellState},
     {"memorizeTestFieldSpell", lMemorizeTestFieldSpell},
     {"testFieldLifecycle", lTestFieldLifecycle},
+    {"testFieldFootprint", lTestFieldFootprint},
+    {"testFieldPlacementPreflight", lTestFieldPlacementPreflight},
+    {"inspectTestFieldUnit", lInspectTestFieldUnit},
+    {"inspectTestFieldItem", lInspectTestFieldItem},
+    {"testFieldFinalState", lTestFieldFinalState},
+    {"inspectTestFieldFinalUnit", lInspectTestFieldFinalUnit},
+    {"setTestFieldTextFocus", lSetTestFieldTextFocus},
+    {"takeTestFieldTextEvents", lTakeTestFieldTextEvents},
+    {"battleView", lBattleView},
+    {"battleScreenToCell", lBattleScreenToCell},
+    {"battleCellToScreen", lBattleCellToScreen},
 #endif
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
@@ -59,6 +70,9 @@ static const luaL_Reg LUA_COE5[] = {
     {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 static const luaL_Reg LUA_UI[] = {
+#ifndef __APPLE__
+    {"drawMonsterIconFit", lDrawMonsterIconFit}, {"drawItemIconFit", lDrawItemIconFit},
+#endif
     {"screenBegin", lScreenBegin}, {"sectionBegin", lSectionBegin}, {"sectionEnd", lSectionEnd}, {"text", lText},
     {"checkbox", lCheckbox}, {"choice", lChoice}, {"tooltip", lTooltip}, {"buttonRow", lButtonRow},
     {"listBegin", lListBegin}, {"listRow", lListRow}, {"listEnd", lListEnd}, {"bindEscape", lBindEscape},

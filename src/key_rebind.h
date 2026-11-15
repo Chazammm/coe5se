@@ -243,7 +243,11 @@ static unsigned long gameFrames;
 
 static int pollEventHook(void *event) {
     int got;
+#ifdef __APPLE__
     do got = nextPollEvent(event); while (got && event && previewFieldTakesEvent(event));
+#else
+    do got = nextPollEvent(event); while (got && event && (testFieldTextTakesEvent(event) || previewFieldTakesEvent(event)));
+#endif
     if (!got) {
         gameFrames++;
         writeHeldKeys();
@@ -521,6 +525,9 @@ static void keyRebindInit(void) {
                 wrapInnermost(SITE_UNIT_LIST_WAIT, (void *)keyWait_UNIT_LIST, (void **)&nextKeyWait_UNIT_LIST) +
                 wrapInnermost(SITE_FILE_BROWSER_WAIT, (void *)keyWait_FILE_BROWSER, (void **)&nextKeyWait_FILE_BROWSER);
     int poll = wrapSite(SITE_POLL_EVENT, (void *)pollEventHook, (void **)&nextPollEvent);
+#ifndef __APPLE__
+    testFieldTextPollReady = poll != 0;
+#endif
     int texts = wrapSite(SITE_KEY_TEXT_BAR, (void *)keyTextBarHook, (void **)&nextKeyTextBar) +
                 wrapInnermost(SITE_MAP_MENU_BUTTON_TEXT, (void *)menuButtonTextHook, (void **)&nextMenuButtonText) +
                 wrapSite(SITE_KEY_HELP_TEXT, (void *)keyHelpTextHook, (void **)&nextKeyHelpText) +
