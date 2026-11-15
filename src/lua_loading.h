@@ -1,5 +1,10 @@
 #pragma once
 
+#ifndef __APPLE__
+static int lTestFieldLoadoutState(lua_State *L);
+static int lSetTestFieldConfiguration(lua_State *L);
+#endif
+
 #ifdef COE5SE_EXTRA_LUA_HEADER
 #include COE5SE_EXTRA_LUA_HEADER
 #else
@@ -37,6 +42,8 @@ static const luaL_Reg LUA_COE5[] = {
     {"battleView", lBattleView},
     {"battleScreenToCell", lBattleScreenToCell},
     {"battleCellToScreen", lBattleCellToScreen},
+    {"testFieldLoadoutState", lTestFieldLoadoutState},
+    {"setTestFieldConfiguration", lSetTestFieldConfiguration},
 #endif
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},

@@ -1901,6 +1901,9 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_card.h"
 #include "item_slot_battle.h"
 #include "item_slot_weapons.h"
+#ifndef __APPLE__
+#include "lua_test_field_loadout.h"
+#endif
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
 #include "battle_replays.h"
@@ -2003,6 +2006,8 @@ static void startCoe5se(const char *via) {
     testFieldExtensions.reset = testFieldFinalReset;
     testFieldExtensions.readOnly = testFieldFinalViewActive;
     testFieldExtensions.resetInput = testFieldTextReset;
+
+    testFieldConfigurationEnabled = gameCodeMatches;
 
 #endif
     if (featureOn(FEATURE_COMMANDER_LINES)) installCommanderLineHooks();

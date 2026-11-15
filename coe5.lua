@@ -5376,6 +5376,49 @@ function coe5.battleScreenToCell(uiX, uiY) end
 ---@return number|nil uiY
 function coe5.battleCellToScreen(x, y) end
 
+---LOCAL EXPERIMENT, not upstream: full owned main-menu TestField configuration.
+---Windows 5.43/code-match only; alive actor generation, not simulation/final view.
+---First supported query lazily installs checked scoped native level/attack readers.
+---Items are 20 rows including empties: position=0..19,id=-1 or loaded ID,
+---slotType and occupied name/itemType/cursed/permanentEffects. organInjuryFlags is
+---a partial read-only mask (eye/heart bits 0x700000), not a complete affliction snapshot.
+---Schools are existing base paths:
+---path,name,templateBase,base,level (effective),bonus,allowance. Known/memorized
+---are distinct ordered ID arrays. maxBase/maxEffective use native aggregate (-1) semantics.
+---complete is readability; valid is spell rules.
+---@param unit integer
+---@return table|nil state {unit,generation,complete,valid,items:table[],schools:table[],known:integer[],memorized:integer[],combatAttackReads}
+---@return string|nil reason
+function coe5.testFieldLoadoutState(unit) end
+
+---LOCAL EXPERIMENT: atomic native equipment/base-school/spell configuration.
+---items is exactly 20 integer IDs (-1 empty), Lua index=position+1. schools lists
+---EVERY existing base path once as {path,level}; no new paths. Supported base
+---levels 1..3, including reductions; higher original template levels can only be retained.
+---Known IDs max60, memorized max30, unique/dense, membership/level/native quota
+---validated. No random learning/memorization. New known spells must be in level.
+---Higher previously known spells remain known; invalid memorization refuses unchanged.
+---Optional restoreKnown=true is for exact new-actor reconstruction of supported formerly
+---higher known spells in existing native schools (up to max(3,templateBase)); not a live Learn
+---bypass. Memorized spells still require current levels/capacity. No random finalizer.
+---Ordinary cursed removals/replacements refuse. With cursedRemoval capability, optional
+---removeCursed={position,item} authorizes ONLY removal of that currently held cursed ID
+---at that zero-based position; all other items/schools/ordered spells must be unchanged.
+---A stale slot/ID refuses. Existing eye/heart implants may be removed but their permanent
+---injury bits must remain unchanged. No new implant is granted. restoreKnown additionally
+---permits rearranging already held identical implants during saved-layout reconstruction,
+---with equal multiplicity and unchanged injury bits. It does not restore all afflictions.
+---Upstream anatomical slots, native compatibility and final layout are checked.
+---Native readback is mandatory; rejection restores exact old configuration.
+---rollbackVerified=false/rollback_failed requires preserved-scenario recovery.
+---See SANDBOX_CURSED_REMOVAL_EXPERIMENT.md for the explicit override and injury limits.
+---@param unit integer
+---@param configuration table {items:integer[],schools:table[],known:integer[],memorized:integer[],restoreKnown?:boolean,removeCursed?:{position:integer,item:integer}}
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail {rollbackVerified:boolean,stage:string,combatAttackReads:integer,path?:integer,spell?:integer,actual?:integer,allowed?:integer,allowance?:integer,level?:integer}
+function coe5.setTestFieldConfiguration(unit, configuration) end
+
 ---Experimental Windows test-field drawing helper. Measures the game's loaded native sprite frame,
 ---centers and scales it inside a lower-left UI rectangle with aspect ratio preserved. Texture
 ---padding remains part of the frame; all geometry stays inside the rectangle. No row may borrow

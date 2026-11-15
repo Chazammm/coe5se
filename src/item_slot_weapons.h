@@ -129,8 +129,14 @@ static int buildUnitAttackRows(int unit, UnitAttackRow rows[MONSTER_ATTACK_MAX],
 
 typedef int (*UnitAttackRowFn)(int unit, int slot, int *type, int *weapon, long long *value);
 static UnitAttackRowFn gameUnitAttackRow;
+/* Optional local owned-test-field adjustment. NULL leaves upstream behavior. */
+static void (*testFieldAttackAdjustment)(int unit,int type,int weapon,long long *value);
 static int unitAttackRowHook(int unit, int slot, int *type, int *weapon, long long *value) {
-    if (!unitWeaponRowsDiffer(unit)) return gameUnitAttackRow(unit, slot, type, weapon, value);
+    if (!unitWeaponRowsDiffer(unit)) {
+        int result=gameUnitAttackRow(unit,slot,type,weapon,value);
+        if(result>=0 && testFieldAttackAdjustment)testFieldAttackAdjustment(unit,*type,*weapon,value);
+        return result;
+    }
 #ifdef __APPLE__
     *type = 0, *weapon = -1, *value = 0;
 #endif
@@ -142,6 +148,7 @@ static int unitAttackRowHook(int unit, int slot, int *type, int *weapon, long lo
     }
     if (slot < 0 || slot >= count) return -1;
     *type = rows[slot].type, *weapon = rows[slot].weapon, *value = rows[slot].value;
+    if(testFieldAttackAdjustment)testFieldAttackAdjustment(unit,*type,*weapon,value);
     return rows[slot].weapon;
 }
 
