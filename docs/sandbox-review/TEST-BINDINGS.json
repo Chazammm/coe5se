@@ -1,0 +1,92 @@
+[
+  {
+    "test": "Ranged",
+    "session": "2518e863317f4c0693ce417333fb6be2",
+    "source_commit": "245307837306510e51bf56427add9c1ab003dc89",
+    "source_branch": "review/sandbox-ranged-20261115",
+    "source_tree_sha256": "d8e1d3765517ffe3cd9d728380e0e0e4b172094002ee8dbe41f086890cc77625",
+    "dll_sha256": "4496f6bdf80fe8f534a5bbc11387fe05d005c4d095d6c27a4b8660c240c6e875",
+    "sandbox_source_sha256": "3c2f2d2a16f735b09e596499fad297b80726229624c8e668314c88eed84328d3",
+    "groups": {}
+  },
+  {
+    "test": "Content origin",
+    "session": "ea242bf7b1a24cb4a4405b1595364b60",
+    "source_commit": "3adfd71d72a1477329482d01a0136c7504a4d5ad",
+    "source_branch": "review/sandbox-content-origin-20261115",
+    "source_tree_sha256": "4a03792a4a91e25d91bdccafda7ea91dc838bb148179ab1e7944c9e1e626aee0",
+    "dll_sha256": "7fc80e9c45d220c6d2ab0b70863d83ba35f607999e1a927932a68c5ccdff3f14",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Core",
+    "session": "acb5f3096d52426cb6b6a12aecaa4e0c",
+    "source_commit": "b67156dd852435ac0d3a4144a116519f1596c2bd",
+    "source_branch": "review/sandbox-field-core-20261115",
+    "source_tree_sha256": "a7518f2202dec496313bce95016be2659829e2473ed5b24b2d47d0e133d77ab4",
+    "dll_sha256": "b0522b820be99eca147c9361d6dcd93aa03a15b9a207954d57670b8701fecb4e",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Presentation",
+    "session": "886d6c1738b042d5a1fee239cd18f585",
+    "source_commit": "c2c9c3a6ab2ac72d560f0bcc938b3cbf247e0dfe",
+    "source_branch": "review/sandbox-field-presentation-20261115",
+    "source_tree_sha256": "0cc77591e5c5cce87bf41bdc000c4ebe21000408c5b9994106fdcab36ddadb28",
+    "dll_sha256": "dc5a32dd66b922679ffdd18d37f73d701f5560e0a0a50052c33e9e29bc4e0f97",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Configuration parser",
+    "session": "1ae6b9c648694f24b9db3c069d82826d",
+    "source_commit": "fcc206fc2293af25d1878166392d476ef9aa9669",
+    "source_branch": "review/sandbox-field-configuration-20261115",
+    "source_tree_sha256": "da7b6782e5dfd08e4af7d8460686a829821fd4a4883f777887bd56be720251df",
+    "dll_sha256": "d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Configuration production",
+    "session": "066927aaf5804f46affbcf778de8229d",
+    "source_commit": "fcc206fc2293af25d1878166392d476ef9aa9669",
+    "source_branch": "review/sandbox-field-configuration-20261115",
+    "source_tree_sha256": "da7b6782e5dfd08e4af7d8460686a829821fd4a4883f777887bd56be720251df",
+    "dll_sha256": "d987adcb65822658a572e483c32f303fea9007b4f22f21c9b389dd737377af61",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Combined standard (before lazy init)",
+    "session": "b728fabe30f5435faf4633db368b8fad",
+    "source_commit": "019389868e9fe9a6269236b794d0107367204a26",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "c04b61bbab3bb8c0b7df37ded17c1bb289883d49d8f982db82a84d01e935d619",
+    "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
+    "sandbox_source_sha256": "3c2f2d2a16f735b09e596499fad297b80726229624c8e668314c88eed84328d3",
+    "groups": {}
+  },
+  {
+    "test": "Combined fixture (before lazy init)",
+    "session": "4920a83ca30440ab9e85053d02df6e6e",
+    "source_commit": "019389868e9fe9a6269236b794d0107367204a26",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "c04b61bbab3bb8c0b7df37ded17c1bb289883d49d8f982db82a84d01e935d619",
+    "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  },
+  {
+    "test": "Combined placement (before lazy init)",
+    "session": "b92ef5a2c7c54f868dea0fa9a26f3f64",
+    "source_commit": "3ae06baebd6836ac628ec9b0cff898c329ebf6d5",
+    "source_branch": "review/sandbox-complete-20261115",
+    "source_tree_sha256": "be622b141573bb180db1a7bfa8ea4b4d61f64b632879dbf0383e153dbb0ff180",
+    "dll_sha256": "e2996d24e872926ba4a4dbe4dd5219f7b5dd6c3708bf741274798a2dbeb1f737",
+    "sandbox_source_sha256": "8b8176fe9662c9e4f4a4a1d46bc4d4d7e5f649df4431b3adbb1487e12cd451fb",
+    "groups": {}
+  }
+]
