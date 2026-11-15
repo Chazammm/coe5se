@@ -587,8 +587,8 @@ function require(name) end
 ---| "commonCause"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "scoreGraphs"           # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
 ---| "battleReports"         # integer: the Advanced Options checkbox. Changes the moment the player clicks it. Read during play and saved, so a change in a game counts.
----| "mapW"                  # integer: the map's width in squares, written at Ok (with a random ±1). At most 1000, the game's square arrays.
----| "mapH"                  # integer: the map's height in squares, written at Ok (with a random ±1). At most 160, the game's square arrays.
+---| "mapW"                  # integer: the map's width in squares, written at Ok (with a random ï¿½1). At most 1000, the game's square arrays.
+---| "mapH"                  # integer: the map's height in squares, written at Ok (with a random ï¿½1). At most 160, the game's square arrays.
 ---| "startFlags"            # integer: start positions, written at Ok: 8 clustered, 16 west/east, 0 random.
 ---| "wilder"                # integer: Wilder, written at Ok: 2 on, 1 off, 0 before the first game. 0 to 2, what the game stores.
 ---| "mapDepth"              # integer: despite the name, the width of the whole world: the map's width, raised as planes are added beside the map. At most 1000.
@@ -5089,8 +5089,8 @@ coe5.keyAction = {
 -- Mac retains upstream legacy fields; editor capabilities are zero, terrains empty,
 -- and the new editor options are refused. A Mac build/runtime test is still required.
 
----Experimental: supported numeric test-field terrain IDs, currently vanilla Plain and Forest
----on Windows; empty on Mac. No field is opened. Use this to detect the extension before passing
+---Experimental: supported numeric test-field terrain IDs, currently vanilla Plain, Forest,
+---Mountains, Swamp and Desert on Windows; empty on Mac. No field is opened. Use this to detect the extension before passing
 ---terrain: older extenders may silently ignore unknown table keys. Mod overrides and campaign
 ---climate/enchantments are not covered by the neutral-land validation.
 ---@return integer[] terrains
