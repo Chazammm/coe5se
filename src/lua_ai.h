@@ -356,7 +356,7 @@ static void buyAiTroops(int player, int offer, int x, int y) {
     aiOfferLimiter(player, offer, limiter);
     int terrain = buyTerrainAt(x, y);
     if (terrain < 0) return;
-    unsigned parts = GAME_FN(unsigned (*)(int, int), RVA_SQUARE_FORT_PARTS)(x, y);
+    unsigned parts = squareFortParts(x, y);
     const unsigned char *t = GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE);
     int gold = *(const short *)(t + TERRAIN_GOLD), trade = *(const short *)(t + TERRAIN_TRADE), fort = (parts & FORT_PART_FORT) != 0;
     int worth;
@@ -471,7 +471,7 @@ static const AiRecruitCalls *aiRecruitGame(void) {
     // @platform-split ai_recruit_buys: Mac's buys are CoE5SE's copies; Windows calls the game's
     if (!aiRecruitCalls.offerAvailable) {
         aiRecruitCalls.offerAvailable = GAME_FN(int (*)(int, int, int, int), RVA_SHOP_OFFER_AVAILABLE);
-        aiRecruitCalls.citadelFor = GAME_FN(int (*)(int, int, int), RVA_SQUARE_IS_CITADEL_FOR);
+        aiRecruitCalls.citadelFor = squareCitadelFor;
         aiRecruitCalls.squareAbilityTotal = GAME_FN(int (*)(int, int, int, int, int), RVA_SQUARE_ABILITY_TOTAL);
         aiRecruitCalls.countMonsterAt = GAME_FN(int (*)(int, int, int, int), RVA_COUNT_MONSTER_AT);
         aiRecruitCalls.seaAreaSize = GAME_FN(int (*)(int, int, int), RVA_SEA_AREA_SIZE);

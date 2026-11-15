@@ -376,4 +376,315 @@ static void battleEnemyExtentCopy(int player, int *low, int *high) {
         }
     *low = lo, *high = hi;
 }
+// ---- Teleports ------------------------------------------------------------------------------------
+
+static void teleportUnitCopy(int unit, int x, int y) {
+    GAME_FN(void (*)(int, int, int, int, int, int, int), RVA_TELEPORT_ARMY)(unit, 0, -1, -1, x, y, 0);
+}
+static void teleportSquareCopy(int fromX, int fromY, int toX, int toY) {
+    GAME_FN(void (*)(int, int, int, int, int, int, int), RVA_TELEPORT_ARMY)(-1, 0, fromX, fromY, toX, toY, 0);
+}
+// ---- Commanders and units -------------------------------------------------------------------------
+
+static int commanderLearnRitualCopy(int c, int slot) {
+    if (c < 0) return 0;
+    for (int i = 0; i < 64; i++) {
+        size_t at = RVA_COMMANDER_KNOWN_RITUALS + (size_t)c * COMMANDER_SIZE + (size_t)i * 2;
+        if ((short)G16(at) > 0) continue;
+        G16(at) = (unsigned short)slot;
+        if (i + 1 < 64) G16(at + 2) = 0;
+        return 1;
+    }
+    return 0;
+}
+static void unitAddXpCopy(int u, int xp) {
+    if (u < 0 || GAME_FN(int (*)(int), RVA_UNIT_MINDLESS)(u)) return;
+    int (*maxHp)(int) = GAME_FN(int (*)(int), RVA_UNIT_MAX_HP);
+    int before = maxHp(u);
+    short sum = (short)(unsigned short)((unsigned short)G16(RVA_UNIT_XP + (size_t)u * UNIT_SIZE) + (unsigned short)xp);
+    if (sum <= 0) sum = 0;
+    if (sum > 9999) sum = 9999;
+    G16(RVA_UNIT_XP + (size_t)u * UNIT_SIZE) = (unsigned short)sum;
+    int gain = maxHp(u) - before;
+    short hp = (short)G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE);
+    if (gain > 0 && hp > 0) G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) = (unsigned short)(hp + gain);
+}
+static void setSquareOwnerCopy(int x, int y, int player) {
+    if (x < 0 || y < 0 || x >= G32(RVA_MAP_W) || y >= G32(RVA_MAP_H) || player >= 32) return;
+    G8(RVA_SQUARE_RECORDS + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE + SQUARE_OWNER) = (unsigned char)player;
+}
+static int unitRemoveTempAbilityCopy(int u, int ability) {
+    if (u < 0) return 0;
+    for (int i = 0; i < 4; i++) {
+        size_t id = RVA_UNIT_TEMP_ABILITY_IDS + (size_t)u * UNIT_SIZE + (size_t)i * 2;
+        int has = (short)G16(id);
+        if (!has) return 0;
+        if (has != ability) continue;
+        G16(id) = -1;
+        G32(RVA_UNIT_TEMP_ABILITY_VALUES + (size_t)u * UNIT_SIZE + (size_t)i * 4) = 0;
+        return 1;
+    }
+    return 0;
+}
+static void addBenefitCopy(int u, unsigned long long bits) {
+    if (u < 0 || u > G32(RVA_UNIT_COUNT)) return;
+    if ((bits & 0x80000000ULL) && !GAME_FN(int (*)(int), RVA_UNIT_PRIMABLE)(u)) bits -= 0x80000000ULL;
+    unsigned long long *have = (unsigned long long *)GAME_PTR(RVA_UNIT_BENEFIT_BITS + (size_t)u * UNIT_SIZE);
+    if ((*have & bits) == bits) return;
+    int (*maxHp)(int) = GAME_FN(int (*)(int), RVA_UNIT_MAX_HP);
+    int before = maxHp(u);
+    *have |= bits;
+    int gain = maxHp(u) - before;
+    short hp = (short)G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE);
+    if (gain > 0 && hp > 0) G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) = (unsigned short)(hp + gain);
+}
+static int squareHoldCopy(int player, int x, int y) {
+    int count = 0;
+    for (int u = 0; u <= G32(RVA_UNIT_COUNT); u++) {
+        size_t at = (size_t)u * UNIT_SIZE;
+        if (G32(RVA_UNIT_X + at) != x || G32(RVA_UNIT_X + 4 + at) != y || (short)G16(RVA_UNIT_HP + at) <= 0) continue;
+        if ((short)G16(RVA_UNIT_PLAYER + at) != player) continue;
+        *(unsigned long long *)GAME_PTR(RVA_UNIT_BENEFIT_BITS + at) |= 1ULL << UNIT_FLAG2_HOLDIT;
+        count++;
+    }
+    return count;
+}
+static int copyCommanderPlayer(int c) {
+    if (c > G32(RVA_LAST_COMMANDER)) return -1;
+    int unit = G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE);
+    return unit < 0 ? -1 : (short)G16(RVA_UNIT_PLAYER + (size_t)unit * UNIT_SIZE);
+}
+static void selectedCommanderDoneCopy(void) {
+    int c = G32(RVA_SELECTED_COMMANDER);
+    if (c < 0) return;
+    G8(RVA_COMMANDER_DONE + (size_t)c * COMMANDER_SIZE) = 1;
+    int player = copyCommanderPlayer(c), group = G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE + COMMANDER_ORDER_GROUP);
+    if (group <= 0) return;
+    for (int i = 0; i <= G32(RVA_LAST_COMMANDER); i++)
+        if (G32(RVA_COMMANDERS + (size_t)i * COMMANDER_SIZE + COMMANDER_ORDER_GROUP) == group && copyCommanderPlayer(i) == player)
+            G8(RVA_COMMANDER_DONE + (size_t)i * COMMANDER_SIZE) = 1;
+}
+static int toggleAutoRecruitCopy(int player, int x, int y, int monster) {
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE)("toggleautorec p%d %d,%d mnr %d\n", player, x, y, monster);
+    if (player < 0 || x < 0 || y < 0 || monster <= 0) return -1;
+    size_t squares = RVA_AUTO_RECRUIT_SQUARES + (size_t)player * PLAYER_BLOCK_SIZE, monsters = RVA_AUTO_RECRUIT_MONSTERS + (size_t)player * PLAYER_BLOCK_SIZE;
+    for (int i = 0; i < 64; i++)
+        if (PG16(squares + (size_t)i * 4) == x && PG16(squares + (size_t)i * 4 + 2) == y && PG16(monsters + (size_t)i * 2) == monster) {
+            PG16(squares + (size_t)i * 4) = 0, PG16(squares + (size_t)i * 4 + 2) = 0, PG16(monsters + (size_t)i * 2) = 0;
+            return 0;
+        }
+    for (int i = 0; i < 64; i++)
+        if (!PG16(squares + (size_t)i * 4) && !PG16(squares + (size_t)i * 4 + 2)) {
+            PG16(squares + (size_t)i * 4) = (short)x, PG16(squares + (size_t)i * 4 + 2) = (short)y, PG16(monsters + (size_t)i * 2) = (short)monster;
+            return 1;
+        }
+    return -1;
+}
+static int unmemorizeSpellCopy(int u, int spell) {
+    if (u < 0 || spell < 0) return -1;
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE_C)("%s unmemorized %s\n", GAME_FN(const char *(*)(int), RVA_UNIT_SHOWN_NAME)(u),
+                                                      spellSlot(spell)->name);
+    size_t list = RVA_UNIT_MEMORIZED_SPELLS + (size_t)u * UNIT_SIZE;
+    for (int i = 0; i < 30; i++) {
+        int at = (short)G16(list + (size_t)i * 2);
+        if (at == spell) {
+            if (i < 29) memmove(GAME_PTR(list + (size_t)i * 2), GAME_PTR(list + (size_t)(i + 1) * 2), (size_t)(29 - i) * 2);
+            G16(list + 29 * 2) = -1;
+            return i;
+        }
+        if (at < 0) return -1;
+    }
+    return -1;
+}
+static void moveGemsCopy(int fromX, int fromY, int toX, int toY) {
+    if (fromX < 0 || fromY < 0 || fromX >= G32(RVA_MAP_DEPTH) || fromY >= G32(RVA_MAP_H)) return;
+    if (toX < 0 || toY < 0 || toX >= G32(RVA_MAP_DEPTH) || toY >= G32(RVA_MAP_H)) return;
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE)("movegems %d,%d -> %d,%d\n", fromX, fromY, toX, toY);
+    unsigned char *from = GAME_PTR(RVA_SQUARE_RECORDS + ((size_t)fromX * MAP_COLUMN_SQUARES + (size_t)fromY) * SQUARE_SIZE + SQUARE_GEMS);
+    unsigned char *to = GAME_PTR(RVA_SQUARE_RECORDS + ((size_t)toX * MAP_COLUMN_SQUARES + (size_t)toY) * SQUARE_SIZE + SQUARE_GEMS);
+    unsigned char next = from[0];
+    for (int i = 0; i < 4; i++) {
+        to[i] = next;
+        if (i < 3) next = from[i + 1];
+        from[i] = 0;
+    }
+}
+static void removeBadFollowersCopy(void) {
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE)("removeallbadfollowers\n");
+    for (int c = 0; c <= G32(RVA_LAST_COMMANDER); c++) {
+        if (G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) >= 0) {
+            GAME_FN(void (*)(int), RVA_CHECK_FOLLOWER_LINKS)(c);
+            continue;
+        }
+        for (int u = 0; u <= G32(RVA_UNIT_COUNT); u++)
+            if (G32(RVA_UNIT_LEADER + (size_t)u * UNIT_SIZE) == c) G32(RVA_UNIT_LEADER + (size_t)u * UNIT_SIZE) = -1;
+    }
+}
+static int moveEnchantsCopy(int fromX, int fromY, int toX, int toY) {
+    void (*trace)(const char *, ...) = GAME_FN(void (*)(const char *, ...), RVA_TRACE);
+    int moved = 0;
+    for (int i = 0; i <= G32(RVA_LAST_ENCHANT); i++) {
+        size_t e = RVA_ENCHANTS + (size_t)i * ENCHANT_SIZE;
+        int kind = G32(e + ENCHANT_KIND);
+        trace("moveench: %d = type %d  at %d,%d\n", i, kind, G32(e + ENCHANT_X), G32(e + ENCHANT_Y));
+        if (!kind || G32(e + ENCHANT_X) != fromX || G32(e + ENCHANT_Y) != fromY) continue;
+        trace("moveench: type %d  %d,%d -> %d,%d\n", kind, fromX, fromY, toX, toY);
+        moved++;
+        G32(e + ENCHANT_X) = toX, G32(e + ENCHANT_Y) = toY;
+    }
+    if (moved <= 0) return moved;
+    for (int x = 0; x <= G32(RVA_MAP_DEPTH); x++)
+        for (int y = 0; y <= G32(RVA_MAP_H); y++) G32(RVA_SQUARE_FLAGS + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE) &= ~4;
+    for (int i = 0; i <= G32(RVA_LAST_ENCHANT); i++) {
+        size_t e = RVA_ENCHANTS + (size_t)i * ENCHANT_SIZE;
+        int x = G32(e + ENCHANT_X), y = G32(e + ENCHANT_Y);
+        if (G32(e + ENCHANT_KIND) && x >= 0 && y >= 0) G32(RVA_SQUARE_FLAGS + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE) |= 4;
+    }
+    return moved;
+}
+static void damageUnitPlainCopy(int u, int damage) {
+    if (u < 0) return;
+    size_t at = (size_t)u * UNIT_SIZE;
+    int x = G32(RVA_UNIT_X + at), y = G32(RVA_UNIT_X + 4 + at);
+    G16(RVA_UNIT_HP + at) = (short)((unsigned short)G16(RVA_UNIT_HP + at) - (unsigned short)damage);
+    if ((short)G16(RVA_UNIT_HP + at) > 0) {
+        rebuildSquareArmyHook(x, y);
+        return;
+    }
+    if (damage != 9999) GAME_FN(void (*)(int), RVA_UNIT_LEAVE_CORPSE)(u);
+    for (int c = 0; c <= G32(RVA_LAST_COMMANDER); c++) {
+        if (G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) != u) continue;
+        for (int p = 0; p < 32; p++)
+            if (PG16(RVA_SLOT_CONTROLLER + (size_t)p * 2) >= 0 && PG32(RVA_PLAYER_LEADER + (size_t)p * PLAYER_BLOCK_SIZE) == c) {
+                PG32(RVA_PLAYER_LEADER + (size_t)p * PLAYER_BLOCK_SIZE) = -1;
+                break;
+            }
+        G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) = -1;
+        break;
+    }
+    for (int f = 0; f <= G32(RVA_UNIT_COUNT); f++) {
+        size_t link = RVA_UNIT_LEADER + (size_t)f * UNIT_SIZE;
+        int leader = G32(link);
+        if (leader < 0 || leader >= 9990) continue;
+        int unit = leader > G32(RVA_LAST_COMMANDER) ? -1 : G32(RVA_COMMANDERS + (size_t)leader * COMMANDER_SIZE);
+        if (unit < 0 || (short)G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) <= 0 ||
+            G16(RVA_UNIT_PLAYER + (size_t)unit * UNIT_SIZE) != G16(RVA_UNIT_PLAYER + (size_t)f * UNIT_SIZE))
+            G32(link) = -1;
+    }
+    rebuildSquareArmyHook(x, y);
+}
+#define COPY_PORTAL_ACTIVE 0xcc
+#define COPY_PORTAL_INACTIVE 0x141
+static size_t copySquareAt(int x, int y) { return RVA_SQUARE_RECORDS + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE; }
+static int fixPortalsCopy(void) {
+    void (*trace)(const char *, ...) = GAME_FN(void (*)(const char *, ...), RVA_TRACE);
+    const char *(*text)(int, int) = GAME_FN(const char *(*)(int, int), RVA_SQUARE_TEXT);
+    int count = 0;
+    for (int y = 0; y < G32(RVA_MAP_H); y++)
+        for (int x = 0; x < G32(RVA_MAP_DEPTH); x++) {
+            int portal = (short)G16(copySquareAt(x, y) + SQUARE_PORTAL);
+            if (portal <= 0) continue;
+            int onMap = x < G32(RVA_MAP_W) && y < G32(RVA_MAP_H);
+            int terrain = onMap ? (short)G16(copySquareAt(x, y) + SQUARE_TERRAIN_TYPE) : -1;
+            int same = 0;
+            for (int x2 = 0; x2 < G32(RVA_MAP_DEPTH); x2++)
+                for (int y2 = 0; y2 < G32(RVA_MAP_H); y2++) {
+                    int other = (short)G16(copySquareAt(x2, y2) + SQUARE_PORTAL);
+                    if (other > 0 && other == portal) same++;
+                }
+            int from = same > 1 ? COPY_PORTAL_INACTIVE : COPY_PORTAL_ACTIVE, to = same > 1 ? COPY_PORTAL_ACTIVE : COPY_PORTAL_INACTIVE;
+            if (terrain == from) {
+                trace(same > 1 ? "fixportals: Portal %d at %s -> active\n" : "fixportals: Portal %d at %s -> inactive\n", portal, text(x, y));
+                if (onMap && G32(RVA_LAST_TERRAIN) >= to) G16(copySquareAt(x, y) + SQUARE_TERRAIN_TYPE) = (short)to;
+            }
+            count++;
+        }
+    return count;
+}
+static void planeShiftUnitCopy(int u, int plane, int noSight) {
+    if (u < 0 || plane < 0) return;
+    int x = G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE), y = G32(RVA_UNIT_X + 4 + (size_t)u * UNIT_SIZE);
+    GAME_FN(void (*)(int, int *, int *), RVA_PLANE_SAME_SPOT)(plane, &x, &y);
+    int c = -1;
+    for (int i = 0; i <= G32(RVA_LAST_COMMANDER); i++)
+        if (G32(RVA_COMMANDERS + (size_t)i * COMMANDER_SIZE) == u) { c = i; break; }
+    const char *name = c >= 0 ? commanderTheName(c) : GAME_FN(const char *(*)(int), RVA_UNIT_SHOWN_NAME)(u);
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE)("planeshiftunit %s to %d (%d,%d)\n", name, plane, x, y);
+    GAME_FN(void (*)(int, int, int, int, int, int, int), RVA_TELEPORT_ARMY)(u, 0, -1, -1, x, y, noSight);
+}
+static void planeRiseToElysiumCopy(int plane, int percent, int each, const char *name) {
+    int (*random)(int) = GAME_FN(int (*)(int), RVA_RANDOM);
+    int (*planeAt)(int, int) = GAME_FN(int (*)(int, int), RVA_PLANE_AT);
+    for (int y = 0; y < planeField(plane, PLANE_H); y++)
+        for (int x = planeField(plane, PLANE_X); x < planeField(plane, PLANE_X) + planeField(plane, PLANE_W); x++) {
+            if (random(100) >= percent || x < 0 || x >= G32(RVA_MAP_DEPTH) || y >= G32(RVA_MAP_H) ||
+                !G16(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * 2))
+                continue;
+            int moved = 0, owner = 24, lastX = -1, lastY = -1;
+            for (int u = 0; u <= G32(RVA_UNIT_COUNT) && u < UNIT_TABLE_MAX; u++) {
+                size_t at = (size_t)u * UNIT_SIZE;
+                int ux = G32(RVA_UNIT_X + at), uy = G32(RVA_UNIT_X + 4 + at);
+                if (planeAt(ux, uy) != plane || (short)G16(RVA_UNIT_HP + at) <= 0 || ux != x || uy != y) continue;
+                const unsigned char *monster = monsterRecord((short)G16(RVA_UNIT_MONSTER + at));
+                if (!monster || strcmp((const char *)monster, name) || random(100) >= each) continue;
+                planeShiftUnitCopy(u, 0, 1);
+                owner = (short)G16(RVA_UNIT_PLAYER + at), lastX = G32(RVA_UNIT_X + at), lastY = G32(RVA_UNIT_X + 4 + at);
+                moved++;
+            }
+            int again = moved > 0 ? (moved * 100 + 50) / 100 : 0;
+            if (again > 0) GAME_FN(int (*)(int, int, const char *, int, int, int), RVA_POPULATE)(lastX, lastY, name, again, owner, -1);
+        }
+}
+static int destroyGatewayCopy(int player, int x, int y, int flag);
+static int destroyGatewayLinksCopy(int player, int number) {
+    int sum = 0;
+    if (!number) return 0;
+    for (int x = 0; x < G32(RVA_MAP_DEPTH); x++)
+        for (int y = 0; y < G32(RVA_MAP_H); y++)
+            if ((short)G16(copySquareAt(x, y) + SQUARE_PORTAL) == number) sum += destroyGatewayCopy(player, x, y, 0);
+    return sum;
+}
+static int destroyGatewayCopy(int player, int x, int y, int flag) {
+    if (x < 0 || y < 0 || x >= G32(RVA_MAP_W) || y >= G32(RVA_MAP_H)) return 0;
+    int terrain = (short)G16(copySquareAt(x, y) + SQUARE_TERRAIN_TYPE), changed = 0;
+    if (terrain < 0) return 0;
+    if (terrain >= 201 && terrain <= 204) {
+        changed = GAME_FN(int (*)(int, int, int, int, int, int), RVA_ALTER_TERRAIN)(player, x, y, terrain, -1, 200);
+        if (!changed) return 0;
+    }
+    int number = (short)G16(copySquareAt(x, y) + SQUARE_PORTAL);
+    if (number) {
+        G16(copySquareAt(x, y) + SQUARE_PORTAL) = 0;
+        if (flag) destroyGatewayLinksCopy(player, number), destroyGatewayLinksCopy(player, -number);
+        changed = 1;
+    }
+    if (changed) GAME_FN(void (*)(int, int, int), RVA_NET_SEND_SQUARE)(player, x, y);
+    if (terrain == 206)
+        GAME_FN(void (*)(int, int, int, int, int, int, const char *, const char *, ...), RVA_ADD_MESSAGE)(
+            -1, -2, x, y, 4, 0, "Wonderful News", "The Gateway to Inferno has been destroyed by %s.",
+            (const char *)playerSlotAddress(RVA_SLOT_NAME, player, PLAYER_BLOCK_SIZE));
+    return changed;
+}
 #endif
+
+// ---- Copies both builds run -----------------------------------------------------------------------
+
+static int nearestUnitAbilityIsCopy(int plane, int x, int y, int ability, int low, int high) {
+    int (*planeAt)(int, int) = GAME_FN(int (*)(int, int), RVA_PLANE_AT);
+    int best = -1, bestDistance = 999999;
+    for (int u = 0; u <= G32(RVA_UNIT_COUNT) && u < UNIT_TABLE_MAX; u++) {
+        size_t at = (size_t)u * UNIT_SIZE;
+        if ((short)G16(RVA_UNIT_HP + at) <= 0) continue;
+        int ux = G32(RVA_UNIT_X + at), uy = G32(RVA_UNIT_X + 4 + at);
+        if (plane != -1) {
+            int on = planeAt(ux, uy);
+            if (plane == -2 ? (on & ~3) != 0 || on == 1 : on != plane) continue;
+        }
+        if ((short)G16(RVA_UNIT_MONSTER + at) < 0 || ux < 0) continue;
+        int total = unitAbilityTotal(u, ability, 0);
+        if (total < low || total > high) continue;
+        int distance = abs(ux - x) + abs(uy - y);
+        if (distance < bestDistance) best = u, bestDistance = distance;
+    }
+    return best;
+}

@@ -180,6 +180,8 @@ static void battleMapsBeforePass(int level);
 static void battleMapsAfterPass(int level);
 static int unitBattleCell(int unit, int *x, int *y);
 static unsigned char *battleCell(int x, int y);
+static const char *moveUnitBattleCell(int unit, int x, int y);
+static const char *writeUnitItem(int unit, int position, int item);
 static void popupMissingPlanes(void);
 static int settingLineHook(const char *line, size_t len, int mod, int level);
 static int eventLogicLine(const char *line, int level);
@@ -523,6 +525,7 @@ static void takeStubLogTail(void) {
     else if (moved < 0) writeLogWarning("stub_log_tail_left", "reason=move_failed path=%s", gameLog);
 }
 
+static void beginContentPass(void), endContentPass(void);
 static void finishStartup(void) {
     if (startupFinished) return;
     takeStubLogTail();
@@ -530,6 +533,7 @@ static void finishStartup(void) {
     readLoadOrder(1);
     readUnreadSettingsFiles();
     loadLuaCommandsFiles();
+    beginContentPass();
     loadLuaScripts();
     logAllWrapOrders();
 #ifdef __APPLE__
@@ -537,6 +541,7 @@ static void finishStartup(void) {
 #endif
     logHeaderEnd();
     startupFinished = 1;
+    endContentPass();
 }
 
 static void onFirstMenuFrame(const MenuColumn *col) {
@@ -616,6 +621,7 @@ static int isInlinedButtonRowSite(CallSite site) {
 
 #include "x86_code.h"
 
+static void modsReadAsGame(void);
 #ifndef __aarch64__
 typedef struct {
     void *head;
@@ -625,13 +631,21 @@ typedef struct {
 } StubData;
 #define STUB_PAGES_BYTES 0x8000
 #define STUB_DATA_BYTES  0x4000
-_Static_assert(SITE_COUNT * STUB_SIZE <= STUB_PAGES_BYTES, "every site's stub must fit the pages allocNearBytes gives");
+#define KEEP_THUNK_SITES 1
+_Static_assert(SITE_COUNT * STUB_SIZE + KEEP_THUNK_SITES * KEEP_THUNK_SLOT <= STUB_PAGES_BYTES, "every site's stub and thunk must fit the pages allocNearBytes gives");
 _Static_assert(SITE_COUNT * sizeof(StubData) <= STUB_DATA_BYTES, "every site's data must fit the data page");
 static unsigned char *stubPage;
 static int siteInstalled[SITE_COUNT];
 static int setupIsAutomated;
 
 static unsigned char *siteStub(CallSite site) { return stubPage + site * STUB_SIZE; }
+
+// @platform-split keep_registers: Windows' calls of SQUARE_WATERLIKE go to a thunk that keeps the volatile registers; Mac's bl goes to the site's stub
+static int siteKeepsRegisters(CallSite site) { return site == SITE_SQUARE_WATERLIKE; }
+static unsigned char *siteKeepThunk(CallSite site) {
+    (void)site;
+    return stubPage + (size_t)SITE_COUNT * STUB_SIZE;
+}
 static StubData *siteStubData(CallSite site) { return (StubData *)(stubPage + STUB_PAGES_BYTES) + site; }
 
 static uintptr_t siteCallerSp(CallSite site) { return siteStubData(site)->rsp + 8; }
@@ -663,6 +677,8 @@ static int topBarIncomeAsGame(int player, int resource, int income);
 static int squarePanelWrapAsGame(int right, int limit, int line);
 static int weaponHitDamageAsGame(int attacker, int target, int weapon, int damage, int value, int dmgtype);
 static int targetCheckAsGame(int unit, int type, int weapon, int value, int target);
+static unsigned long long unitResistancesAsGame(int unit), unitFlagsAsGame(int unit);
+static int ritualCanCastAsGame(int commander, int ritual);
 static unsigned char *siteCallTarget(CallSite site) {
     unsigned char *generated = generatedSiteTarget(site);
     if (generated) return generated;
@@ -670,6 +686,10 @@ static unsigned char *siteCallTarget(CallSite site) {
     if (site == SITE_SQUARE_PANEL_WRAP) return (unsigned char *)squarePanelWrapAsGame;
     if (site == SITE_WEAPON_HIT) return (unsigned char *)weaponHitDamageAsGame;
     if (site == SITE_BATTLE_TARGET_CHECK) return (unsigned char *)targetCheckAsGame;
+    if (site == SITE_UNIT_RESISTANCES) return (unsigned char *)unitResistancesAsGame;
+    if (site == SITE_UNIT_FLAGS) return (unsigned char *)unitFlagsAsGame;
+    if (site == SITE_MODS_READ) return (unsigned char *)modsReadAsGame;
+    if (site == SITE_RITUAL_CAN_CAST) return (unsigned char *)ritualCanCastAsGame;
     if (!SITES[site].targetRva) return NULL;
     unsigned char *target = gameBase + SITES[site].targetRva;
     return siteThroughSlot[site] ? *(unsigned char **)target : target;
@@ -687,7 +707,26 @@ static int isSiteCall(const unsigned char *call, const unsigned char *target, co
 
 static int siteRunByCoe5se(CallSite site) {
     return site == SITE_MAP_DRAW || site == SITE_BATTLE_DRAW || site == SITE_TOP_BAR_INCOME || site == SITE_WEAPON_HIT ||
-           site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP;
+           site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP || site == SITE_UNIT_RESISTANCES ||
+           site == SITE_UNIT_FLAGS || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST;
+}
+
+static int installKeepThunk(CallSite site, const unsigned char *stub) {
+    unsigned char *thunk = siteKeepThunk(site), slot[KEEP_THUNK_SLOT] = {0};
+    size_t n = buildKeepThunk(slot, thunk, stub);
+    buildKeepThunkUnwind(slot + KEEP_THUNK_UNWIND);
+    RUNTIME_FUNCTION function = {.BeginAddress = (DWORD)(thunk - stubPage), .EndAddress = (DWORD)(thunk - stubPage + n),
+                                 .UnwindData = (DWORD)(thunk + KEEP_THUNK_UNWIND - stubPage)};
+    memcpy(slot + KEEP_THUNK_FUNCTION, &function, sizeof function);
+    if (!writeGameCode(thunk, slot, sizeof slot)) {
+        writeLog("site_skipped", "site=%s reason=code_unwritable thunk=1", SITES[site].name);
+        return 0;
+    }
+    if (!RtlAddFunctionTable((RUNTIME_FUNCTION *)(thunk + KEEP_THUNK_FUNCTION), 1, (DWORD64)(uintptr_t)stubPage)) {
+        writeLog("site_skipped", "site=%s reason=unwind_not_added thunk=1", SITES[site].name);
+        return 0;
+    }
+    return 1;
 }
 
 static int installSite(CallSite site) {
@@ -732,12 +771,22 @@ static int installSite(CallSite site) {
         writeLog("site_skipped", "site=%s reason=code_unwritable", info->name);
         return 0;
     }
+    unsigned char *callTarget = stub;
+    if (siteKeepsRegisters(site)) {
+        for (int i = 0; !ownCall && siteCallAt(site, i); i++)
+            if (siteCallAt(site, i)[0] != 0xe8) {
+                writeLog("site_skipped", "site=%s reason=not_a_call address=%p", info->name, (void *)siteCallAt(site, i));
+                return 0;
+            }
+        if (!installKeepThunk(site, stub)) return 0;
+        callTarget = siteKeepThunk(site);
+    }
 
     unsigned char saved[MAX_SITE_CALLS + 1][6];
     for (int i = 0; !ownCall && siteCallAt(site, i); i++) {
         unsigned char *call = siteCallAt(site, i), callCode[6];
         size_t size = slot ? 6 : 5;
-        buildSiteCall(callCode, call, stub, !slot && call[0] == 0xe9);
+        buildSiteCall(callCode, call, callTarget, !slot && call[0] == 0xe9);
         memcpy(saved[i], call, size);
         if (writeGameCode(call, callCode, size)) continue;
         while (--i >= 0) writeGameCode(siteCallAt(site, i), saved[i], size);
@@ -853,7 +902,7 @@ static void *makeGate(void *hook, void *next, GateKind kind) {
     X(SITE_CREATE_RANDOM_MAP) X(SITE_WORLD_PART_TERRAIN) X(SITE_MAPGEN_REMOVE_SMALL_ISLANDS) X(SITE_MAPGEN_RIVER_CROSSINGS) X(SITE_MAPGEN_ANCIENT_FOREST) X(SITE_MAPGEN_CLEAR_AREA) X(SITE_MAPGEN_ADJUST_TEMPERATURE) X(SITE_MARK_RIVER) X(SITE_GEN_DIAGONAL_FIX) X(SITE_GEN_UPDATE_MOIST_WALLS) X(SITE_GEN_TERRAIN_BLOB) X(SITE_CREATE_CELESTIAL_PLANE) X(SITE_CREATE_SKY_PLANE) X(SITE_CREATE_AGARTHA_PLANE) X(SITE_CREATE_INFERNO_PLANE) X(SITE_CREATE_HADES_PLANE) X(SITE_CREATE_ELEMENTAL_PLANE) X(SITE_LOAD_AZTLAN_PLANE) X(SITE_LOAD_PRIMAL_PLANE) X(SITE_AUTO_RECRUIT) X(SITE_USE_LIBRARY) X(SITE_ADD_GROUND_ITEMS) X(SITE_VOID_INSANITY) X(SITE_WANDERER_PICK_TARGET) X(SITE_WANDERER_PICK_UP) X(SITE_SET_HOLDIT) \
     X(SITE_LIBRARY_SCREEN) X(SITE_CHOP_BURN_SCREEN) X(SITE_SLAVE_HUNT_SCREEN) X(SITE_UNIT_STATS_SCREEN) X(SITE_ITEM_INFO_SCREEN) X(SITE_WEAPON_INFO_WINDOW) X(SITE_PLANE_INFO_SCREEN) X(SITE_BATTLE_INTRO_SCREEN) X(SITE_COMMANDER_SET_DONE) X(SITE_SELECT_NEXT_COMMANDER) X(SITE_SELECT_PREV_COMMANDER) \
     X(SITE_RUN_HATREDS) X(SITE_SANDSTORM_CLOUD_UPDATE) X(SITE_TAINTED_MAGIC_PASS) X(SITE_HERO_ARRIVAL) X(SITE_CLEAN_SQUARE) X(SITE_ADJUST_FOR_SNOW) X(SITE_START_TUNE) X(SITE_SQUARE_SET_OWNER) X(SITE_TEAMLESS_OWN_TEAM) X(SITE_ADD_BENEFIT) X(SITE_SOCIETY_PRESETS) X(SITE_MOVE_STEP_AFTER) X(SITE_NUMBER_BOX) \
-    X(SITE_ENCHANTS_DESTROYED_AT) X(SITE_STORM_SPAWN) X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_CLIENT_TURN)
+    X(SITE_ENCHANTS_DESTROYED_AT) X(SITE_STORM_SPAWN) X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_CLIENT_TURN) X(SITE_MODS_READ)
 
 static int isInternalSite(CallSite site) {
     return site == SITE_MODS_RUN || site == SITE_MOD_COMMAND || site == SITE_TEXT_FORMAT || site == SITE_TEXT_BUILD ||
@@ -1781,13 +1830,17 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "map_editor.h"
 #include "top_bar_income.h"
 #include "square_panel_wrap.h"
+#include "computed_hooks.h"
 #include "commander_lines.h"
 #include "lua_scripts.h"
+#include "lua_determinism.h"
 #include "lua_game_data.h"
+#include "content_writes.h"
 #include "lua_get_set.h"
 #include "strength_index.h"
 #include "lua_sites.h"
 #include "lua_split_chain.h"
+#include "mac_copy_hooks.h"
 #include "lua_coe5_table.h"
 #include "game_code_claims.h"
 #include "random_events.h"
@@ -1810,6 +1863,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "preview_world.h"
 #include "lua_loading.h"
 #include "game_data.h"
+#include "content_travel.h"
 #include "plane_words.h"
 #include "class_names.h"
 #include "ai_class.h"
@@ -1827,6 +1881,8 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_weapons.h"
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
+#include "battle_replays.h"
+#include "lan_join_notice.h"
 #include "faction_words.h"
 #include "faction_movers.h"
 #include "faction_saves.h"

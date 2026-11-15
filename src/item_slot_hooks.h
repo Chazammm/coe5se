@@ -90,6 +90,19 @@ static int giveItemToPositions(int unit, int item, int *spilled) {
     return -1;
 }
 
+static const char *writeUnitItem(int unit, int position, int item) {
+    if (unit < 0 || unit >= UNIT_TABLE_MAX || position < 0 || position >= ITEM_POSITION_MAX) return "no_place";
+    if ((short)G16(RVA_UNIT_MONSTER + (size_t)unit * UNIT_SIZE) < 0) return "no_unit";
+    if (item < 0) {
+        if (unitItemAt(unit, position) >= 0 && setUnitItemAt(unit, position, -1)) flushUnitItemCaches(unit);
+        return NULL;
+    }
+    if (item > G32(RVA_ITEM_COUNT)) return "no_item";
+    if (itemSlotKind(unit, position) != itemTypeOf(item)) return "wrong_kind";
+    equipItemAt(unit, position, item);
+    return NULL;
+}
+
 static int newUnitWatch, newUnitLent = -1;
 static void watchNewUnitGive(int unit) {
     if (!newUnitWatch || newUnitLent >= 0) return;

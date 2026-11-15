@@ -194,7 +194,7 @@ static SplitCall *startSplitChain(CallSite site, const LuaArgs *in, LuaArgs *out
         SplitLevel *level = &c->levels[c->count++];
         level->w = w;
         level->in = args;
-        level->f = (LuaFrame){luaFrames, w, &level->in, 0, 0, ++luaFrameSerial, 0, 0, 0, luaChangeCount};
+        level->f = (LuaFrame){luaFrames, w, &level->in, 0, 0, ++luaFrameSerial, 0, 0, 0, luaChangeCount, 0};
         LuaScript *s = w->s;
         if (!s || s->dead || !luaSiteOpenNow(s, site)) continue;
         if (!s->depth++) startLuaSteps(s);

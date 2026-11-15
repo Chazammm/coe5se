@@ -531,11 +531,21 @@
 #define RVA_AI_PROGRESS_DRAW                   ADDR(        0x07dce0,          MAC_NOT_LOOKED_UP)
 #define RVA_AI_COUNT_CITADELS                  ADDR(        0x077210,          0x1004d31ac)
 #define RVA_AI_CITADEL_COUNT                   ADDR(        0x59eac7c,         MAC_IN_CODE)
+#define RVA_CITADELS_MOVE_COPY_START           ADDR(        WIN_NO_EQUIVALENT, 0x1004e0ac0)
+#define RVA_CITADELS_MOVE_COPY_END             ADDR(        WIN_NO_EQUIVALENT, 0x1004e0680)
+#define RVA_CITADELS_MONTHLY_COPY_START        ADDR(        WIN_NO_EQUIVALENT, 0x100333be0)
+#define RVA_CITADELS_MONTHLY_COPY_END          ADDR(        WIN_NO_EQUIVALENT, 0x100333b70)
+#define RVA_CITADELS_STATS_COPY_START          ADDR(        WIN_NO_EQUIVALENT, 0x10053bc7c)
+#define RVA_CITADELS_STATS_COPY_END            ADDR(        WIN_NO_EQUIVALENT, 0x10053bd18)
 #define RVA_AI_ATTACK_DIV_OTHER                ADDR(        0x1aa7bc4,         0x105a0aeac)
 #define RVA_AI_ATTACK_DIV_AI                   ADDR(        0x1aa65c4,         0x105a0aeb0)
 #define RVA_AI_ATTACK_DIV_HUMAN                ADDR(        0x1aa62ac,         0x105a0aeb4)
 #define AI_ATTACK_MARGIN                       15
 #define RVA_AI_ATTACK_MARGIN                   ADDR(        0x1aa74f4,         MAC_IN_CODE)
+#define RVA_AI_CONQUER_MARGIN                   ADDR_DIFFERS(0x0756de,          0x1004d8a6c)
+#define RVA_WAYTOGO_MARGIN_OTHER               ADDR_DIFFERS(0x1dadf8,          0x10059c0d4)
+#define RVA_WAYTOGO_MARGIN_AI                  ADDR_DIFFERS(0x1dae10,          0x10059c0f4)
+#define RVA_WAYTOGO_MARGIN_HUMAN               ADDR_DIFFERS(0x1dae26,          0x10059c114)
 #define RVA_AI_SET_ATTACK_DIVS_COPY            ADDR(        0x06fc20,          MAC_NOT_LOOKED_UP)
 #define RVA_AI_STRONGEST_ENEMY                 ADDR(        WIN_NOT_FOUND,     MAC_NOT_LOOKED_UP)
 #define RVA_AI_STRONGEST_ENEMY_SCAN            ADDR(        WIN_NOT_FOUND,     MAC_NOT_LOOKED_UP)
@@ -972,6 +982,9 @@
 #define RVA_COUNT_LAND_NEAR                    ADDR(        0x32cb20,          0x1004c9090)
 #define RVA_TERRAIN_RUIN_FORM                  ADDR(        0x32e1a0,          0x1004d0fe4)
 #define SQUARE_FLAG_HOLDIT                     0x10
+#define SQUARE_FLAG_PLENTY                     0x8000
+#define SQUARE_FLAG_CONVERTED                  0x4000
+#define SQUARE_FLAG_POISON_FOG                 0x10000
 #define SQUARE_FLAG_ILLUSION                   0x4
 #define SQUARE_FLAG_NO_SIGHT                   0x20000
 #define UNIT_FLAG2_HOLDIT                      41
@@ -1009,6 +1022,7 @@
 #define RVA_LAND_DROWN_KILL_CALL               ADDR(        0x114aed,          0x1003b5ff8)
 #define RVA_UNIT_MAY_BE_ON_LAND                ADDR_DIFFERS(0x31faa0,          0x100548048)
 #define UNIT_STATE_FLYING_OVER_WATER           0x2000000000
+#define UNIT_STATE_HAS_ATTACKED                0x400000000000
 #define RVA_CRASH_LANDING_CHECK                ADDR(        0x113b30,          MAC_INLINED)
 #define RVA_TURN_UNIT_UPKEEP                   ADDR(        0x143a70,          0x100399a14)
 #define RVA_UPKEEP_SOUL_CONTRACTS              ADDR(        0x1462f1,          0x10039ea9c)
@@ -1089,6 +1103,7 @@
 #define RVA_REPLAY_FIGHT_CALL                  ADDR(        0x0f42d6,          0x1004c3b1c)
 #define RVA_BATTLE_ROUND_CRC_CALL              ADDR(        0x0f2465,          0x1003e0a64)
 #define RVA_BATTLE_ROUND_TRACE_CALL            ADDR(        0x0f247d,          0x1003e0a78)
+#define RVA_BATTLE_EOF_CRC_CALL                ADDR(        0x0f3ade,          0x1003e6e14)
 #define RVA_UNIT_DEATH_TRACE_CALL              ADDR(        0x0bf07e,          0x1003ba4c4)
 #define RVA_DAMAGE_FLAG_BERSERK_DEATH          ADDR_DIFFERS(0x5804c38,         0x106cc64c0)
 #define RVA_DAMAGE_FLAG_UPKEEP                 ADDR_DIFFERS(0x5804c30,         0x106cc64c4)
@@ -1728,6 +1743,18 @@
 #define RVA_LINK_SQUARES_NEW_PORTAL            RVA_NEW_PORTAL_PAIR
 #define RVA_RANDOM_LAND_SQUARE                 RVA_RANDOM_RITUAL_SQUARE
 #define RVA_SQUARE_IS_OPEN_LAND                ADDR(        0x2a3970,          MAC_INLINED)
+#define RVA_OPEN_LAND_MARK_START               ADDR(        WIN_NO_EQUIVALENT, 0x1004ba288)
+#define RVA_OPEN_LAND_MARK_CLOSED              ADDR(        WIN_NO_EQUIVALENT, 0x1004ba1f4)
+#define RVA_OPEN_LAND_MARK_OPEN                ADDR(        WIN_NO_EQUIVALENT, 0x1004ba3e0)
+#define RVA_OPEN_LAND_RITUAL_1_START           ADDR(        WIN_NO_EQUIVALENT, 0x1004b419c)
+#define RVA_OPEN_LAND_RITUAL_1_CLOSED          ADDR(        WIN_NO_EQUIVALENT, 0x1004b4248)
+#define RVA_OPEN_LAND_RITUAL_1_OPEN            ADDR(        WIN_NO_EQUIVALENT, 0x1004b4240)
+#define RVA_OPEN_LAND_RITUAL_2_START           ADDR(        WIN_NO_EQUIVALENT, 0x1004b4250)
+#define RVA_OPEN_LAND_RITUAL_2_CLOSED          ADDR(        WIN_NO_EQUIVALENT, 0x1004b42f4)
+#define RVA_OPEN_LAND_RITUAL_2_OPEN            ADDR(        WIN_NO_EQUIVALENT, 0x1004b42f8)
+#define RVA_OPEN_LAND_RITUAL_3_START           ADDR(        WIN_NO_EQUIVALENT, 0x1004b42f8)
+#define RVA_OPEN_LAND_RITUAL_3_CLOSED          ADDR(        WIN_NO_EQUIVALENT, 0x1004b43a8)
+#define RVA_OPEN_LAND_RITUAL_3_OPEN            ADDR(        WIN_NO_EQUIVALENT, 0x1004b43ac)
 #define RVA_SQUARE_WATERLIKE                   ADDR(        0x2ad910,          0x1004acb7c)
 #define RVA_SPREAD_TERRAIN                     RVA_GEN_SPREAD_TERRAIN
 #define RVA_INFERNO_CENTRE_X                   ADDR(        0x1ae05c4,         0x10487ff30)
@@ -2263,6 +2290,7 @@
 #define HATES_KILL_CHANCE                      15
 #define RVA_RUN_HATREDS                        ADDR(        0x142c90,          MAC_INLINED)
 #define RVA_UNIT_WITH_ABILITY_AT               ADDR(        0x112d10,          0x100468a7c)
+#define RVA_RANDOM_UNIT_OF_MONSTER             ADDR(        0x113540,          0x100468420)
 #define MONSTER_ABILITY_LIMITED_GEM_BONUS      0xbf
 #define MONSTER_ABILITY_RANGE_BONUS            0xc7
 #define MONSTER_ABILITY_WALL_COVER             0x198
@@ -2827,12 +2855,19 @@
 #define RVA_GET_UNIT_X                         ADDR(        0x329910,          MAC_INLINED)
 #define RVA_GET_UNIT_Y                         ADDR(        0x32a220,          MAC_INLINED)
 #define RVA_LIBRARY_LEVEL                      ADDR(        0x1b14a0,          MAC_INLINED)
+#define RVA_LIBRARY_USE_COPY_CALL              ADDR(        WIN_NO_EQUIVALENT, 0x10035c8d8)
+#define RVA_LIBRARY_SCREEN_COPY_CALL           ADDR(        WIN_NO_EQUIVALENT, 0x10035cd48)
+#define RVA_LIBRARY_PANEL_COPY_CALL            ADDR(        WIN_NO_EQUIVALENT, 0x100375fcc)
+#define RVA_LIBRARY_MAP_COPY_CALL              ADDR(        WIN_NO_EQUIVALENT, 0x10037eaa4)
+#define RVA_LIBRARY_TOTAL_COPY_CALL            ADDR(        WIN_NO_EQUIVALENT, 0x1004ab5a8)
+#define RVA_LIBRARY_INFO_COPY_CALL             ADDR(        WIN_NO_EQUIVALENT, 0x1004cc5dc)
+#define RVA_LIBRARY_AI_COPY_CALL               ADDR(        WIN_NO_EQUIVALENT, 0x1004d8bd4)
 #define RVA_PLAYER_LIBRARY_TOTAL               ADDR(        0x1b0b30,          0x1004ab4d0)
 #define RVA_COUNT_SQUARES_OF_TERRAIN           ADDR(        0x32daf0,          0x1004ced94)
 #define RVA_COUNT_GROUP_CITADELS               ADDR(        0x0af190,          MAC_INLINED)
 #define RVA_COUNT_GROUP_SQUARES                ADDR(        0x2c16d0,          MAC_INLINED)
 #define RVA_MONSTER_GATHERS_RESOURCE           ADDR(        0x090d20,          0x100363a70)
-#define RVA_SQUARE_LIBRARY_LEVEL               ADDR(        0x1b16e0,          MAC_INLINED)
+#define RVA_SQUARE_LIBRARY_LEVEL               ADDR(        0x1b16e0,          0x1004ab410)
 #define RVA_SQUARE_ENCHANT_VALUE               ADDR(        0x2be4b0,          0x100565cbc)
 #define RVA_UNIT_MAX_HP                        ADDR(        0x3259d0,          0x10056a8e0)
 #define RVA_UNIT_FLAGS                         ADDR(        0x328a00,          0x100569d20)
@@ -3278,6 +3313,7 @@
 #define RVA_UNIT_MONSTER                       ADDR(        0xfb8e8c8,         0x110049968)
 #define RVA_UNIT_COUNT                         ADDR(        0xfb8e7c0,         0x110049878)
 #define RVA_UNIT_HP                            ADDR(        0xfb8e8c6,         0x110049966)
+#define RVA_UNIT_BENEFIT_BITS                  ADDR(        0xfb8e7e8,         0x110049888)
 #define RVA_UNIT_PLAYER                        ADDR(        0xfb8e8ca,         0x11004996a)
 #define RVA_UNIT_XP                            ADDR(        0xfb8e8c4,         0x110049964)
 #define RVA_UNIT_KILLS                         ADDR(        0xfb8e8cc,         0x11004996c)
@@ -4384,14 +4420,22 @@ typedef struct {
     unsigned int rvas[MAX_SITE_CALLS], targetRva;
     const char *name;
     int captureMenuFade;
+    int onOtherBuild;
 } SiteInfo;
 
 #define SITE_CALLS(...) __VA_ARGS__
+#define SITE_FIRST_CALL_(first, ...) first
+#define SITE_FIRST_CALL(calls) SITE_FIRST_CALL_ calls
+#define SITE_ON(calls, target) (SITE_FIRST_CALL(calls) != 0 || (target) != 0)
 #ifdef __APPLE__
 #define M(va) MAC(va)
-#define SITE(name, fade, winCalls, winTarget, macCalls, macTarget) {{SITE_CALLS macCalls}, macTarget, name, fade}
 #else
-#define SITE(name, fade, winCalls, winTarget, macCalls, macTarget) {{SITE_CALLS winCalls}, winTarget, name, fade}
+#define M(va) ((unsigned)((va) - 0x100000000ULL))
+#endif
+#ifdef __APPLE__
+#define SITE(name, fade, winCalls, winTarget, macCalls, macTarget) {{SITE_CALLS macCalls}, macTarget, name, fade, SITE_ON(winCalls, winTarget)}
+#else
+#define SITE(name, fade, winCalls, winTarget, macCalls, macTarget) {{SITE_CALLS winCalls}, winTarget, name, fade, SITE_ON(macCalls, macTarget)}
 #endif
 static const SiteInfo SITES[SITE_COUNT] = {
     [SITE_MAIN_MENU_WAIT] = SITE("main_menu_wait", 1,
@@ -5550,9 +5594,152 @@ static const SiteInfo SITES[SITE_COUNT] = {
     [SITE_SQUARE_PANEL_WRAP] = SITE("square_panel_wrap", 0,
  (0), 0,
  (0), 0),
+    [SITE_UNIT_ARMOR] = SITE("unit_armor", 0,
+ (0x0bbf3b, 0x0dd7cf, 0x0e6340, 0x1d513d), 0x3210a0,
+ (M(0x1003c33cc), M(0x1003d8674), M(0x1003f6248), M(0x100521ff8)), M(0x10056aa70)),
+    [SITE_UNIT_RETURNS] = SITE("unit_returns", 0,
+ (0x075eb7, 0x0761e2, 0x07ced9, 0x0bf3d4), 0x326440,
+ (M(0x1003bad30), M(0x1004d1184), M(0x1004d680c), M(0x1004d9aec), M(0x1004e2a48)), M(0x10056925c)),
+    [SITE_AI_COUNT_CITADELS] = SITE("ai_count_citadels", 0,
+ (0x06ef7c, 0x06fa68, 0x198b50, 0x31d321), 0x077210,
+ (M(0x1004da844)), M(0x1004d31ac)),
+    [SITE_MOVE_INDEPENDENT_ARMY] = SITE("move_independent_army", 0,
+ (0x167474, 0x167539, 0x17aa66), 0x1726d0,
+ (M(0x10038ed0c), M(0x10038ed44), M(0x100547da0)), M(0x1005475dc)),
+    [SITE_UNIT_STRENGTH] = SITE("unit_strength", 0,
+ (0x09442e, 0x0a2bcb, 0x0bbdbd, 0x0bbe22, 0x0f44d4, 0x0f8b8e, 0x0f8ca3, 0x0f8de3, 0x118237, 0x118266,
+                       0x128ba8, 0x128ce4, 0x128d2a, 0x1b1b9b, 0x1dcb54, 0x31d154, 0x31d38f),   0x0bbe50,
+ (M(0x100333b40), M(0x1003725ac), M(0x10038a298), M(0x10038a378), M(0x10038fd3c), M(0x1003e70ec),
+                       M(0x1003e7334), M(0x1003f712c), M(0x1003f7218), M(0x1003f7264), M(0x100465fc4), M(0x100465fe8),
+                       M(0x10047508c), M(0x10047f7a0), M(0x10047f7f8), M(0x10047f8ac), M(0x10047f908), M(0x1004993e4),
+                       M(0x1004d2a80), M(0x1004d2b80), M(0x1004d6b64), M(0x1004da974), M(0x1004dae98), M(0x1004daffc),
+                       M(0x1004db0e4), M(0x1004db114), M(0x1004db5e8), M(0x1004db78c), M(0x1004db948), M(0x1004dba24),
+                       M(0x1004dba58), M(0x1004e0a18), M(0x10053bda8), M(0x10053be48), M(0x100545fe0), M(0x10059b31c),
+                       M(0x10059b3d0)),   M(0x1003f6168)),
+    [SITE_SQUARE_STRENGTH] = SITE("square_strength", 0,
+ (0x06d81b, 0x06d852, 0x075650, 0x075686),   0x0f8fe0,
+ (M(0x1004d728c), M(0x1004d73c4), M(0x1004d74f4), M(0x1004d7620), M(0x1004d7744), M(0x1004d7870),
+                       M(0x1004d7994), M(0x1004d7a04), M(0x1004d7b60), M(0x1004d7c8c), M(0x1004d7dbc), M(0x1004d7ee4),
+                       M(0x1004d800c), M(0x1004d8134), M(0x1004d8970), M(0x1004d89e0), M(0x1004d9430), M(0x1004d945c),
+                       M(0x10059bd60), M(0x10059bd78)),   M(0x1003f6f14)),
+    [SITE_COMMANDER_STRENGTH] = SITE("commander_strength", 0,
+ (0x06b02b, 0x06d16b, 0x06f031, 0x06f7a2, 0x06f7b1, 0x06f82d, 0x06f83c, 0x06f8b4, 0x06f8c3, 0x070b20,
+                       0x07a9a7, 0x07b7e6, 0x07c003, 0x1289b2, 0x16a07d, 0x16a81b, 0x16baec, 0x16c0f1, 0x16c933, 0x17cb68),   0x128c50,
+ (M(0x10038c680), M(0x1004d1698), M(0x1004d1a40), M(0x1004d28c0), M(0x1004d6150), M(0x1004da994),
+                       M(0x1004dab8c), M(0x1004dac64), M(0x1004dacf8), M(0x1004dcec8), M(0x1004df8d0), M(0x1005486c0),
+                       M(0x100548bf4), M(0x100549d30), M(0x10054a41c), M(0x10054a73c)),   M(0x10047f82c)),
+    [SITE_PLAYER_ABILITY] = SITE("player_ability", 0,
+ (0x0702f9, 0x070314, 0x070335, 0x070350, 0x070379, 0x070494, 0x0704fc, 0x075473, 0x07548c, 0x07733a,
+                       0x077350, 0x07736b, 0x077384, 0x07b245, 0x0a9030, 0x0a9509, 0x0a95ff, 0x0a97bc, 0x0ab032, 0x0ab372,
+                       0x0ad17f, 0x0ae7a7, 0x0aec7b, 0x0aec98, 0x1263ad, 0x14054a, 0x2d28be, 0x2d9cb6, 0x2d9db7, 0x2da1c7,
+                       0x2dc73b, 0x31c51a, 0x32ce45, 0x32d1f5, 0x32d335, 0x32d5e5, 0x32d765, 0x32dd35, 0x32e385, 0x32e518,
+                       0x32e617, 0x32ec57, 0x32eeb7, 0x334c16),   0x0b0790,
+ (M(0x10035dbf0), M(0x1003818c4), M(0x100381b40), M(0x100381cd8), M(0x1003ac93c), M(0x1003aea3c),
+                       M(0x1003b0fcc), M(0x1003b2088), M(0x10047b7b0), M(0x1004cf1b0), M(0x1004cf2d0), M(0x1004cf3cc),
+                       M(0x1004cf57c), M(0x1004cf5f0), M(0x1004cf7a0), M(0x1004cfc64), M(0x1004cfefc), M(0x1004d01e0),
+                       M(0x1004d04d8), M(0x1004d070c), M(0x1004d0f90), M(0x1004d2178), M(0x1004d486c), M(0x1004d496c),
+                       M(0x1004d86ac), M(0x1004d86c0), M(0x1004e0cdc), M(0x1004e0cf0), M(0x1004e0d14), M(0x1004e0d2c),
+                       M(0x1004e3ea4), M(0x1004e3ec8), M(0x1004e3ee8), M(0x1004e3f0c), M(0x1004e3f34), M(0x10056099c),
+                       M(0x100560c30), M(0x100596910)),   M(0x100361ffc)),
+    [SITE_UNIT_STATE_FLAGS] = SITE("unit_state_flags", 0,
+ (0x079817, 0x07d989, 0x09b157, 0x09b1bd, 0x09da5f, 0x09dc07, 0x0b8a0f, 0x0bb9a9, 0x0bba00, 0x0bbf2e,
+                       0x0bd49e, 0x0c6dee, 0x0cbe7d, 0x0d0a45, 0x0d37b0, 0x0d3d87, 0x0d4f1b, 0x0dcdb3, 0x0dcdc2, 0x0f334e,
+                       0x0f69af, 0x0fc432, 0x0fcc6c, 0x0fd464, 0x105600, 0x120f27, 0x121004, 0x1216c3, 0x121751, 0x14248b,
+                       0x143be3, 0x199981, 0x1d137f, 0x1d3aaf, 0x1dec80, 0x1df4d2, 0x1df625, 0x2b5287, 0x2e4851, 0x3210e0,
+                       0x322442, 0x32368f, 0x323a17, 0x3248ca, 0x325128, 0x325a40, 0x328a7e, 0x3299f3, 0x32a2db),   0x32a090,
+ (M(0x100376cc0), M(0x1003771b8), M(0x10037bd70), M(0x10037c48c), M(0x10037cac4), M(0x1003858bc),
+                       M(0x100385918), M(0x100385e34), M(0x100385e90), M(0x1003864ac), M(0x1003865b8), M(0x100399c64),
+                       M(0x1003b853c), M(0x1003b8fb8), M(0x1003c25d4), M(0x1003c25e0), M(0x1003c4090), M(0x1003cc528),
+                       M(0x1003ccb88), M(0x1003cd388), M(0x1003d167c), M(0x1003d6084), M(0x1003e3a0c), M(0x1003e8b98),
+                       M(0x1003eb014), M(0x1003ecfc8), M(0x1003eda20), M(0x1003ee698), M(0x1003efd38), M(0x1003f15b8),
+                       M(0x1003f1724), M(0x1003f4cc4), M(0x1003f6228), M(0x1003f728c), M(0x1003f74d8), M(0x1003f7538),
+                       M(0x100480658), M(0x100480714), M(0x1004807c8), M(0x100480898), M(0x1004bb028), M(0x1004d12d8),
+                       M(0x1004d2ef8), M(0x1004d2fb8), M(0x1004d389c), M(0x1004d43bc), M(0x1004e8590), M(0x10051cce4),
+                       M(0x10051d098), M(0x10051fd30), M(0x100559660), M(0x100567204), M(0x1005674ec), M(0x100569d60),
+                       M(0x10056a41c), M(0x10056a4d8), M(0x10056a920), M(0x10056aaa4), M(0x10056abf8), M(0x10056b180),
+                       M(0x10056cb2c), M(0x10056cd94), M(0x10057d764), M(0x10057fb9c), M(0x100580464), M(0x10059947c),
+                       M(0x100599b44), M(0x100599cbc), M(0x10059a3e0)),   M(0x10056725c)),
+    [SITE_ARMY_MOVE_FLAGS] = SITE("army_move_flags", 0,
+ (0x073f55, 0x0744cf, 0x075496, 0x1202fe, 0x169cda, 0x1dc094, 0x1dc187, 0x1dce44, 0x1dceb4, 0x1df2e3,
+                       0x1df68a),   0x328e10,
+ (M(0x100384728), M(0x1004d3b84), M(0x1004d86cc), M(0x1004d9e34), M(0x100548434), M(0x100599f1c),
+                       M(0x100599f6c), M(0x10059a4d8), M(0x10059ad40), M(0x10059c4ac), M(0x10059d7f4)),   M(0x100569fd8)),
+    [SITE_UNIT_PATH_LEVEL] = SITE("unit_path_level", 0,
+ (0x073beb, 0x0cc7b5, 0x1d68ff, 0x1d6b55, 0x2dde09, 0x2e3692, 0x2e3aa4, 0x2e3eab, 0x2e43e4, 0x2e4709,
+                       0x2e563b, 0x2e6235, 0x2e6283, 0x2e6327),   0x2e6f40,
+ (M(0x1003596c8), M(0x100359a30), M(0x10035bde0), M(0x10035c988), M(0x10035d10c), M(0x1003e3e28),
+                       M(0x1004bc99c), M(0x1004bda10), M(0x1004bda5c), M(0x1004bdb6c), M(0x1004bebb8), M(0x1004bfbf4),
+                       M(0x1004d454c), M(0x1005240a8), M(0x1005242d8)),   M(0x1004bb46c)),
+    [SITE_UNIT_VISIBLE_TO] = SITE("unit_visible_to", 0,
+ (0x0a2b69, 0x0bbce8, 0x1139ca, 0x122451, 0x128a84, 0x1a1a93, 0x1b1ee3, 0x1b1f07, 0x1b2066, 0x1b208a,
+                       0x1b2cef, 0x1b2d07),   0x117c10,
+ (M(0x100372534), M(0x1003769fc), M(0x100376e28), M(0x1003d72a0), M(0x1003d8528), M(0x100467cf8),
+                       M(0x10047e0bc), M(0x10047e0fc), M(0x100481b24), M(0x10048a230), M(0x100499490), M(0x1004994b0),
+                       M(0x100499660), M(0x100499688), M(0x1004998c4), M(0x100499a54), M(0x1004d9930), M(0x10050be78),
+                       M(0x10059d9b0)),   M(0x100467d04)),
+    [SITE_RESOURCE_AVAILABLE] = SITE("resource_available", 0,
+ (0x09ce41, 0x09ce97, 0x09cee9, 0x09cf25, 0x09cf70, 0x09cfee, 0x10a00e, 0x10a055, 0x10a0a5, 0x10a0cf,
+                       0x10a17a, 0x126d70, 0x126db9, 0x31ffe1),   0x31fdd0,
+ (M(0x10047ccf8), M(0x1005695fc)),   M(0x1005693a4)),
+    [SITE_UNIT_RESISTANCES] = SITE("unit_resistances", 0,
+ (0), 0,
+ (0), 0),
+    [SITE_UNIT_FLAGS] = SITE("unit_flags", 0,
+ (0), 0,
+ (0), 0),
+    [SITE_SQUARE_CITADEL] = SITE("square_citadel", 0,
+ (0x6d4bb, 0x6ef6b, 0x6f773, 0x75b1e, 0x75b36, 0x76aa0, 0x76c39, 0x7727d, 0x7761e, 0x97a82, 0xa0413, 0xa3c55,
+                        0xaf21a, 0x108eeb, 0x10c83b, 0x10c8d8, 0x124f4d, 0x166adb, 0x169f66, 0x169faa, 0x1ae6e9, 0x1b0736, 0x2e9f73,
+                        0x330ca9, 0x332f95, 0x334274), 0x0b1210,
+ (M(0x100333c68), M(0x100363208), M(0x100363308), M(0x100363408), M(0x1003658cc), M(0x10036a82c),
+                        M(0x10036ca64), M(0x100375f40), M(0x10037674c), M(0x100387394), M(0x10038f180), M(0x10046c948),
+                        M(0x10046ca0c), M(0x100479e5c), M(0x1004c5db0), M(0x1004cc194), M(0x1004cd360), M(0x1004d329c),
+                        M(0x1004d6534), M(0x1004d6640), M(0x1004d8fbc), M(0x1004d8fe0), M(0x1004da838), M(0x1004dab64),
+                        M(0x1004df504), M(0x1004e0b08), M(0x1004e13ec), M(0x10053bd04), M(0x10054860c), M(0x100548664), M(0x10058a100)), M(0x10036255c)),
+    [SITE_SQUARE_FORT_PARTS] = SITE("square_fort_parts", 0,
+ (0x6f44d, 0x77fa0, 0x79bba, 0x7dc92, 0x868e4, 0xa3b9a, 0xa3bc0, 0xa3c1b, 0xee867, 0xf6ca3, 0xf6e1a, 0xf8d1f,
+                        0xf8e3e, 0xf90ea, 0x128ef4, 0x129504, 0x1dcaf0, 0x332ce4, 0x332d0d, 0x332e85), 0x12af40,
+ (M(0x100375e68), M(0x100375e94), M(0x100375f00), M(0x1003cf594), M(0x1003cf840), M(0x1003d12b8),
+                        M(0x1003d1fa0), M(0x1003e708c), M(0x1003e71d4), M(0x1003f6fcc), M(0x1004cbed8), M(0x1004cbf04),
+                        M(0x1004cc0b0), M(0x1004d1320), M(0x1004d6654), M(0x1004daac4), M(0x1004df4f0), M(0x1004e2474),
+                        M(0x1004e25f4), M(0x10059b1c0)), M(0x10047516c)),
+    [SITE_SQUARE_WATERLIKE] = SITE("square_waterlike", 0,
+ (0xa40c0, 0xa4b85, 0xa4be2, 0xa4c21, 0xa4e38, 0xa4ed4, 0xa5cc8, 0xa6e54, 0xa6edd, 0xa6f66, 0xa6fc1, 0xa6fd2,
+                        0xa7072, 0xa727f, 0xa7ab7, 0xa7be7, 0xa7cc7, 0xa7d4a, 0xa7d5b, 0xa7e50, 0xa7f04, 0xa80ad, 0xa81ab, 0xb3c20,
+                        0xe27bc, 0x118c38, 0x1b0e64, 0x1b0ed9, 0x1b0f4b, 0x1b0fa9, 0x243c8a, 0x243f84, 0x24424d, 0x244568, 0x24aa9c,
+                        0x2a39c2, 0x2a5642, 0x2a5652, 0x2a5662, 0x2a5672, 0x2a6157, 0x2ad1cf, 0x2ad693, 0x2ad8e1, 0x2ada71, 0x2adb03,
+                        0x2adc78, 0x2ade4d, 0x2e887f, 0x2e89ff, 0x2e9655), 0x2ad910,
+ (M(0x10036e404), M(0x10036e5b8), M(0x10036eeb4), M(0x10036ef74), M(0x10036f07c), M(0x1003708d8),
+                        M(0x100370994), M(0x100370a8c), M(0x10046a614), M(0x1004ac994), M(0x1004acfa0), M(0x1004ad40c),
+                        M(0x1004ad598), M(0x1004ad720), M(0x1004ad8a4), M(0x1004af2dc), M(0x1004af7cc), M(0x1004b2418),
+                        M(0x1004b3fa4), M(0x1004b4110), M(0x1004b41c8), M(0x1004b427c), M(0x1004b432c), M(0x1004ba2cc),
+                        M(0x100551be8), M(0x10058a68c), M(0x10058b068), M(0x100593484), M(0x100594d90), M(0x100594eec), M(0x100598a3c)), M(0x1004acb7c)),
+    [SITE_SQUARE_OPEN_LAND] = SITE("square_open_land", 0,
+ (0x242c76, 0x2430ce, 0x2433d0, 0x243d4b, 0x2440a6, 0x244380, 0x2446d0, 0x245e20, 0x2463ca, 0x24669d, 0x24695d,
+                        0x246c7c, 0x247cb6, 0x247e63, 0x247f52, 0x24813b, 0x248232, 0x248327, 0x248418, 0x248509, 0x249bf0, 0x249e85,
+                        0x24a167, 0x24ab62, 0x2a44d2, 0x2a48f7, 0x2a5a46, 0x2a8209, 0x2a8abd, 0x2aca9e, 0x2ad2e0, 0x2ad2fb, 0x2ad308,
+                        0x2ad328, 0x2e892c, 0x2e8aae, 0x2e9a26), 0x2a3970,
+ (0), 0),
+    [SITE_SQUARE_LIBRARY_LEVEL] = SITE("square_library_level", 0,
+ (0x7583f, 0x9a68b, 0xa3cea, 0x1b0bb5, 0x1b1722, 0x1b1730, 0x2dda04,
+                        0x2e362e, 0x3335a3), 0x1b14a0,
+ (0), 0),
+    [SITE_MODS_READ] = SITE("mods_read", 0,
+ (0), 0,
+ (0), 0),
+    [SITE_RITUAL_CAN_CAST] = SITE("ritual_can_cast", 0,
+ (0), 0,
+ (0), 0),
+    [SITE_RITUAL_LOCATION_CHECK] = SITE("ritual_location_check", 0,
+ (0x06b176, 0x06bd7b, 0x06bf0a, 0x06c37e, 0x2c1df4, 0x2cb786),   0x2ccea0,
+ (M(0x1004dd220), M(0x1004de0f4), M(0x1004de4e8), M(0x1004de674), M(0x10055bcc8), M(0x1005664f0),
+                       M(0x1005665c0), M(0x100566690), M(0x100566730)),   M(0x1005596bc)),
 };
 #undef M
 #undef SITE
+#undef SITE_ON
+#undef SITE_FIRST_CALL
+#undef SITE_FIRST_CALL_
 #endif
 
 // ---- Code CoE5SE copied ---------------------------------------------------------------------------

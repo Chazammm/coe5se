@@ -16,6 +16,8 @@ static int personalListSentAt;
 static u64 personalListSentSlots;
 static int personalListSentOnce;
 
+static void sendLanBuild(u64 slots);
+static int readLanLobbyMessage(const char *message, int lists);
 static int personalListClockNow(void) { return GAME_FN(int (*)(void), RVA_TICKS_MS)(); }
 static int (*personalListClock)(void) = personalListClockNow;
 
@@ -86,6 +88,7 @@ static void sendPersonalModListIfDue(void) {
     char message[NET_LOBBY_MESSAGE_MAX];
     snprintf(message, sizeof message, PERSONAL_LIST_PREFIX "%016llx:%s", (unsigned long long)slots, ownPersonalModList);
     sendNetworkCheckText(message);
+    sendLanBuild(slots);
     if (!personalListSentOnce || slots != personalListSentSlots) writeLog("personal_mod_list_sent", "slots=%llx list=%s", (unsigned long long)slots, ownPersonalModList);
     personalListSentOnce = 1;
     personalListSentAt = now;
@@ -138,6 +141,10 @@ static void participantsLobbyTrace(const char *format, ...) {
     char *message = (char *)GAME_PTR(RVA_LOBBY_MESSAGE);
     const char *body = networkCheckBody(message, PERSONAL_LIST_PREFIX);
     va_end(ap);
+    if (!body && readLanLobbyMessage(message, 0)) {
+        message[0] = '\0';
+        return;
+    }
     if (!body) {
         GAME_FN(GameTraceFn, RVA_TRACE)(format, message);
         return;

@@ -11,6 +11,7 @@ enum {
     K_TARGET_SQUARE,
     K_VETO,
     K_SEAL_BREAK,
+    K_TEST,
     K_SEAL_EVENT,
 };
 #define LUA_CALL_ARGS 17
@@ -59,6 +60,7 @@ typedef struct LuaFrame {
     u64 result;
     lua_Integer serial;
     int changesFrom, changesTo, argsChanged, changesAtEntry;
+    int inNext;
 } LuaFrame;
 static LuaFrame *luaFrames;
 static lua_Integer luaFrameSerial;
@@ -147,6 +149,15 @@ static const LuaSite luaSites[] = {
     {"BATTLE_DRAW",                   SITE_BATTLE_DRAW,                   K_CALL,    "v:"},
     {"TOP_BAR_INCOME",                SITE_TOP_BAR_INCOME,                K_CALL,    "i:iii"},
     {"SQUARE_PANEL_WRAP",             SITE_SQUARE_PANEL_WRAP,             K_CALL,    "i:iii"},
+    {"UNIT_ARMOR",                    SITE_UNIT_ARMOR,                    K_CALL,    "i:i"},
+    {"UNIT_RETURNS",                  SITE_UNIT_RETURNS,                  K_CALL,    "i:i"},
+    {"AI_COUNT_CITADELS",             SITE_AI_COUNT_CITADELS,             K_CALL,    "i:i"},
+    {"MOVE_INDEPENDENT_ARMY",         SITE_MOVE_INDEPENDENT_ARMY,         K_CALL,    "v:iii"},
+    {"SQUARE_CITADEL",                SITE_SQUARE_CITADEL,                K_TEST,    "i:iii"},
+    {"SQUARE_FORT_PARTS",             SITE_SQUARE_FORT_PARTS,             K_CALL,    "i:ii"},
+    {"SQUARE_WATERLIKE",              SITE_SQUARE_WATERLIKE,              K_TEST,    "i:ii"},
+    {"SQUARE_OPEN_LAND",              SITE_SQUARE_OPEN_LAND,              K_TEST,    "i:ii"},
+    {"SQUARE_LIBRARY_LEVEL",          SITE_SQUARE_LIBRARY_LEVEL,          K_CALL,    "i:iii"},
     {"MESSAGES_WAIT",                 SITE_MESSAGES_WAIT,                 K_CALL,    "i:ii"},
     {"WARN_WAIT",                     SITE_WARN_WAIT,                     K_CALL,    "i:ii"},
     {"MESSAGE_BOX_WAIT",              SITE_MESSAGE_BOX_WAIT,              K_CALL,    "i:ii"},
@@ -157,6 +168,7 @@ static const LuaSite luaSites[] = {
     {"PLAYER_TURN_START",             SITE_PLAYER_TURN_START,             K_OBSERVE, "v:ii"},
     {"HUMAN_TURN",                    SITE_HUMAN_TURN,                    K_OBSERVE, "x:i"},
     {"CLIENT_TURN",                   SITE_CLIENT_TURN,                   K_OBSERVE, "x:i"},
+    {"MODS_READ",                     SITE_MODS_READ,                     K_OBSERVE, "v:"},
     {"AI_TURN",                       SITE_AI_TURN,                       K_OBSERVE, "v:i"},
     {"PLAYER_TURN_END",               SITE_PLAYER_TURN_END,               K_OBSERVE, "i:i"},
     {"GAME_OVER",                     SITE_GAME_OVER,                     K_OBSERVE, "v:i"},
@@ -411,7 +423,33 @@ static const LuaSite luaSites[] = {
     {"WILD_SPAWN",                    SITE_WILD_SPAWN,                    K_OBSERVE, "v:ii"},
     {"REVELS_SPAWN",                  SITE_REVELS_SPAWN,                  K_OBSERVE, "v:ii"},
     {"HORROR_LORD_PICK",              SITE_HORROR_LORD_PICK,              K_OBSERVE, "x:ii"},
+    {"UNIT_STRENGTH",                 SITE_UNIT_STRENGTH,                 K_CALL,    "i:iii"},
+    {"SQUARE_STRENGTH",               SITE_SQUARE_STRENGTH,               K_CALL,    "i:iii"},
+    {"COMMANDER_STRENGTH",            SITE_COMMANDER_STRENGTH,            K_CALL,    SITE_SIGNATURE("i:ii", "i:i")},
+    {"PLAYER_ABILITY",                SITE_PLAYER_ABILITY,                K_CALL,    "i:iii"},
+    {"UNIT_STATE_FLAGS",              SITE_UNIT_STATE_FLAGS,              K_CALL,    "u:i"},
+    {"ARMY_MOVE_FLAGS",               SITE_ARMY_MOVE_FLAGS,               K_CALL,    "u:i"},
+    {"UNIT_PATH_LEVEL",               SITE_UNIT_PATH_LEVEL,               K_CALL,    "i:ii"},
+    {"UNIT_VISIBLE_TO",               SITE_UNIT_VISIBLE_TO,               K_CALL,    "i:iiii"},
+    {"RESOURCE_AVAILABLE",            SITE_RESOURCE_AVAILABLE,            K_CALL,    "i:iiii"},
+    {"UNIT_RESISTANCES",              SITE_UNIT_RESISTANCES,              K_CALL,    "u:i"},
+    {"UNIT_FLAGS",                    SITE_UNIT_FLAGS,                    K_CALL,    "u:i"},
+    {"RITUAL_CAN_CAST",               SITE_RITUAL_CAN_CAST,               K_CALL,    "i:ii"},
+    {"RITUAL_LOCATION_CHECK",         SITE_RITUAL_LOCATION_CHECK,         K_CALL,    "i:iiii"},
 };
+
+static int luaSiteGuardsReentry(CallSite site) {
+    switch (site) {
+    case SITE_UNIT_STRENGTH: case SITE_SQUARE_STRENGTH: case SITE_COMMANDER_STRENGTH: case SITE_PLAYER_ABILITY:
+    case SITE_UNIT_STATE_FLAGS: case SITE_ARMY_MOVE_FLAGS: case SITE_UNIT_PATH_LEVEL: case SITE_UNIT_VISIBLE_TO:
+    case SITE_RESOURCE_AVAILABLE: case SITE_UNIT_RESISTANCES: case SITE_UNIT_FLAGS:
+    case SITE_UNIT_ARMOR: case SITE_UNIT_RETURNS: case SITE_AI_COUNT_CITADELS: case SITE_MOVE_INDEPENDENT_ARMY:
+    case SITE_SQUARE_CITADEL: case SITE_SQUARE_FORT_PARTS: case SITE_SQUARE_WATERLIKE: case SITE_SQUARE_OPEN_LAND:
+    case SITE_SQUARE_LIBRARY_LEVEL:
+    case SITE_RITUAL_CAN_CAST: case SITE_RITUAL_LOCATION_CHECK: return 1;
+    default: return 0;
+    }
+}
 
 static void previewNoteWrapChange(const LuaWrap *w) {
     char file[64] = "";
@@ -552,6 +590,20 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
         }
         return;
     }
+    if (ls->site == SITE_UNIT_ARMOR || ls->site == SITE_UNIT_RETURNS || ls->site == SITE_AI_COUNT_CITADELS ||
+        ls->site == SITE_MOVE_INDEPENDENT_ARMY) {
+        typedef struct { const char *name, *reason; } KeptArg;
+        static const KeptArg ARMY[3] = {{"player", "player_changed"}, {"x", "square_changed"}, {"y", "square_changed"}},
+                             UNIT[3] = {{"unit", "unit_changed"}, {NULL, NULL}, {NULL, NULL}},
+                             PLAYER[3] = {{"player", "player_changed"}, {NULL, NULL}, {NULL, NULL}};
+        const KeptArg *kept = ls->site == SITE_MOVE_INDEPENDENT_ARMY ? ARMY : ls->site == SITE_AI_COUNT_CITADELS ? PLAYER : UNIT;
+        for (int i = 0; i < 3 && kept[i].name; i++) {
+            if ((int)a->a[i] != (int)orig->a[i])
+                refuseLuaCall(mod, ls->name, kept[i].reason, "%s=%d own=%d", kept[i].name, (int)a->a[i], (int)orig->a[i]);
+            a->a[i] = orig->a[i];
+        }
+        return;
+    }
     if (ls->site == SITE_AI_DANGEROUS_STEP || ls->site == SITE_AI_MAKE_GUARDS || ls->site == SITE_DECORATE_SQUARE) {
         typedef struct { const char *name, *reason; } KeptArg;
         static const KeptArg STEP[3] = {{"commander", "commander_changed"}, {"dx", "step_changed"}, {"dy", "step_changed"}},
@@ -631,15 +683,60 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
         checks[n++] = (NextArgCheck){6, "costType2", LLONG_MIN, RITUAL_COST_TYPE_MAX};
         checks[n++] = (NextArgCheck){8, "costType3", LLONG_MIN, RITUAL_COST_TYPE_MAX};
         checks[n++] = (NextArgCheck){10, "costType4", LLONG_MIN, RITUAL_COST_TYPE_MAX};
+    } else if (ls->site == SITE_SQUARE_CITADEL) {
+        checks[n++] = (NextArgCheck){0, "player", -1, PLAYER_SLOTS - 1};
     } else if (ls->site == SITE_SQUARE_INFO_SCREEN) {
         checks[n++] = (NextArgCheck){0, "player", 0, PLAYER_SLOTS - 1};
+    } else if (ls->site == SITE_UNIT_STRENGTH) {
+        checks[n++] = (NextArgCheck){0, "unit", -1, UNIT_TABLE_MAX - 1};
+        checks[n++] = (NextArgCheck){1, "monster", -1, tableRecords(TABLE_MONSTER) - 1};
+    } else if (ls->site == SITE_SQUARE_STRENGTH) {
+        checks[n++] = (NextArgCheck){0, "team", -1, playerSlotCount() - 1};
+        checks[n++] = (NextArgCheck){1, "x", LLONG_MIN, MAP_COLUMNS_MAX - 1};
+        checks[n++] = (NextArgCheck){2, "y", LLONG_MIN, MAP_COLUMN_SQUARES - 1};
+    } else if (ls->site == SITE_PLAYER_ABILITY) {
+        checks[n++] = (NextArgCheck){0, "player", 0, playerSlotCount() - 1};
+    } else if (ls->site == SITE_UNIT_STATE_FLAGS || ls->site == SITE_UNIT_PATH_LEVEL || ls->site == SITE_UNIT_RESISTANCES ||
+               ls->site == SITE_UNIT_FLAGS) {
+        checks[n++] = (NextArgCheck){0, "unit", 0, UNIT_TABLE_MAX - 1};
+    } else if (ls->site == SITE_ARMY_MOVE_FLAGS) {
+        checks[n++] = (NextArgCheck){0, "commander", 0, COMMANDER_TABLE_MAX - 1};
+    } else if (ls->site == SITE_UNIT_VISIBLE_TO) {
+        checks[n++] = (NextArgCheck){0, "player", 0, playerSlotCount() - 1};
+        checks[n++] = (NextArgCheck){1, "unit", 0, UNIT_TABLE_MAX - 1};
+        checks[n++] = (NextArgCheck){2, "x", 0, MAP_COLUMNS_MAX - 1};
+        checks[n++] = (NextArgCheck){3, "y", 0, MAP_COLUMN_SQUARES - 1};
+    } else if (ls->site == SITE_RESOURCE_AVAILABLE) {
+        checks[n++] = (NextArgCheck){0, "player", 0, playerSlotCount() - 1};
+        checks[n++] = (NextArgCheck){1, "costType", 0, 18};
+        checks[n++] = (NextArgCheck){2, "x", LLONG_MIN, MAP_COLUMNS_MAX - 1};
+        checks[n++] = (NextArgCheck){3, "y", LLONG_MIN, MAP_COLUMN_SQUARES - 1};
+    } else if (ls->site == SITE_RITUAL_CAN_CAST || ls->site == SITE_RITUAL_LOCATION_CHECK) {
+        checks[n++] = (NextArgCheck){0, "commander", 0, COMMANDER_TABLE_MAX - 1};
+        checks[n++] = (NextArgCheck){1, "slot", 0, ritualSlotCount() - 1};
+    }
+    if (ls->site == SITE_RITUAL_LOCATION_CHECK) {
+        int x = (int)a->a[2], y = (int)a->a[3], changed = x != (int)orig->a[2] || y != (int)orig->a[3];
+        int own = x == -999 && y == -999, onMap = x >= 0 && x < MAP_COLUMNS_MAX && y >= 0 && y < MAP_COLUMN_SQUARES;
+        if (changed && !own && !onMap) {
+            refuseLuaCall(mod, ls->name, "out_of_range", "arg=x value=%d y=%d", x, y);
+            a->a[2] = orig->a[2];
+            a->a[3] = orig->a[3];
+        }
     }
     for (int i = 0; i < n; i++) {
         lua_Integer value = (int)a->a[checks[i].index];
         if (value >= checks[i].min && value <= checks[i].max) continue;
+        if ((int)a->a[checks[i].index] == (int)orig->a[checks[i].index]) continue;
         refuseLuaCall(mod, ls->name, "out_of_range", "arg=%s value=%lld max=%lld", checks[i].name, (long long)value,
                       (long long)checks[i].max);
         a->a[checks[i].index] = orig->a[checks[i].index];
+    }
+    if (ls->site == SITE_UNIT_STRENGTH && (int)a->a[0] < 0 && (int)a->a[1] < 0 &&
+        ((int)a->a[0] != (int)orig->a[0] || (int)a->a[1] != (int)orig->a[1])) {
+        refuseLuaCall(mod, ls->name, "out_of_range", "arg=unit value=%d monster=%d", (int)a->a[0], (int)a->a[1]);
+        a->a[0] = orig->a[0];
+        a->a[1] = orig->a[1];
     }
 }
 
@@ -748,6 +845,10 @@ static int pushLuaResult(lua_State *L, const LuaSite *ls, const LuaArgs *a, u64 
         lua_pushboolean(L, (int)result == 0);
         return 1;
     }
+    if (ls->kind == K_TEST) {
+        lua_pushboolean(L, (int)result != 0);
+        return 1;
+    }
     if (ls->kind == K_SEAL_EVENT) return 0;
     char type = siteResult(ls);
     if (type == 'v') return 0;
@@ -811,6 +912,17 @@ static u64 takeVeto(lua_State *L, const LuaSite *ls, const LuaArgs *a, const Lua
     return 0;
 }
 
+static u64 takeTest(lua_State *L, const LuaSite *ls, const LuaFrame *f, const char *mod, int *callNext) {
+    *callNext = 0;
+    if (lua_isboolean(L, -1)) return lua_toboolean(L, -1) ? 1 : 0;
+    lua_Integer whole = 0;
+    if (luaWholeNumber(L, -1, &whole)) return whole != 0 ? 1 : 0;
+    if (!lua_isnil(L, -1)) refuseLuaCall(mod, ls->name, "not_a_boolean", "type=%s", luaL_typename(L, -1));
+    if (f->nextCalled) return f->result;
+    *callNext = 1;
+    return 0;
+}
+
 #define ROUTE_COMSTR_MAX 21474836
 static u64 takeComstr(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
     *callNext = 0;
@@ -860,10 +972,14 @@ static u64 runLuaWrap(LuaWrap *w, const LuaArgs *a) {
     const LuaSite *ls = &luaSites[w->site];
     LuaScript *s = w->s;
     if (!s || s->dead || !luaSiteOpenNow(s, ls->site)) return callLuaNext(ls, w->next, a);
-    LuaFrame f = {luaFrames, w, a, 0, 0, ++luaFrameSerial, 0, 0, 0, luaChangeCount};
+    LuaFrame f = {luaFrames, w, a, 0, 0, ++luaFrameSerial, 0, 0, 0, luaChangeCount, 0};
     luaFrames = &f;
     int results = ls->kind == K_TARGET_SQUARE ? 3 : 1;
+    CallSite outerSite = luaRunningSite;
+    luaRunningSite = ls->site;
+    noteBattleScriptCall(s);
     int ok = callLuaProtected(s, pushLuaWrapCall, &f, results);
+    luaRunningSite = outerSite;
     u64 result = 0;
     int vetoNext = 0;
     int squareChanged = 0;
@@ -874,13 +990,16 @@ static u64 runLuaWrap(LuaWrap *w, const LuaArgs *a) {
             squareChanged = f.nextCalled && (*(const int *)(uintptr_t)a->a[2] != nextX || *(const int *)(uintptr_t)a->a[3] != nextY);
         }
         else if (ls->kind == K_VETO) result = takeVeto(s->L, ls, a, &f, s->mod, &vetoNext);
+        else if (ls->kind == K_TEST) result = takeTest(s->L, ls, &f, s->mod, &vetoNext);
         else if (ls->site == SITE_AI_MOVE_COMSTR) result = takeComstr(s->L, ls, a, &f, s->mod, &vetoNext);
         else if (ls->site == SITE_BATTLE_SPELL_PICK) result = takeSpellPick(s->L, ls, a, &f, s->mod, &vetoNext);
         else if (ls->kind == K_SEAL_EVENT) result = f.nextCalled ? f.result : 0;
+        else if (ls->site == SITE_UNIT_RETURNS && lua_isboolean(s->L, -1)) result = (u64)lua_toboolean(s->L, -1);
         else result = lua_isinteger(s->L, -1) ? (u64)lua_tointeger(s->L, -1) : f.result;
         lua_pop(s->L, results);
         closeDeadLuaScript(s);
-        int answerChanged = !vetoNext && (!f.nextCalled || (siteResult(ls) == 'i' ? (int)result != (int)f.result : result != f.result));
+        int answerChanged = !vetoNext && (!f.nextCalled || (ls->kind == K_TEST ? ((int)result != 0) != ((int)f.result != 0)
+                                                           : siteResult(ls) == 'i' ? (int)result != (int)f.result : result != f.result));
         if (answerChanged) siteResultMod[luaSites[w->site].site] = s->mod;
         if (siteResult(ls) == 'v' && ls->kind != K_SEAL_EVENT) answerChanged = !vetoNext && !f.nextCalled;
         noteLuaChange(ls->site, w, answerChanged || squareChanged, f.argsChanged);
@@ -923,7 +1042,9 @@ static int lNextCall(lua_State *L) {
     unsigned long frames = gameFrames;
     f->changesFrom = luaChangeCount;
     luaCodeRunning--;
+    f->inNext++;
     f->result = callLuaNext(ls, f->wrap->next, &a);
+    f->inNext--;
     luaCodeRunning++;
     f->changesTo = luaChangeCount;
     if (gameFrames != frames) resetLuaSteps(L);
@@ -987,6 +1108,9 @@ static u64 enterLuaWrap(void *gate, const LuaArgs *a) {
         a = &split;
     }
     if (luaSites[w->site].kind == K_SEAL_BREAK) G32(SEALS_BROKEN_RVA) = (int)a->a[2] - 1;
+    if (luaSiteGuardsReentry(site))
+        for (const LuaFrame *up = luaFrames; up; up = up->up)
+            if (up->wrap->site == w->site && !up->inNext) return callLuaNext(&luaSites[w->site], w->next, a);
     luaSiteDepth[site]++;
     u64 r = runLuaWrap(w, a);
     luaSiteDepth[site]--;
@@ -1204,6 +1328,7 @@ static void dropLuaScriptWraps(const LuaScript *s) {
 
 // ---- Observers: coe5.observe(siteName, before, after) -----------------------------------------
 typedef struct { int ref; const LuaSite *ls; const CallInfo *call; int after; } LuaObserverCall;
+static int personalObserverSees(CallSite site, const CallInfo *call, int after);
 static int pushLuaObserverCall(lua_State *L, void *ctx) {
     const LuaObserverCall *c = ctx;
     luaL_checkstack(L, 8, "an observer's arguments");
@@ -1229,14 +1354,25 @@ static void runLuaObservers(CallSite site, const CallInfo *call, int after) {
     const LuaSiteState *st = &luaSiteState[ls - luaSites];
     const CallInfo *outerCall = luaObserving[site];
     int outerAfter = luaObservingAfter[site];
+    CallSite outerSite = luaRunningSite;
     luaObserving[site] = call, luaObservingAfter[site] = after;
+    luaRunningSite = site;
+    int seen = -1;
     for (int i = 0; i < st->observerCount; i++) {
         LuaObserver o = st->observers[i];
         LuaObserverCall c = {after ? o.refAfter : o.refBefore, ls, call, after};
-        if (!o.s || o.s->dead || c.ref == LUA_NOREF) continue;
-        if (role != NET_ROLE_SINGLE && !luaCallbackOpenNow(o.s)) continue;
+        if (!o.s || o.s->dead) continue;
+        int open = site == SITE_MODS_READ ? luaModsReadOpenFor(role, modClassNow(o.s->mod)) : luaObserverOpenNow(o.s, site);
+        if (role != NET_ROLE_SINGLE && !open) continue;
+        if (role == NET_ROLE_CLIENT && modClassNow(o.s->mod) == LUA_CLASS_PERSONAL) {
+            if (seen < 0) seen = personalObserverSees(site, call, after);
+            if (!seen) continue;
+        }
+        if (c.ref == LUA_NOREF) continue;
+        noteBattleScriptCall(o.s);
         callLuaProtected(o.s, pushLuaObserverCall, &c, 0);
     }
+    luaRunningSite = outerSite;
     luaObserving[site] = outerCall, luaObservingAfter[site] = outerAfter;
 }
 

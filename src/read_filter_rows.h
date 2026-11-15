@@ -177,6 +177,7 @@ static const ReadRow READ_GET_ROWS[] = {
     {"monsterFlags", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
     {"monsterHp", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
     {"monsterLastIndex", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
+    {"monsterMod", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
     {"monsterMoveFlags", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
     {"monsterName", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},
     {"monsterSprite", READ_FREE, 0, READ_FREE, 0, UNSEEN_NIL},

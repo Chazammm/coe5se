@@ -2,11 +2,17 @@
 #pragma once
 
 #define REPLAY_ITEMS_TAG      SAVE_TAG('C', '5', 'R', 'I')
+#define REPLAY_STORE_TAG      SAVE_TAG('C', '5', 'L', 'S')
+#define REPLAY_END_TAG        SAVE_TAG('C', '5', 'R', 'E')
 #define REPLAY_ITEMS_VERSION  1
 #define REPLAY_ITEMS_TRAILER  8
 #define REPLAY_HEADER_BYTES   22
 #define REPLAY_FILE_MAX       (64 << 20)
 #define REPLAY_VIEW_FILE      "tmp_shom.vcr"
+#define REPLAY_WRITE_FILE     "tmp_cbat.vcr"
+static void noteBattleReplayWritten(const char *path);
+static int replayCarriesScripts(void);
+static void writeReplayScriptStore(FILE *file);
 
 typedef struct { int unit, position, item; } ReplayItem;
 static ReplayItem *replayItems;
@@ -72,17 +78,49 @@ static void forgetReplayItems(void) {
     replayItemCount = 0;
 }
 
+static int findReplayChunk(const unsigned char *file, size_t size, int tag, const unsigned char **payload, int *payloadSize) {
+    size_t end = size;
+    while (end >= REPLAY_HEADER_BYTES + REPLAY_ITEMS_TRAILER) {
+        SaveCursor c = {file + end - REPLAY_ITEMS_TRAILER, file + end, 0};
+        int bytes = saveCursorInt(&c), found = saveCursorInt(&c);
+        if (found != REPLAY_ITEMS_TAG && found != REPLAY_STORE_TAG && found != REPLAY_END_TAG) return 0;
+        if (bytes < 0 || (size_t)bytes > end - REPLAY_HEADER_BYTES - REPLAY_ITEMS_TRAILER) {
+            writeLogWarning("replay_trailer_read", "reason=bad_size bytes=%d file=%zu", bytes, size);
+            return -1;
+        }
+        end -= REPLAY_ITEMS_TRAILER;
+        if (found == tag) {
+            *payload = file + end - (size_t)bytes;
+            *payloadSize = bytes;
+            return 1;
+        }
+        end -= (size_t)bytes;
+    }
+    return 0;
+}
+
+static int writeReplayChunk(FILE *file, int tag, const SaveBuffer *payload) {
+    SaveBuffer chunk = {0};
+    saveBufferAdd(&chunk, payload->bytes, payload->size);
+    saveBufferInt(&chunk, (int)payload->size);
+    saveBufferInt(&chunk, tag);
+    int ok = !chunk.failed && !payload->failed && fwrite(chunk.bytes, 1, chunk.size, file) == chunk.size;
+    if (!ok) writeLogError("replay_trailer_written", "ok=0 reason=write_failed tag=%08x bytes=%zu", (unsigned)tag, chunk.size);
+    free(chunk.bytes);
+    return ok;
+}
+
 static int readReplayItems(const unsigned char *file, size_t size) {
     forgetReplayItems();
-    if (size < REPLAY_HEADER_BYTES + REPLAY_ITEMS_TRAILER) return 0;
-    SaveCursor end = {file + size - REPLAY_ITEMS_TRAILER, file + size, 0};
-    int payloadSize = saveCursorInt(&end), tag = saveCursorInt(&end);
-    if (tag != REPLAY_ITEMS_TAG) return 0;
-    if (payloadSize < 8 || (size_t)payloadSize > size - REPLAY_HEADER_BYTES - REPLAY_ITEMS_TRAILER) {
+    const unsigned char *payloadAt = NULL;
+    int payloadSize = 0;
+    int found = findReplayChunk(file, size, REPLAY_ITEMS_TAG, &payloadAt, &payloadSize);
+    if (found <= 0) return found;
+    if (payloadSize < 8) {
         writeLogWarning("item_slots_replay_read", "reason=bad_size bytes=%d file=%zu", payloadSize, size);
         return -1;
     }
-    SaveCursor c = {file + size - REPLAY_ITEMS_TRAILER - (size_t)payloadSize, file + size - REPLAY_ITEMS_TRAILER, 0};
+    SaveCursor c = {payloadAt, payloadAt + payloadSize, 0};
     int version = saveCursorInt(&c), entries = saveCursorInt(&c);
     if (version != REPLAY_ITEMS_VERSION || entries < 0 || entries > payloadSize / 9) {
         writeLogWarning("item_slots_replay_read", "reason=%s version=%d entries=%d", version != REPLAY_ITEMS_VERSION ? "other_version" : "bad_entries",
@@ -129,23 +167,36 @@ static int replayFilePath(char *out, size_t size) {
     return buildPath(out, size, __func__, "%s/" REPLAY_VIEW_FILE, (const char *)GAME_PTR(RVA_TEMP_DIR));
 }
 
-static void readReplayFileItems(void) {
-    replayItemsRead = 1;
+static int readReplayFileBytes(const char *event, unsigned char **bytes, size_t *size) {
+    *bytes = NULL, *size = 0;
     char path[2600];
-    if (!replayFilePath(path, sizeof path)) return;
+    if (!replayFilePath(path, sizeof path)) return 0;
     FILE *file = fopen(path, "rb");
     if (!file) {
-        writeLogWarning("item_slots_replay_read", "reason=no_file");
-        return;
+        writeLogWarning(event, "reason=no_file");
+        return 0;
     }
-    unsigned char *bytes = NULL;
-    long size = fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
-    if (size >= 0 && size <= REPLAY_FILE_MAX && fseek(file, 0, SEEK_SET) == 0 && (bytes = malloc((size_t)size + 1)) &&
-        fread(bytes, 1, (size_t)size, file) == (size_t)size)
-        readReplayItems(bytes, (size_t)size);
-    else writeLogWarning("item_slots_replay_read", "reason=unreadable bytes=%ld", size);
-    free(bytes);
+    long length = fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
+    int ok = length >= 0 && length <= REPLAY_FILE_MAX && fseek(file, 0, SEEK_SET) == 0 && (*bytes = malloc((size_t)length + 1)) &&
+             fread(*bytes, 1, (size_t)length, file) == (size_t)length;
     fclose(file);
+    if (!ok) {
+        writeLogWarning(event, "reason=unreadable bytes=%ld", length);
+        free(*bytes);
+        *bytes = NULL;
+        return 0;
+    }
+    *size = (size_t)length;
+    return 1;
+}
+
+static void readReplayFileItems(void) {
+    replayItemsRead = 1;
+    unsigned char *bytes;
+    size_t size;
+    if (!readReplayFileBytes("item_slots_replay_read", &bytes, &size)) return;
+    readReplayItems(bytes, size);
+    free(bytes);
 }
 
 static int replayLoadingUnits(void) { return *(const unsigned char *)GAME_PTR(RVA_BATTLE_IS_REPLAY) != 0; }
@@ -187,13 +238,16 @@ static BattleReplayFileFn gameSaveBattleReplay, gameLoadBattleReplay;
 
 static void saveBattleReplayHook(const char *path) {
     gameSaveBattleReplay(path);
-    if (!anyExtraItems()) return;
+    noteBattleReplayWritten(path);
+    int items = anyExtraItems(), store = replayCarriesScripts();
+    if (!items && !store) return;
     FILE *file = fopen(path, "ab");
     if (!file) {
         writeLogError("item_slots_replay_written", "ok=0 reason=no_file");
         return;
     }
-    writeReplayItems(file);
+    if (items) writeReplayItems(file);
+    if (store) writeReplayScriptStore(file);
     fclose(file);
 }
 
@@ -219,7 +273,11 @@ static int installItemSlotReplaySites(void) {
 // ---- Mac: the writer is inline in RVA_DO_ALL_FIGHTS ------------------------------------------------------------
 static int closeBattleReplayWritten(FILE *file) {
     writeReplayItems(file);
-    return fclose(file);
+    if (replayCarriesScripts()) writeReplayScriptStore(file);
+    int closed = fclose(file);
+    char path[2600];
+    if (buildPath(path, sizeof path, __func__, "%s/" REPLAY_WRITE_FILE, (const char *)GAME_PTR(RVA_TEMP_DIR))) noteBattleReplayWritten(path);
+    return closed;
 }
 
 static int installItemSlotReplaySites(void) {

@@ -591,16 +591,13 @@ static void addGameDataEntry(SaveBuffer *chunk, int *mods, const char *mod, Save
 
 static int gameDataChunkMods;
 
-static void addGameDataChunk(SaveList *list) {
-    gameDataChunkMods = 0;
-    if (netRoleNow() == NET_ROLE_OFFICIAL) return;
-    int player = saveTailPlayer;
-    SaveBuffer chunk = {0}, entry = {0};
+static int writeGameDataPayload(SaveBuffer *chunk, int player, int *refusedOut) {
+    SaveBuffer entry = {0};
     int mods = 0, refused = 0;
-    saveBufferInt(&chunk, GAME_DATA_VERSION);
-    saveBufferInt(&chunk, player);
-    size_t modsAt = chunk.size;
-    saveBufferInt(&chunk, 0);
+    saveBufferInt(chunk, GAME_DATA_VERSION);
+    saveBufferInt(chunk, player);
+    size_t modsAt = chunk->size;
+    saveBufferInt(chunk, 0);
     for (int i = 0; i < luaScriptCount; i++) {
         LuaScript *s = luaScripts[i];
         if (s->retired || !gameDataCountsFor(s)) continue;
@@ -622,14 +619,24 @@ static void addGameDataChunk(SaveList *list) {
             if (!h) continue;
             any = writeHeldGameDataEntry(&entry, h, player);
         }
-        addGameDataEntry(&chunk, &mods, s->mod, &entry, any, player);
+        addGameDataEntry(chunk, &mods, s->mod, &entry, any, player);
     }
+    unsigned char le[4] = {(unsigned char)mods, (unsigned char)(mods >> 8), (unsigned char)(mods >> 16), (unsigned char)(mods >> 24)};
+    if (!chunk->failed && chunk->size >= modsAt + 4) memcpy(chunk->bytes + modsAt, le, 4);
+    if (refusedOut) *refusedOut = refused;
+    return mods;
+}
+
+static void addGameDataChunk(SaveList *list) {
+    gameDataChunkMods = 0;
+    if (netRoleNow() == NET_ROLE_OFFICIAL) return;
+    int player = saveTailPlayer, refused = 0;
+    SaveBuffer chunk = {0};
+    int mods = writeGameDataPayload(&chunk, player, &refused);
     if (!mods) {
         free(chunk.bytes);
         return;
     }
-    unsigned char le[4] = {(unsigned char)mods, (unsigned char)(mods >> 8), (unsigned char)(mods >> 16), (unsigned char)(mods >> 24)};
-    if (!chunk.failed) memcpy(chunk.bytes + modsAt, le, 4);
     writeLog("game_data_written", "file=%s mods=%d bytes=%zu refused=%d", player >= 0 ? "turn" : "save", mods, chunk.size, refused);
     gameDataChunkMods = mods;
     saveListAdd(list, SAVE_TAG_GDAT, &chunk);
@@ -825,6 +832,85 @@ static u64 rehearsalHumanTurnHook(u64 player) {
         restartContentScriptsForRehearsal("turn_end", (int)player);
     }
     return result;
+}
+
+// ---- A battle's replay: the store as the fight had it ------------------------------------------------
+typedef struct { LuaScript *s; SaveBuffer live; unsigned long long hash; int hashKnown; } ReplayStoreSwap;
+static ReplayStoreSwap *replayStoreSwaps;
+static int replayStoreSwapCount, replayStoreSwapCapacity;
+
+static void fillGameDataFromEntry(LuaScript *s, const GameDataEntryRead *e) {
+    GameDataHeld *h = e ? calloc(1, sizeof *h) : NULL;
+    if (e && !h) {
+        writeLogError("replay_store_dropped", "mod=%s reason=out_of_memory", s->mod);
+        return;
+    }
+    if (h) {
+        h->shared = e->shared;
+        for (int k = 0; k < e->parts; k++) h->players[e->at[k].slot] = e->at[k].part;
+    }
+    GameDataJob job = {.kind = GAME_DATA_FILL, .s = s, .player = -1, .from = h};
+    callLuaProtected(s, pushGameDataJob, &job, 0);
+    free(h);
+}
+
+static void restoreReplayGameData(void) {
+    GameDataEntryRead *e = replayStoreSwapCount ? malloc(sizeof *e) : NULL;
+    for (int i = 0; i < replayStoreSwapCount; i++) {
+        ReplayStoreSwap *w = &replayStoreSwaps[i];
+        SaveCursor c = {w->live.bytes, w->live.bytes + w->live.size, 0};
+        if (e && gameDataStateLive(w->s) && readGameDataEntryBody(&c, memset(e, 0, sizeof *e))) {
+            fillGameDataFromEntry(w->s, e);
+            w->s->gameDataHash = w->hash, w->s->gameDataHashKnown = w->hashKnown;
+        } else if (gameDataStateLive(w->s)) writeLogError("replay_store_dropped", "mod=%s reason=%s", w->s->mod, e ? "bad_entry" : "out_of_memory");
+        free(w->live.bytes);
+    }
+    if (replayStoreSwapCount) writeLog("replay_store_restored", "scripts=%d", replayStoreSwapCount);
+    free(e);
+    replayStoreSwapCount = 0;
+}
+
+static int useReplayGameData(const unsigned char *payload, size_t size) {
+    restoreReplayGameData();
+    SaveCursor c = {payload, payload + size, 0};
+    int version = saveCursorInt(&c), player = saveCursorInt(&c), mods = saveCursorInt(&c);
+    if (c.failed || version != GAME_DATA_VERSION || player != -1 || mods < 0 || mods > 4096) {
+        writeLogWarning("replay_store_read", "reason=%s version=%d", c.failed ? "bad_chunk" : "other_version", version);
+        return 0;
+    }
+    GameDataEntryRead *entries = mods ? calloc((size_t)mods, sizeof *entries) : NULL;
+    if (mods && !entries) {
+        writeLogError("replay_store_read", "reason=out_of_memory mods=%d", mods);
+        return 0;
+    }
+    int read = 0;
+    while (read < mods && readGameDataEntry(&c, &entries[read])) read++;
+    if (read < mods) writeLogWarning("replay_store_read", "reason=bad_entry at=%d mods=%d", read, mods);
+    int swapped = 0;
+    for (int i = 0; i < luaScriptCount; i++) {
+        LuaScript *s = luaScripts[i];
+        if (s->retired || !gameDataStateLive(s) || !gameDataCountsFor(s)) continue;
+        if (!growList((void **)&replayStoreSwaps, &replayStoreSwapCapacity, replayStoreSwapCount + 1, sizeof replayStoreSwaps[0])) {
+            writeLogError("replay_store_dropped", "mod=%s reason=out_of_memory", s->mod);
+            break;
+        }
+        ReplayStoreSwap *w = &replayStoreSwaps[replayStoreSwapCount];
+        *w = (ReplayStoreSwap){s, {0}, s->gameDataHash, s->gameDataHashKnown};
+        GameDataJob job = {.kind = GAME_DATA_WRITE, .s = s, .player = -1, .entry = &w->live};
+        if (!callLuaProtected(s, pushGameDataJob, &job, 0) || w->live.failed) {
+            free(w->live.bytes);
+            continue;
+        }
+        replayStoreSwapCount++;
+        const GameDataEntryRead *e = NULL;
+        for (int k = 0; k < read && !e; k++)
+            if (!strcmp(entries[k].mod, s->mod)) e = &entries[k];
+        fillGameDataFromEntry(s, e);
+        swapped++;
+    }
+    free(entries);
+    writeLog("replay_store_used", "mods=%d scripts=%d", read, swapped);
+    return swapped;
 }
 
 // ---- Install --------------------------------------------------------------------------------------------

@@ -32,31 +32,49 @@ static int commanderRitpowOf(int commander, int *level) {
     return 0;
 }
 
+static int squareThrough2(CallSite site, CallSite alsoRunning, int (*own)(int, int), int x, int y) {
+    if (!siteInstalled[site] || luaSiteDepth[site] || (alsoRunning != SITE_COUNT && luaSiteDepth[alsoRunning])) return own(x, y);
+    return ((int (*)(int, int))*siteHeadSlot(site))(x, y);
+}
+static int squareThrough3(CallSite site, int (*own)(int, int, int), int a, int x, int y) {
+    if (!siteInstalled[site] || luaSiteDepth[site]) return own(a, x, y);
+    return ((int (*)(int, int, int))*siteHeadSlot(site))(a, x, y);
+}
+
 #define LIBRARY_ENCHANT_KIND 0x484
+static int libraryLevelOf(int owner, int x, int y) {
+    size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
+    int terrain = (short)G16(RVA_SQUARE_RECORDS + square + SQUARE_TERRAIN_TYPE);
+    if (terrain < 0 || terrain >= TERRAIN_TABLE_MAX) return 0;
+    unsigned long long flags = *(const unsigned long long *)GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE + TERRAIN_FLAGS);
+    int base = (int)((flags >> 34) & 1);
+    int enchant = GAME_FN(int (*)(int, int, int, int), RVA_SQUARE_ENCHANT_VALUE)(owner, x, y, LIBRARY_ENCHANT_KIND);
+    return enchant + ((flags >> 35) & 1 ? base + 2 : base);
+}
 static int squareLibraryLevel(int x, int y) {
     if (x < 0 || y < 0 || x >= G32(RVA_MAP_DEPTH) || y >= G32(RVA_MAP_H) || x >= G32(RVA_MAP_W)) return 0;
     size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
     int terrain = (short)G16(RVA_SQUARE_RECORDS + square + SQUARE_TERRAIN_TYPE);
     if (terrain < 0 || terrain >= TERRAIN_TABLE_MAX) return 0;
     int owner = (signed char)G8(RVA_SQUARE_RECORDS + square + SQUARE_OWNER);
-    unsigned long long flags = *(const unsigned long long *)GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE + TERRAIN_FLAGS);
-    int base = (int)((flags >> 34) & 1);
-    int enchant = GAME_FN(int (*)(int, int, int, int), RVA_SQUARE_ENCHANT_VALUE)(owner, x, y, LIBRARY_ENCHANT_KIND);
-    return enchant + ((flags >> 35) & 1 ? base + 2 : base);
+    return squareThrough3(SITE_SQUARE_LIBRARY_LEVEL, libraryLevelOf, owner, x, y);
 }
 
 #define FORT_PART_FORT 0x200
 #define FORT_PARTS_LEVEL_2 0x11800
+static int fortPartsOf(int x, int y) { return (int)GAME_FN(unsigned (*)(int, int), RVA_SQUARE_FORT_PARTS)(x, y); }
+static unsigned squareFortParts(int x, int y) { return (unsigned)squareThrough2(SITE_SQUARE_FORT_PARTS, SITE_COUNT, fortPartsOf, x, y); }
 static int squareHasFort(int x, int y) {
     if (x >= G32(RVA_MAP_DEPTH) || y >= G32(RVA_MAP_H)) return 0;
-    return (GAME_FN(unsigned (*)(int, int), RVA_SQUARE_FORT_PARTS)(x, y) & FORT_PART_FORT) != 0;
+    return (squareFortParts(x, y) & FORT_PART_FORT) != 0;
 }
 
-static int squareWaterlike(int x, int y) { return GAME_FN(int (*)(int, int), RVA_SQUARE_WATERLIKE)(x, y) != 0; }
+static int waterlikeOf(int x, int y) { return GAME_FN(int (*)(int, int), RVA_SQUARE_WATERLIKE)(x, y); }
+static int squareWaterlike(int x, int y) { return squareThrough2(SITE_SQUARE_WATERLIKE, SITE_COUNT, waterlikeOf, x, y) != 0; }
 
 #define TERRAIN_FLAG_WATER     0x4
 #define TERRAIN_FLAG_NOSTART   (1ULL << 18)
-static int squareOpenLand(int x, int y) {
+static int openLandOf(int x, int y) {
     if (x < 0 || y < 0 || x >= G32(RVA_MAP_W) || y >= G32(RVA_MAP_H) || x >= MAP_COLUMNS_MAX || y >= MAP_COLUMN_SQUARES) return 0;
     size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
     int terrain = (short)G16(RVA_SQUARE_RECORDS + square + SQUARE_TERRAIN_TYPE);
@@ -65,6 +83,7 @@ static int squareOpenLand(int x, int y) {
     if (flags & (TERRAIN_FLAG_WATER | TERRAIN_FLAG_NOSTART)) return 0;
     return !(G32(RVA_SQUARE_FLAGS + square) & SQUARE_FLAG_FLOODED);
 }
+static int squareOpenLand(int x, int y) { return squareThrough2(SITE_SQUARE_OPEN_LAND, SITE_SQUARE_WATERLIKE, openLandOf, x, y) != 0; }
 
 // ---- Incomes: slotIncome and terrainIncome ---------------------------------------------------------
 static int terrainIncomeField(int resource) {
@@ -240,7 +259,7 @@ static int garrisonSquareTerrain(int x, int y) {
 }
 static int garrisonFortLevel(int x, int y) {
     if (!squareHasFort(x, y)) return 0;
-    return (GAME_FN(unsigned (*)(int, int), RVA_SQUARE_FORT_PARTS)(x, y) & FORT_PARTS_LEVEL_2) ? 2 : 1;
+    return (squareFortParts(x, y) & FORT_PARTS_LEVEL_2) ? 2 : 1;
 }
 
 static int garrisonArmyStrength(int c, int last, unsigned long long flags) {
@@ -283,7 +302,7 @@ static void garrisonGather(int c, int unit, int player, int x, int y, int last) 
     int terrain = garrisonSquareTerrain(x, y);
     if (terrain < 0 || terrain >= TERRAIN_TABLE_MAX) return;
     int gold = G16(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE + TERRAIN_GOLD);
-    int citadel = GAME_FN(int (*)(int, int, int), RVA_SQUARE_IS_CITADEL_FOR)(player, x, y) != 0;
+    int citadel = squareCitadelFor(player, x, y) != 0;
     int keep = 0;
     if (citadel) keep = GAME_FN(int (*)(int), RVA_AI_COUNT_CITADELS)(player) <= 1 ? 60 : 20;
     if (gold >= 4 && keep < 10) keep = 10;
@@ -753,14 +772,7 @@ static void pushRecordWord(lua_State *L, const char *name, int kind, const unsig
     }
 }
 
-// ---- Weapon writes: coe5.set("weapon", w, "dmg", 12) on a weapon the script's own mod made -----------
-static short weaponMadeBy[WEAPON_RECORDS_MOVED];
-
-static void noteWeaponMade(int mod) {
-    int weapon = G32(RVA_WEAPON_CURRENT);
-    if (weapon >= 0 && weapon < WEAPON_RECORDS_MOVED) weaponMadeBy[weapon] = (short)(mod + 1);
-}
-
+// ---- Record writes: coe5.set("monster", m, "hp", 30) on any mod's record or the game's -----------
 static int weaponSoundPairKind(const char *word) {
     return !strcmp(word, "sndvol") ? 1 : !strcmp(word, "reloadsnd") ? 6 : 0;
 }
@@ -815,71 +827,139 @@ static const char *setWeaponRuleTraits(int weapon, int rule, const char *traits,
     return NULL;
 }
 
-static int setWeaponWord(lua_State *L, int weapon, unsigned char *record, int arg) {
+static int lastWeaponNumber(void) { return tableRecords(TABLE_WEAPON) - 1; }
+static int lastTerrainCode(void) { return TERRAIN_TABLE_MAX - 1; }
+
+#define ITEM_TYPE_LAST 8
+static void recordWordRange(int kind, const RecordWord *row, lua_Integer *min, lua_Integer *max) {
+    *min = row->size == 1 ? SCHAR_MIN : row->size == 2 ? SHRT_MIN : row->size == 4 ? INT_MIN : LUA_MININTEGER;
+    *max = row->size == 1 ? UCHAR_MAX : row->size == 2 ? USHRT_MAX : row->size == 4 ? UINT_MAX : LUA_MAXINTEGER;
+    if (kind == RECORD_ITEM && !strcmp(row->word, "itemwep")) *min = -1, *max = lastWeaponNumber();
+    else if (kind == RECORD_WEAPON && !strcmp(row->word, "nextalwayswep")) *min = -(lastWeaponNumber() + 1), *max = lastWeaponNumber() + 1;
+    else if (kind == RECORD_ITEM && !strcmp(row->word, "type")) *min = 0, *max = ITEM_TYPE_LAST;
+    else if ((kind == RECORD_CLASS && !strcmp(row->word, "hometerr")) || (kind == RECORD_RITUAL && !strcmp(row->word, "terr"))) *max = lastTerrainCode();
+}
+
+typedef struct { int offset, count, stride, valueAt, valueWidth, idWidth; } AbilityPairs;
+static AbilityPairs abilityPairsOf(int kind) {
+    switch (kind) {
+    case RECORD_MONSTER: return (AbilityPairs){MONSTER_ABILITIES, MONSTER_ABILITY_PAIRS, 8, 4, 4, 4};
+    case RECORD_ITEM: return (AbilityPairs){ITEM_ABILITIES, ITEM_ABILITY_PAIRS, 8, 4, 4, 4};
+    case RECORD_CLASS: return (AbilityPairs){CLASS_ABILITIES, CLASS_ABILITY_PAIRS, 8, 4, 4, 4};
+    case RECORD_TERRAIN: return (AbilityPairs){TERRAIN_ABILITIES, TERRAIN_ABILITY_PAIRS, 16, 8, 8, 8};
+    default: return (AbilityPairs){RITUAL_FX, RITUAL_FX_MAX, RITUAL_FX_SIZE, RITUAL_FX_VALUE, 8, 4};
+    }
+}
+
+static const char *setRecordAbility(int kind, int index, long long id, lua_Integer value) {
+    AbilityPairs a = abilityPairsOf(kind);
+    if (a.valueWidth == 4 && (value < INT_MIN || value > INT_MAX)) return "out_of_range";
+    const unsigned char *record = contentRecord(kind, index);
+    if (!record) return "bad_record";
+    int at = -1, end = -1;
+    for (int i = 0; i < a.count && at < 0 && end < 0; i++) {
+        const unsigned char *pair = record + a.offset + (size_t)i * a.stride;
+        long long have = a.idWidth == 8 ? *(const long long *)pair : *(const int *)pair;
+        if (have < 1) end = i;
+        else if (have == id) at = i;
+    }
+    if (at < 0 && end < 0) return "no_room";
+    int slot = at >= 0 ? at : end;
+    unsigned char pair[RITUAL_FX_SIZE];
+    memcpy(pair, record + a.offset + (size_t)slot * a.stride, (size_t)a.stride);
+    if (a.idWidth == 8) *(long long *)pair = id;
+    else *(int *)pair = (int)id;
+    if (a.valueWidth == 8) *(long long *)(pair + a.valueAt) = value;
+    else *(int *)(pair + a.valueAt) = (int)value;
+    const char *reason = writeContent(kind, index, a.offset + slot * a.stride, pair, a.stride);
+    if (reason || at >= 0 || slot + 1 >= a.count) return reason;
+    unsigned char ended[8] = {0};
+    return writeContent(kind, index, a.offset + (slot + 1) * a.stride, ended, a.idWidth);
+}
+
+static int refuseRecordWrite(lua_State *L, const char *reason, const char *name, int index, const char *word) {
     LuaScript *s = luaScriptOf(L);
-    const char *mod = s ? s->mod : "?";
-    const char *word = luaL_checkstring(L, arg);
-    int maker = weapon >= 0 && weapon < WEAPON_RECORDS_MOVED ? weaponMadeBy[weapon] - 1 : -1;
-    if (maker < 0 || maker > G32(RVA_MOD_LAST_INDEX) || _stricmp(modName(maker), mod)) {
-        refuseLuaCall(mod, "coe5.set", "not_own_weapon", "name=weapon weapon=%d word=%s", weapon, word);
-        return 0;
-    }
-    int rule = weaponRuleOfWord(word);
-    if (rule >= 0) {
-        char bad[48] = "";
-        const char *reason = setWeaponRuleTraits(weapon, rule, luaL_checkstring(L, arg + 1), bad, sizeof bad);
-        if (reason) refuseLuaCall(mod, "coe5.set", reason, "name=weapon weapon=%d word=%s trait=%s", weapon, word, bad);
-        return 0;
-    }
-    if (!strcmp(word, "noexplode")) {
-        if (lua_type(L, arg + 1) != LUA_TBOOLEAN) {
-            refuseLuaCall(mod, "coe5.set", "needs_boolean", "name=weapon word=%s value=%s", word, luaL_typename(L, arg + 1));
-            return 0;
-        }
-        if (!lua_toboolean(L, arg + 1)) {
-            if (weapon < noExplode.weaponCount) noExplode.weapons[weapon] = 0;
-        } else if (!addNoExplodeWeapon(weapon)) {
-            refuseLuaCall(mod, "coe5.set", "out_of_memory", "name=weapon word=%s", word);
-        }
-        return 0;
-    }
-    int pairKind = weaponSoundPairKind(word);
-    const RecordWord *row = pairKind ? NULL : recordWordRow(RECORD_WEAPON, word);
-    if (!pairKind && !row) return luaL_error(L, "weapon: unknown word '%s'", word);
-    if (row && row->kind == WORD_FLAG) {
-        if (lua_type(L, arg + 1) != LUA_TBOOLEAN) {
-            refuseLuaCall(mod, "coe5.set", "needs_boolean", "name=weapon word=%s value=%s", word, luaL_typename(L, arg + 1));
-            return 0;
-        }
-        unsigned long long *bits = (unsigned long long *)(record + row->offset);
-        if (lua_toboolean(L, arg + 1)) *bits |= row->value;
-        else *bits &= ~row->value;
-        return 0;
-    }
-    lua_Integer value = luaL_checkinteger(L, arg + 1);
-    if (value < INT_MIN || value > INT_MAX) {
-        refuseLuaCall(mod, "coe5.set", "out_of_range", "name=weapon word=%s value=%lld", word, (long long)value);
-        return 0;
-    }
-    if (pairKind) {
-        int *pairs = (int *)(record + WEAPON_SOUND_PAIRS);
-        int i = 0;
-        while (i < WEAPON_SOUND_PAIRS_MAX && pairs[2 * i] && pairs[2 * i] != pairKind) i++;
-        if (i == WEAPON_SOUND_PAIRS_MAX) {
-            refuseLuaCall(mod, "coe5.set", "no_room", "name=weapon weapon=%d word=%s", weapon, word);
-            return 0;
-        }
-        if (!pairs[2 * i] && i + 1 < WEAPON_SOUND_PAIRS_MAX) pairs[2 * (i + 1)] = 0;
-        pairs[2 * i] = pairKind;
-        pairs[2 * i + 1] = (int)value;
-        return 0;
-    }
-    unsigned char *at = record + row->offset;
-    if (row->size == 1) *at = (unsigned char)value;
-    else if (row->size == 2) *(short *)at = (short)value;
-    else if (row->size == 4) *(int *)at = (int)value;
-    else *(long long *)at = value;
+    refuseLuaCall(s ? s->mod : "?", "coe5.set", reason, "name=%s index=%d word=%s", name, index, word);
     return 0;
+}
+
+static int setRecordWord(lua_State *L, const GameVar *v, int arg) {
+    int kind = v->size, index = (int)lua_tointeger(L, 2);
+    const char *word = luaL_checkstring(L, arg);
+    const unsigned char *record = contentRecord(kind, index);
+    if (!record) return luaL_error(L, "%s: index %d out of range", v->name, index);
+    if (kind == RECORD_WEAPON) {
+        int rule = weaponRuleOfWord(word);
+        if (rule >= 0) {
+            const char *traits = luaL_checkstring(L, arg + 1);
+            char bad[48] = "";
+            int kind2, len;
+            const char *p = traits;
+            char trait[WEAPON_TRAIT_WORD_SIZE];
+            unsigned long long value;
+            while ((len = readWord(&p, trait, sizeof trait)) > 0)
+                if ((size_t)len >= sizeof trait || !findWeaponTrait(trait, &kind2, &value)) {
+                    snprintf(bad, sizeof bad, "%.40s", trait);
+                    LuaScript *s = luaScriptOf(L);
+                    refuseLuaCall(s ? s->mod : "?", "coe5.set", "unknown_trait", "name=weapon weapon=%d word=%s trait=%s", index, word, bad);
+                    return 0;
+                }
+            const char *reason = writeContent(CONTENT_WEAPON_TRAITS, index, rule, traits, (int)strlen(traits) + 1);
+            return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
+        }
+        if (!strcmp(word, "noexplode")) {
+            if (lua_type(L, arg + 1) != LUA_TBOOLEAN) return refuseRecordWrite(L, "needs_boolean", v->name, index, word);
+            unsigned char on = (unsigned char)lua_toboolean(L, arg + 1);
+            const char *reason = writeContent(CONTENT_NOEXPLODE, index, 0, &on, 1);
+            return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
+        }
+        int pairKind = weaponSoundPairKind(word);
+        if (pairKind) {
+            lua_Integer value = luaL_checkinteger(L, arg + 1);
+            if (value < INT_MIN || value > INT_MAX) return refuseRecordWrite(L, "out_of_range", v->name, index, word);
+            int pairs[2 * WEAPON_SOUND_PAIRS_MAX];
+            memcpy(pairs, record + WEAPON_SOUND_PAIRS, sizeof pairs);
+            int i = 0;
+            while (i < WEAPON_SOUND_PAIRS_MAX && pairs[2 * i] && pairs[2 * i] != pairKind) i++;
+            if (i == WEAPON_SOUND_PAIRS_MAX) return refuseRecordWrite(L, "no_room", v->name, index, word);
+            if (!pairs[2 * i] && i + 1 < WEAPON_SOUND_PAIRS_MAX) pairs[2 * (i + 1)] = 0;
+            pairs[2 * i] = pairKind;
+            pairs[2 * i + 1] = (int)value;
+            const char *reason = writeContent(CONTENT_WEAPON, index, WEAPON_SOUND_PAIRS, pairs, (int)sizeof pairs);
+            return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
+        }
+    }
+    const RecordWord *row = recordWordRow(kind, word);
+    long long ability = row && row->kind == WORD_ABILITY ? (long long)row->value : -1;
+    if (!row && (kind == RECORD_MONSTER || kind == RECORD_ITEM || kind == RECORD_RITUAL)) ability = abilityIdOfWord(word);
+    if (!row && ability < 0) return luaL_error(L, "%s: unknown word '%s'", v->name, word);
+    if (row && row->kind == WORD_FLAG) {
+        if (lua_type(L, arg + 1) != LUA_TBOOLEAN) return refuseRecordWrite(L, "needs_boolean", v->name, index, word);
+        unsigned long long bits = row->size == 4 ? *(const unsigned int *)(record + row->offset) : *(const unsigned long long *)(record + row->offset);
+        bits = lua_toboolean(L, arg + 1) ? bits | row->value : bits & ~row->value;
+        unsigned int low = (unsigned int)bits;
+        const char *reason = writeContent(kind, index, row->offset, row->size == 4 ? (const void *)&low : (const void *)&bits, row->size == 4 ? 4 : 8);
+        return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
+    }
+    lua_Integer value = luaL_checkinteger(L, arg + 1), min, max;
+    if (row && row->kind == WORD_FIELD) {
+        recordWordRange(kind, row, &min, &max);
+        if (value < min || value > max) {
+            LuaScript *s = luaScriptOf(L);
+            refuseLuaCall(s ? s->mod : "?", "coe5.set", "out_of_range", "name=%s index=%d word=%s value=%lld min=%lld max=%lld", v->name, index, word,
+                          (long long)value, (long long)min, (long long)max);
+            return 0;
+        }
+        unsigned char bytes[8];
+        if (row->size == 1) bytes[0] = (unsigned char)value;
+        else if (row->size == 2) *(short *)bytes = (short)value;
+        else if (row->size == 4) *(int *)bytes = (int)value;
+        else *(long long *)bytes = value;
+        const char *reason = writeContent(kind, index, row->offset, bytes, row->size);
+        return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
+    }
+    const char *reason = setRecordAbility(kind, index, ability, value);
+    return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
 }
 
 static int lGet(lua_State *L) {
@@ -904,6 +984,12 @@ static int lGet(lua_State *L) {
         break;
     }
     case T_RITUAL_TERRAIN_NAME: pushGameTerrainName(L, *(const int *)p); break;
+    case T_MONSTER_MOD: {
+        const char *mod = monsterMadeByName((int)lua_tointeger(L, 2));
+        if (mod) lua_pushstring(L, mod);
+        else lua_pushnil(L);
+        break;
+    }
     case T_RITUAL_TERRAIN_AT: {
         int at = ritualTerrainAt(*(const int *)p, (int)lua_tointeger(L, 3), (int)lua_tointeger(L, 4));
         if (at < 0) lua_pushnil(L);
@@ -1063,7 +1149,7 @@ static int lGet(lua_State *L) {
         else pushRecordWord(L, v->name, v->size, p, word);
         break;
     }
-    case T_AI_ATTACK_MARGIN: lua_pushinteger(L, AI_ATTACK_MARGIN); break;
+    case T_AI_ATTACK_MARGIN: lua_pushinteger(L, aiAttackMarginNow); break;
     case T_SLOT_ABILITY:
         lua_pushinteger(L, GAME_FN(int (*)(int, int, int), RVA_PLAYER_ABILITY)((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), v->size));
         break;
@@ -1112,6 +1198,8 @@ static int lGet(lua_State *L) {
 #define MAP_ZOOM_MAX 100.0
 #define MESSAGE_RECORDS 1000
 #define PATH_ENTRIES 256
+#define MONSTER_SPRITE_END 0x7fbc
+#define RITUAL_COST_TYPE_LAST 0x32
 
 static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[] = {
     {"mapW", INT_MIN, MAP_COLUMNS_MAX}, {"mapH", INT_MIN, MAP_COLUMN_SQUARES}, {"mapDepth", INT_MIN, MAP_COLUMNS_MAX},
@@ -1165,6 +1253,12 @@ static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[
     {"eventTargetX", INT_MIN, MAP_COLUMNS_MAX - 1}, {"eventTargetY", INT_MIN, MAP_COLUMN_SQUARES - 1},
     {"eventSquareX", INT_MIN, MAP_COLUMNS_MAX - 1}, {"eventSquareY", INT_MIN, MAP_COLUMN_SQUARES - 1},
     {"pathLength", 0, PATH_ENTRIES}, {"pathX", 0, MAP_COLUMNS_MAX - 1}, {"pathY", 0, MAP_COLUMN_SQUARES - 1},
+    {"squareArmyOwner", -1, INT_MAX}, {"squareRememberedStrength", -1, INT_MAX},
+    {"slotRitualCasts", 0, COMMANDER_CAST_MAX}, {"unitRitualCasts", 0, COMMANDER_CAST_MAX},
+    {"unitItem", -1, INT_MAX}, {"unitBattleX", 0, BATTLE_WIDTH_MAX - 1}, {"unitBattleY", 0, BATTLE_ROWS - 1}, {"uiWheel", INT_MIN, INT_MAX},
+    {"monsterSprite", 0, MONSTER_SPRITE_END - 1}, {"itemSlotType", 0, ITEM_TYPE_LAST}, {"ritualTerrain", INT_MIN, TERRAIN_TABLE_MAX - 1},
+    {"ritualCostType", INT_MIN, RITUAL_COST_TYPE_LAST}, {"ritualEffect", INT_MIN, RITUAL_EFFECT_ID_COUNT - 1},
+    {"monsterAttackWeapon", -1, INT_MAX},
 };
 
 static const struct { const char *name; double min, max; } GAME_VAR_FLOAT_RANGES[] = {
@@ -1197,6 +1291,7 @@ static int lastItemNumber(void) { return tableRecords(TABLE_ITEM) - 1; }
 static int lastClassNumber(void) { return tableRecords(TABLE_CLASS) - 1; }
 static int lastPlaneRecord(void) { return planeTableRecords() - 1; }
 static int lastRitualSlot(void) { return ritualSlotCount() - 1; }
+static int lastBattleColumn(void) { return G32(RVA_BATTLE_WIDTH) - 1; }
 static int lastSpellSlot(void) { return spellTableRecords() - 2; }
 static int lastPlaneInUse(void) {
     int last = G32(RVA_LAST_PLANE);
@@ -1212,6 +1307,8 @@ static const struct { const char *name; int (*last)(void); } GAME_VAR_LAST[] = {
     {"planeLastIndex", lastPlaneRecord}, {"mapPlaneIndex", lastPlaneRecord}, {"mapViewPlane", lastPlaneInUse},
     {"commanderRitual", lastRitualSlot}, {"commanderRepeatRitual", lastRitualSlot}, {"commanderRitualPlan", lastRitualSlot},
     {"enchantRitual", lastRitualSlot}, {"unitKnownSpell", lastSpellSlot}, {"unitMemorizedSpell", lastSpellSlot},
+    {"squareArmyOwner", lastPlayerSlot}, {"unitItem", lastItemNumber}, {"unitBattleX", lastBattleColumn},
+    {"monsterAttackWeapon", lastWeaponNumber},
 };
 
 static void gameVarRange(const GameVar *v, lua_Integer *min, lua_Integer *max) {
@@ -1336,12 +1433,360 @@ static void narrowPlaneRange(const GameVar *v, const unsigned char *p, lua_Integ
     if (limit < *max) *max = limit;
 }
 
+static int refuseSetValue(lua_State *L, const char *reason, const GameVar *v, lua_Integer value, lua_Integer min, lua_Integer max) {
+    LuaScript *s = luaScriptOf(L);
+    refuseLuaCall(s ? s->mod : "?", "coe5.set", reason, "name=%s value=%lld min=%lld max=%lld", v->name, (long long)value, (long long)min,
+                  (long long)max);
+    return 0;
+}
+
+static int refusedSetValue(lua_State *L, const char *reason, const GameVar *v, lua_Integer value, lua_Integer min, lua_Integer max) {
+    refuseSetValue(L, reason, v, value, min, max);
+    return 1;
+}
+
+static int setPlaneTintValue(lua_State *L, int arg) {
+    double rgba[PLANE_TINT_CHANNELS];
+    for (int c = 0; c < PLANE_TINT_CHANNELS; c++) rgba[c] = luaL_checknumber(L, arg + c);
+    lua_Integer plane = lua_tointeger(L, 2);
+    const char *reason = setLuaPlaneTint(plane < 0 || plane > INT_MAX ? -1 : (int)plane, rgba);
+    if (reason) {
+        LuaScript *s = luaScriptOf(L);
+        refuseLuaCall(s ? s->mod : "?", "coe5.set", reason, "name=planeTint plane=%lld r=%g g=%g b=%g strength=%g min=0 max=1", (long long)plane,
+                      rgba[0], rgba[1], rgba[2], rgba[3]);
+    }
+    return 0;
+}
+
+#define WRITTEN_NAME_MAX 64
+static struct { const char **entry; char text[NAME_SIZE]; } writtenNames[WRITTEN_NAME_MAX];
+static int writtenNameCount;
+static int setPointerName(lua_State *L, const GameVar *v, unsigned char *p, int arg) {
+    const char *text = luaL_checkstring(L, arg);
+    const char **entry = (const char **)p;
+    int k = 0;
+    while (k < writtenNameCount && writtenNames[k].entry != entry) k++;
+    const char *reason = k == WRITTEN_NAME_MAX ? "no_room" : !makeGameDataWritable(entry, sizeof *entry) ? "table_not_writable" : NULL;
+    if (reason) {
+        LuaScript *s = luaScriptOf(L);
+        refuseLuaCall(s ? s->mod : "?", "coe5.set", reason, "name=%s index=%lld", v->name, (long long)lua_tointeger(L, 2));
+        return 0;
+    }
+    if (k == writtenNameCount) writtenNames[writtenNameCount++].entry = entry;
+    snprintf(writtenNames[k].text, sizeof writtenNames[k].text, "%s", text);
+    *entry = writtenNames[k].text;
+    return 0;
+}
+
+static int setTempAbility(int unit, int ability, int value) {
+    if (unit < 0 || ability < 1) return 0;
+    for (int i = 0; i < UNIT_TEMP_ABILITIES; i++) {
+        size_t id = RVA_UNIT_TEMP_ABILITY_IDS + (size_t)unit * UNIT_SIZE + (size_t)i * 2;
+        int has = (short)G16(id);
+        if (has && has != ability && has != -1) continue;
+        G16(id) = (short)ability;
+        G32(RVA_UNIT_TEMP_ABILITY_VALUES + (size_t)unit * UNIT_SIZE + (size_t)i * 4) = value;
+        if (!has && i + 1 < UNIT_TEMP_ABILITIES) G16(id + 2) = 0;
+        return 1;
+    }
+    return 0;
+}
+
+static const char *writeUnitAbility(int unit, int ability, int value, lua_Integer *own) {
+    *own = INT_MIN;
+    if (!unitAliveInTable(unit)) return "no_unit";
+    if (ability < 1) return "bad_ability";
+    unsigned char *ids = GAME_PTR(RVA_UNIT_TEMP_ABILITY_IDS + (size_t)unit * UNIT_SIZE);
+    unsigned char *values = GAME_PTR(RVA_UNIT_TEMP_ABILITY_VALUES + (size_t)unit * UNIT_SIZE);
+    short oldIds[UNIT_TEMP_ABILITIES];
+    int oldValues[UNIT_TEMP_ABILITIES];
+    memcpy(oldIds, ids, sizeof oldIds), memcpy(oldValues, values, sizeof oldValues);
+    for (int i = 0; i < UNIT_TEMP_ABILITIES && oldIds[i]; i++)
+        if (oldIds[i] == ability) {
+            short freed = -1;
+            int none = 0;
+            memcpy(ids + (size_t)i * 2, &freed, 2), memcpy(values + (size_t)i * 4, &none, 4);
+        }
+    int total = unitAbilityTotal(unit, ability, 0);
+    *own = total;
+    if (total == value) return NULL;
+    const char *reason = NULL;
+    if (!setTempAbility(unit, ability, value)) reason = "no_room";
+    else if ((total = unitAbilityTotal(unit, ability, 0)) != value) {
+        long long lowered = (long long)value - ((long long)total - value);
+        if (lowered >= INT_MIN && lowered <= INT_MAX && setTempAbility(unit, ability, (int)lowered)) total = unitAbilityTotal(unit, ability, 0);
+        if (total != value) reason = "below_own";
+    }
+    if (reason) memcpy(ids, oldIds, sizeof oldIds), memcpy(values, oldValues, sizeof oldValues);
+    return reason;
+}
+
+#define AI_ATTACK_MARGIN_MAX 127
+#define MARGIN_IMM12 (0xfffu << 10)
+#define MARGIN_IMM16 (0xffffu << 5)
+static const char *writeAiAttackMargin(int margin) {
+    if (!gameCodeMatches) return gameCodeReason();
+#ifdef __APPLE__
+    const struct { uintptr_t at; uint32_t mask; int shift; } words[] = {
+        {RVA_AI_CONQUER_MARGIN, MARGIN_IMM12, 10},
+        {RVA_WAYTOGO_MARGIN_OTHER - 0xc, MARGIN_IMM16, 5},
+        {RVA_WAYTOGO_MARGIN_OTHER - 8, MARGIN_IMM12, 10}, {RVA_WAYTOGO_MARGIN_OTHER, MARGIN_IMM12, 10},
+        {RVA_WAYTOGO_MARGIN_AI - 8, MARGIN_IMM12, 10},    {RVA_WAYTOGO_MARGIN_AI, MARGIN_IMM12, 10},
+        {RVA_WAYTOGO_MARGIN_HUMAN - 8, MARGIN_IMM12, 10}, {RVA_WAYTOGO_MARGIN_HUMAN, MARGIN_IMM12, 10},
+    };
+    for (size_t i = 0; i < sizeof words / sizeof words[0]; i++) {
+        uint32_t live;
+        memcpy(&live, GAME_PTR(words[i].at), sizeof live);
+        uint32_t word = patchedWord(live, words[i].mask, (uint32_t)margin << words[i].shift);
+        if (!writeGameCode(GAME_PTR(words[i].at), &word, sizeof word)) return "code_unwritable";
+    }
+#else
+    const struct { uintptr_t at; int sign; } bytes[] = {
+        {RVA_AI_CONQUER_MARGIN, 1}, {RVA_WAYTOGO_MARGIN_OTHER, -1}, {RVA_WAYTOGO_MARGIN_AI, -1}, {RVA_WAYTOGO_MARGIN_HUMAN, -1},
+    };
+    for (size_t i = 0; i < sizeof bytes / sizeof bytes[0]; i++) {
+        signed char immediate = (signed char)(bytes[i].sign * margin);
+        if (!writeGameCode(GAME_PTR(bytes[i].at + 2), &immediate, 1)) return "code_unwritable";
+    }
+#endif
+    aiAttackMarginNow = margin;
+    return NULL;
+}
+
+static int setKeyHeld(lua_State *L, const GameVar *v, int arg) {
+    LuaScript *s = luaScriptOf(L);
+    lua_Integer code = lua_tointeger(L, 2);
+    if (lua_type(L, arg) != LUA_TBOOLEAN) {
+        refuseLuaCall(s ? s->mod : "?", "coe5.set", "needs_boolean", "name=%s value=%s", v->name, luaL_typename(L, arg));
+        return 1;
+    }
+    if (code < 1) {
+        refuseLuaCall(s ? s->mod : "?", "coe5.set", "out_of_range", "name=%s key=%lld min=1 max=%d", v->name, (long long)code, KEY_STATE_SIZE - 1);
+        return 1;
+    }
+    unsigned char held = lua_toboolean(L, arg) ? 1 : 0;
+    keysHeld[code] = held;
+    *(unsigned char *)GAME_PTR(RVA_KEY_STATE + (size_t)code) = held;
+    return 1;
+}
+
+static int setComputedValue(lua_State *L, const GameVar *v, unsigned char *p, int arg) {
+    int integer = v->type == T_ARMY_OWNER || v->type == T_UNIT_AP_LEFT || v->type == T_UNIT_BATTLE_X || v->type == T_UNIT_BATTLE_Y ||
+                  v->type == T_REMEMBERED_STRENGTH || v->type == T_CAST_COUNT || v->type == T_UNIT_RITUAL_CASTS || v->type == T_UNIT_ITEM ||
+                  v->type == T_PREVIEW_WHEEL || v->type == T_UNIT_ABILITY || v->type == T_AI_ATTACK_MARGIN;
+    if (v->type == T_KEY_HELD) return setKeyHeld(L, v, arg);
+    if (v->type == T_ARMY_HOLDS) {
+        if (lua_type(L, arg) != LUA_TBOOLEAN) {
+            LuaScript *s = luaScriptOf(L);
+            refuseLuaCall(s ? s->mod : "?", "coe5.set", "needs_boolean", "name=%s value=%s", v->name, luaL_typename(L, arg));
+            return 1;
+        }
+        int x = (int)lua_tointeger(L, 2), y = (int)lua_tointeger(L, 3);
+        size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
+        if (lua_toboolean(L, arg)) {
+            G32(RVA_SQUARE_FLAGS + square) |= SQUARE_FLAG_HOLDIT;
+            return 1;
+        }
+        G32(RVA_SQUARE_FLAGS + square) &= ~SQUARE_FLAG_HOLDIT;
+        for (int u = 0, last = G32(RVA_UNIT_COUNT); u <= last && u < UNIT_TABLE_MAX; u++)
+            if (unitAliveAt(u, x, y)) *(unsigned long long *)GAME_PTR(RVA_UNITS + (size_t)u * UNIT_SIZE + 8) &= ~(1ull << UNIT_FLAG2_HOLDIT);
+        return 1;
+    }
+    if (!integer) return 0;
+    lua_Integer value = luaL_checkinteger(L, arg), min, max;
+    gameVarRange(v, &min, &max);
+    if (v->type == T_UNIT_AP_LEFT) {
+        int unit = (int)lua_tointeger(L, 2), used = (short)G16(RVA_UNITS + (size_t)unit * UNIT_SIZE + UNIT_AP_USED), most = unitApLeft(unit) + used;
+        min = (lua_Integer)most - SHRT_MAX, max = (lua_Integer)most - SHRT_MIN;
+        if (value < min || value > max) return refusedSetValue(L, "out_of_range", v, value, min, max);
+        G16(RVA_UNITS + (size_t)unit * UNIT_SIZE + UNIT_AP_USED) = (short)(most - value);
+        flushArmyApCaches(unit);
+        return 1;
+    }
+    if (v->type == T_AI_ATTACK_MARGIN) {
+        min = 0, max = AI_ATTACK_MARGIN_MAX;
+        if (value < min || value > max) return refusedSetValue(L, "out_of_range", v, value, min, max);
+        const char *reason = writeAiAttackMargin((int)value);
+        if (reason) return refusedSetValue(L, reason, v, value, min, max);
+        return 1;
+    }
+    if (v->type == T_UNIT_ABILITY) {
+        min = INT_MIN, max = INT_MAX;
+        if (value < min || value > max) return refusedSetValue(L, "out_of_range", v, value, min, max);
+        const char *reason = writeUnitAbility((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)value, &min);
+        if (reason) return refusedSetValue(L, reason, v, value, min, max);
+        return 1;
+    }
+    if (value < min || value > max) return refusedSetValue(L, "out_of_range", v, value, min, max);
+    switch (v->type) {
+    case T_ARMY_OWNER: *(short *)p = (short)value; break;
+    case T_REMEMBERED_STRENGTH: *(int *)p = (int)value; break;
+    case T_CAST_COUNT: *(short *)p = (short)value; break;
+    case T_PREVIEW_WHEEL: G32(RVA_WHEEL) = (int)((unsigned)G32(RVA_WHEEL) + (unsigned)value); break;
+    case T_UNIT_RITUAL_CASTS:
+        if (!setUnitRitualCasts((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)value)) return refusedSetValue(L, "out_of_memory", v, value, min, max);
+        break;
+    case T_UNIT_BATTLE_X:
+    case T_UNIT_BATTLE_Y: {
+        int unit = (int)lua_tointeger(L, 2), x = 0, y = 0;
+        if (!unitBattleCell(unit, &x, &y)) return refusedSetValue(L, "not_on_field", v, value, min, max);
+        const char *reason = moveUnitBattleCell(unit, v->type == T_UNIT_BATTLE_X ? (int)value : x, v->type == T_UNIT_BATTLE_Y ? (int)value : y);
+        if (reason) return refusedSetValue(L, reason, v, value, min, max);
+        break;
+    }
+    case T_UNIT_ITEM: {
+        const char *reason = writeUnitItem((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)value);
+        if (reason) return refusedSetValue(L, reason, v, value, min, max);
+        break;
+    }
+    default: break;
+    }
+    return 1;
+}
+
+static const struct { const char *name; int kind, nameSize; } CONTENT_VALUES[] = {
+    {"monsterName", CONTENT_MONSTER, MONSTER_NAME_SIZE}, {"monsterSprite", CONTENT_MONSTER, 0}, {"monsterHp", CONTENT_MONSTER, 0},
+    {"monsterFlags", CONTENT_MONSTER, 0}, {"monsterMoveFlags", CONTENT_MONSTER, 0}, {"monsterAttackType", CONTENT_MONSTER, 0},
+    {"monsterAttackWeapon", CONTENT_MONSTER, 0}, {"monsterAttackValue", CONTENT_MONSTER, 0}, {"monsterAbility", CONTENT_MONSTER, 0},
+    {"itemName", CONTENT_ITEM, ITEM_NAME_SIZE}, {"itemSlotType", CONTENT_ITEM, 0},
+    {"className", CONTENT_CLASS, CLASS_NAME_SIZE}, {"classLeader", CONTENT_CLASS, MONSTER_NAME_SIZE},
+    {"classStartArmy", CONTENT_CLASS, CLASS_START_UNIT_SIZE}, {"classStandardTroops", CONTENT_CLASS, 0}, {"classAbility", CONTENT_CLASS, 0},
+    {"classRecruitName", CONTENT_CLASS_RECRUITS, MONSTER_NAME_SIZE}, {"classRecruitCount", CONTENT_CLASS_RECRUITS, 0},
+    {"terrainName", CONTENT_TERRAIN, TERRAIN_GOLD}, {"terrainFlags", CONTENT_TERRAIN, 0}, {"terrainIncome", CONTENT_TERRAIN, 0},
+    {"ritualName", CONTENT_RITUAL, RITUAL_NAME_SIZE}, {"ritualString", CONTENT_RITUAL, RITUAL_STRING_SIZE}, {"ritualRitpow", CONTENT_RITUAL, 0},
+    {"ritualLevel", CONTENT_RITUAL, 0}, {"ritualCostType", CONTENT_RITUAL, 0}, {"ritualCost", CONTENT_RITUAL, 0},
+    {"ritualTerrain", CONTENT_RITUAL, 0}, {"ritualEffect", CONTENT_RITUAL, 0}, {"ritualEffectValue", CONTENT_RITUAL, 0},
+    {"ritualFlags", CONTENT_RITUAL, 0}, {"ritualSummons", CONTENT_RITUAL, 0}, {"ritualCasterMaxCast", CONTENT_CASTER_MAX_CAST, 0},
+    {"weaponName", CONTENT_WEAPON, WEAPON_TRGRANK}, {"weaponDmgType", CONTENT_WEAPON, 0}, {"weaponAoe", CONTENT_WEAPON, 0},
+};
+
+static int contentValueRow(const GameVar *v) {
+    for (int i = 0; i < (int)(sizeof CONTENT_VALUES / sizeof CONTENT_VALUES[0]); i++)
+        if (!strcmp(CONTENT_VALUES[i].name, v->name)) return i;
+    return -1;
+}
+
+static int monsterAttackEnd(const unsigned char *record) {
+    for (int k = 0; k < MONSTER_ATTACK_MAX; k++) {
+        const unsigned char *r = record + MONSTER_ATTACKS + (size_t)k * MONSTER_ATTACK_SIZE;
+        if (*(const int *)r < 1 || *(const int *)(r + MONSTER_ATTACK_WEAPON) < 0) return k;
+    }
+    return MONSTER_ATTACK_MAX;
+}
+
+static int refuseContentWrite(lua_State *L, const char *reason, const GameVar *v, lua_Integer index, lua_Integer value) {
+    LuaScript *s = luaScriptOf(L);
+    refuseLuaCall(s ? s->mod : "?", "coe5.set", reason, "name=%s index=%lld value=%lld", v->name, (long long)index, (long long)value);
+    return 0;
+}
+
+static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int arg) {
+    int row = contentValueRow(v), kind = CONTENT_VALUES[row].kind, index = (int)lua_tointeger(L, 2);
+    int recordKind = kind == CONTENT_CASTER_MAX_CAST ? CONTENT_RITUAL : kind;
+    GameVarShape shape = gameVarShape(v);
+    unsigned char *record = contentRecord(recordKind, index);
+    int at2 = v->count2 > 1 ? (int)lua_tointeger(L, 3) : 0;
+    const char *reason = NULL;
+    lua_Integer value = 0, min = 0, max = 0;
+    if (v->type != T_STR && v->type != T_CLASS_STDTROOPS && v->type != T_RITUAL_SUMMONS) {
+        value = luaL_checkinteger(L, arg);
+        gameVarRange(v, &min, &max);
+        if (v->type == T_I64) min = LUA_MININTEGER, max = LUA_MAXINTEGER;
+        if (v->type == T_TERRAIN_INCOME) min = SHRT_MIN, max = USHRT_MAX;
+        if (v->type == T_RITUAL_CASTER_MAX_CAST) min = 0, max = COMMANDER_CAST_MAX;
+        if (v->type == T_CLASS_ABILITY || v->type == T_MONSTER_ABILITY || v->type == T_MONSTER_ATTACK) {
+            if (v->type != T_MONSTER_ATTACK || v->addr != RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_WEAPON) min = INT_MIN, max = INT_MAX;
+        }
+        if (value < min || value > max) return refuseSetValue(L, "out_of_range", v, value, min, max);
+    }
+    if (!p) return shape.list != LIST_NONE ? luaL_error(L, "%s: the list ends before that index", v->name)
+                                           : luaL_error(L, "%s: index %d out of range", v->name, index);
+    if (!record) return luaL_error(L, "%s: index %d out of range", v->name, index);
+    int offset = (int)(p - record);
+    if (v->type == T_STR) {
+        const char *text = luaL_checkstring(L, arg);
+        int size = CONTENT_VALUES[row].nameSize;
+        char field[RITUAL_STRING_SIZE] = {0};
+        snprintf(field, (size_t)size, "%s", text);
+        int appends = shape.list == LIST_TO_EMPTY_NAME && !*p && field[0] && at2 + 1 < v->count2;
+        reason = writeContent(kind, index, offset, field, size);
+        if (!reason && appends && p[v->stride2]) {
+            char ended = 0;
+            reason = writeContent(kind, index, offset + v->stride2, &ended, 1);
+        }
+        return reason ? refuseContentWrite(L, reason, v, index, 0) : 0;
+    }
+    if (v->type == T_CLASS_STDTROOPS || v->type == T_RITUAL_SUMMONS) {
+        if (lua_type(L, arg) != LUA_TBOOLEAN) {
+            LuaScript *s = luaScriptOf(L);
+            refuseLuaCall(s ? s->mod : "?", "coe5.set", "needs_boolean", "name=%s value=%s", v->name, luaL_typename(L, arg));
+            return 0;
+        }
+        int on = lua_toboolean(L, arg);
+        if (v->type == T_CLASS_STDTROOPS) reason = setRecordAbility(RECORD_CLASS, index, CLASS_ABILITY_STDTROOPS, on);
+        else if (on) reason = ritualFirstFx(record, RITUAL_FX_SUMMONING, -1) != -1 ? NULL : setRecordAbility(RECORD_RITUAL, index, RITUAL_FX_SUMMONING, 1);
+        else {
+            unsigned char fx[RITUAL_FX_MAX * RITUAL_FX_SIZE] = {0};
+            int kept = 0;
+            for (int i = 0; i < RITUAL_FX_MAX && ritualFxId(record, i) >= 1; i++)
+                if (ritualFxId(record, i) != RITUAL_FX_SUMMONING) memcpy(fx + (size_t)kept++ * RITUAL_FX_SIZE, record + RITUAL_FX + (size_t)i * RITUAL_FX_SIZE, RITUAL_FX_SIZE);
+            reason = writeContent(CONTENT_RITUAL, index, RITUAL_FX, fx, (int)sizeof fx);
+        }
+        return reason ? refuseContentWrite(L, reason, v, index, on) : 0;
+    }
+    switch (v->type) {
+    case T_TERRAIN_INCOME: {
+        int field = terrainIncomeField(at2);
+        short n = (short)value;
+        if (field < 0) return refuseContentWrite(L, "no_field", v, index, value);
+        reason = writeContent(kind, index, field, &n, 2);
+        break;
+    }
+    case T_CLASS_ABILITY:
+    case T_MONSTER_ABILITY:
+        if (at2 < 1) return refuseContentWrite(L, "bad_ability", v, index, value);
+        reason = setRecordAbility(v->type == T_CLASS_ABILITY ? RECORD_CLASS : RECORD_MONSTER, index, at2, value);
+        break;
+    case T_RITUAL_CASTER_MAX_CAST: {
+        short n = (short)value;
+        reason = writeContent(CONTENT_CASTER_MAX_CAST, index, 0, &n, 2);
+        break;
+    }
+    case T_MONSTER_ATTACK: {
+        int end = monsterAttackEnd(record), field = (int)(v->addr - (RVA_MONSTER_TABLE + MONSTER_ATTACKS));
+        if (at2 > end) return luaL_error(L, "%s: the list ends before that index", v->name);
+        long long wide = value;
+        reason = writeContent(kind, index, MONSTER_ATTACKS + at2 * MONSTER_ATTACK_SIZE + field, &wide, field == MONSTER_ATTACK_VALUE ? 8 : 4);
+        if (!reason && at2 == end && monsterAttackEnd(record) > end && end + 1 < MONSTER_ATTACK_MAX && monsterAttackEnd(record) > end + 1) {
+            int ended = 0;
+            reason = writeContent(kind, index, MONSTER_ATTACKS + (end + 1) * MONSTER_ATTACK_SIZE, &ended, 4);
+        }
+        break;
+    }
+    default: {
+        int width = v->type == T_I64 ? 8 : v->type == T_I16 ? 2 : 4;
+        long long wide = value;
+        int endsBefore = shape.list == LIST_TO_BELOW_ZERO_I32 ? *(const int *)p < 0 : shape.list == LIST_TO_BELOW_ONE_I32 ? *(const int *)p < 1 : 0;
+        int keyAppends = !shape.nameBack && endsBefore && (shape.list == LIST_TO_BELOW_ZERO_I32 ? value >= 0 : value >= 1) && at2 + 1 < v->count2;
+        reason = writeContent(kind, index, offset, &wide, width);
+        if (!reason && keyAppends) {
+            int ended = shape.list == LIST_TO_BELOW_ZERO_I32 ? -1 : 0;
+            if (shape.list == LIST_TO_BELOW_ZERO_I32 ? *(const int *)(p + v->stride2) >= 0 : *(const int *)(p + v->stride2) >= 1)
+                reason = writeContent(kind, index, offset + v->stride2, &ended, 4);
+        }
+    }
+    }
+    return reason ? refuseContentWrite(L, reason, v, index, value) : 0;
+}
+
 static int lSet(lua_State *L) {
     const GameVar *v;
     int arg = 2;
     unsigned char *p = gameVarAddress(L, &v, &arg, 1);
-    if (v->type == T_RECORD_WORD && v->size == RECORD_WEAPON && p) return setWeaponWord(L, (int)lua_tointeger(L, 2), p, arg);
+    if (v->type == T_RECORD_WORD && p) return setRecordWord(L, v, arg);
     if (!v->writable) return luaL_error(L, "game variable '%s' is read-only", v->name);
+    if (contentValueRow(v) >= 0) return setContentValue(L, v, p, arg);
+    if (v->type == T_PLANE_TINT) return setPlaneTintValue(L, arg);
     int pastListEnd = !p && gameVarShape(v).list != LIST_NONE;
     if (!p && !pastListEnd) return luaL_error(L, "%s can only be set while a wrap of its site runs", v->name);
     if (v->writable == WRITABLE_WHILE_BUILDING) return setSquareValue(L, v, p, arg);
@@ -1356,6 +1801,8 @@ static int lSet(lua_State *L) {
         return 0;
     }
     if (v->type == T_CEREMONY_COST) return setCeremonyCost(L, p, arg);
+    if (v->type == T_PTR_STR) return setPointerName(L, v, p, arg);
+    if (setComputedValue(L, v, p, arg)) return 0;
     if (v->type == T_U8 || v->type == T_I8 || v->type == T_I16 || v->type == T_I32 || v->type == T_FRAME_I32 || v->type == T_SITE_I32) {
         lua_Integer value = luaL_checkinteger(L, arg), min, max;
         gameVarRange(v, &min, &max);

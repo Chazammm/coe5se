@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 51
+#define ENTRY_HOOK_COUNT 53
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -54,6 +54,8 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"net_get_unit_items", 0x069480, 5, 0, {{0, 0}}},
     {"save_battle_replay", 0x0f1780, 6, 0, {{0, 0}}},
     {"load_battle_replay", 0x0f3cb0, 5, 0, {{0, 0}}},
+    {"unit_resistances", 0x32a250, 6, 0, {{0, 0}}},
+    {"unit_flags", 0x328a00, 6, 0, {{0, 0}}},
 };
 #else
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
@@ -108,5 +110,7 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"net_get_unit_items", 0x000000, 0, 0, {{0, 0}}},
     {"save_battle_replay", 0x000000, 0, 0, {{0, 0}}},
     {"load_battle_replay", 0x000000, 0, 0, {{0, 0}}},
+    {"unit_resistances", 0x567474, 16, 0, {{0, 0}}},
+    {"unit_flags", 0x569d20, 16, 0, {{0, 0}}},
 };
 #endif

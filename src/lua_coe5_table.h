@@ -167,7 +167,9 @@ static void runLuaModCommand(int callback, const char *args, int mod, int level)
     NetRole role = netRoleNow();
     if (role != NET_ROLE_SINGLE && !luaModCommandOpenFor(role, modClassNow(c.s->mod), level)) return;
     LuaModCommandCall call = {c.ref, args, mod >= 0 && mod <= G32(RVA_MOD_LAST_INDEX) ? modName(mod) : NULL, level};
+    LuaLoadPhase outer = beginLuaLoadPhase(LUA_LOAD_PASS);
     callLuaProtected(c.s, pushLuaModCommand, &call, 0);
+    endLuaLoadPhase(outer);
 }
 
 static int luaPathIsLink(const char *path);

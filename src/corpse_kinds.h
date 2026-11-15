@@ -1196,11 +1196,10 @@ static const char *corpsePutText(int x, int y) {
 typedef int (*CanCastFn)(int, int);
 static CanCastFn nextCorpseCanCast;
 
-static int ritualRaiseFindsCorpses(int unit, int ritual) {
-    if (unit < 0 || unit >= UNIT_TABLE_MAX) return 1;
-    short *corpses = squareCorpses(G32(RVA_UNIT_X + (size_t)unit * UNIT_SIZE), G32(RVA_UNIT_X + 4 + (size_t)unit * UNIT_SIZE));
+static int ritualRaiseFindsCorpses(int commander, int ritual) {
+    short *corpses = commanderCorpses(commander);
     if (!corpses) return 1;
-    CorpseCast cast = {.ritual = ritual, .unit = unit, .human = 1, .percent = 100};
+    CorpseCast cast = {.ritual = ritual, .unit = G32(RVA_COMMANDERS + (size_t)commander * COMMANDER_SIZE), .human = 1, .percent = 100};
     int raises = 0;
     for (int t = 0; t < 2; t++) {
         int type = t ? CORPSE_RULE_RAISE_ANIMALS : CORPSE_RULE_RAISE_DEAD, group = t ? CORPSE_MASK_ANIMAL : CORPSE_MASK_HUMANOID;
@@ -1219,13 +1218,15 @@ static int ritualRaiseFindsCorpses(int unit, int ritual) {
     return !raises;
 }
 
-static int corpseScreenCanCast(int unit, int ritual) {
-    int result = nextCorpseCanCast(unit, ritual);
+static int corpseScreenCanCast(int commander, int ritual) {
+    int result = nextCorpseCanCast(commander, ritual);
     if (result < 1 || !corpseRuleCount || !ritualHasCorpseRule(ritual, CORPSE_RULE_NEED)) return result;
-    return ritualRaiseFindsCorpses(unit, ritual) ? result : RITUAL_REASON_NOT_NOW;
+    return ritualRaiseFindsCorpses(commander, ritual) ? result : RITUAL_REASON_NOT_NOW;
 }
 
 static int lastCorpseUnit = -1, lastCorpseLeft = CORPSE_KIND_LEAVES_NONE;
+
+static int corpseReplayRefights(void) { return *(const unsigned char *)GAME_PTR(RVA_BATTLE_IS_REPLAY) != 0; }
 
 static void corpseLeave(int unit) {
     int monster = unit >= 0 && unit < UNIT_TABLE_MAX ? (short)G16(RVA_UNIT_MONSTER + (size_t)unit * UNIT_SIZE) : -1;
@@ -1233,7 +1234,8 @@ static void corpseLeave(int unit) {
     short *corpses = unit >= 0 && unit < UNIT_TABLE_MAX
                          ? squareCorpses(G32(RVA_UNIT_X + (size_t)unit * UNIT_SIZE), G32(RVA_UNIT_X + 4 + (size_t)unit * UNIT_SIZE))
                          : NULL;
-    fitCustomCorpses(corpses);
+    int replay = corpseReplayRefights();
+    if (!replay) fitCustomCorpses(corpses);
     lastCorpseUnit = unit, lastCorpseLeft = kind < 0 ? CORPSE_KIND_LEAVES_NONE : kind;
     if (kind < 0) {
         short before[SQUARE_CORPSE_KINDS] = {0};
@@ -1245,7 +1247,12 @@ static void corpseLeave(int unit) {
     }
     if (kind == CORPSE_KIND_LEAVES_NONE) return;
     if (!corpses) return;
-    if (kind >= CORPSE_STORED_CUSTOM - 1) addCustomCorpses(corpses, kind - (CORPSE_STORED_CUSTOM - 1), 1);
+    int custom = kind >= CORPSE_STORED_CUSTOM - 1 ? kind - (CORPSE_STORED_CUSTOM - 1) : -1;
+    if (custom >= 0 && replay) {
+        if (customCorpseKinds[custom].base >= 0) addCorpses(corpses, customCorpseKinds[custom].base, 1);
+        return;
+    }
+    if (custom >= 0) addCustomCorpses(corpses, custom, 1);
     else addCorpses(corpses, kind, 1);
 }
 

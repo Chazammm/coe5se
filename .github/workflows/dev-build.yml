@@ -6,6 +6,7 @@
 # dev-v<base> marks where it began). n counts dev's commits since the last release or since that bump. So after
 # CoE5SE 3.6.2, dev builds are 3.6.2.1, 3.6.2.2, ..., a bump to 3.6.3 makes 3.6.3.0, 3.6.3.1, ..., and the next
 # release takes a later number than any dev base (publish_release.py refuses one that isn't).
+# Its page lists what dev has gained since the last release: the text of .github/DEV_NOTES.md below its --- line.
 # It builds the three DLLs and three dylibs from src/ with release.yml's compilers, zips the mod as a release is
 # zipped (with a SHA256.txt of what it built, so the verify scripts work on it), and signs a build provenance
 # attestation for the six files and the zip.
@@ -116,10 +117,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          subject=$(git log -1 --format=%s "$GITHUB_SHA")
           {
-            echo "CoE5SE $VERSION, built from dev at $GITHUB_SHA: $subject"
+            echo "CoE5SE $VERSION, built from dev at $GITHUB_SHA."
             echo
+            # What dev has gained since the last release: .github/DEV_NOTES.md below its --- line, when it has any.
+            if sed '1,/^---$/d' .github/DEV_NOTES.md | grep -q '[^[:space:]]'; then
+              sed '1,/^---$/d' .github/DEV_NOTES.md | sed '/[^[:space:]]/,$!d'
+              echo
+            fi
             echo "Not a release: the current state of dev, for contributors and testing. Players: the latest release is at https://github.com/$GITHUB_REPOSITORY/releases/latest"
           } > "$RUNNER_TEMP/notes.md"
           if gh release view dev-build > /dev/null 2>&1; then

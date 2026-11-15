@@ -231,12 +231,14 @@ static int clientWriteOwnerNow(lua_State *L, const ClientWrite *w) {
     return w->owner == WRITE_OWNER_PLAYER ? (int)at : w->owner == WRITE_OWNER_UNIT ? garrisonUnitOwner((int)at) : commanderOwnerOf((int)at);
 }
 
+static int contentModsReading(void);
 static const char *clientWriteRefusalNow(lua_State *L, const char *name, int inTurn) {
     int isSet = !strcmp(name, "coe5.set");
     const char *value = isSet && lua_type(L, 1) == LUA_TSTRING ? lua_tostring(L, 1) : "";
     if (isSet) {
         const GameVar *v = findGameVar(value);
         if (!v || !v->writable) return NULL;
+        if (v->type == T_RECORD_WORD || contentValueRow(v) >= 0) return clientContentWriteRefusalFor(contentModsReading());
     }
     ClientWrite w = clientWriteOf(name, value);
     int own = -1;
@@ -244,7 +246,7 @@ static const char *clientWriteRefusalNow(lua_State *L, const char *name, int inT
     if (w.kind == CLIENT_WRITE_TRAVELS && !strcmp(name, "coe5.damageUnitPlain") && lua_isinteger(L, 1) && lua_isinteger(L, 2) &&
         lua_tointeger(L, 2) >= garrisonUnitHp((int)lua_tointeger(L, 1)))
         w.kind = CLIENT_WRITE_LOST;
-    return clientWriteRefusalFor(w.kind, inTurn, own);
+    return clientWriteRefusalFor(w.kind, inTurn, own, netReplayRunning());
 }
 
 static int lanRehearsalInTurn;
@@ -278,6 +280,14 @@ static int luaGate(lua_State *L) {
     refuseLuaCall(s ? s->mod : "?", lua_tostring(L, lua_upvalueindex(2)), reason, "running=%s", luaRunning ? luaRunning->mod : "none");
     if (luaBlockingCallOf(lua_tostring(L, lua_upvalueindex(2))) == LUA_BLOCKING_FALSE) {
         lua_pushboolean(L, 0);
+        return 1;
+    }
+    if (fn->func == lListIni) {
+        lua_newtable(L);
+        return 1;
+    }
+    if (fn->func == lReadIni) {
+        lua_pushnil(L);
         return 1;
     }
     return 0;
@@ -315,7 +325,7 @@ static void luaWarn(void *ud, const char *message, int tocont) {
 // ---- Loading ----------------------------------------------------------------------------------
 static int setUpLuaSandbox(lua_State *L);
 static lua_State *newLuaSandbox(LuaScript *s) {
-    lua_State *L = lua_newstate(luaAlloc, s, luaL_makeseed(NULL));
+    lua_State *L = lua_newstate(luaAlloc, s, luaStateSeedFor(s));
     if (!L) return NULL;
     lua_atpanic(L, luaPanic);
     return setUpLuaSandbox(L) ? L : NULL;
@@ -342,6 +352,7 @@ static int openLuaSandbox(lua_State *L) {
         luaL_requiref(L, LIBS[i].name, LIBS[i].func, 1);
         lua_pop(L, 1);
     }
+    wrapLuaDeterminism(L);
     static const char *const REMOVED[] = {"dofile", "loadfile", "load", "collectgarbage"};
     for (size_t i = 0; i < sizeof REMOVED / sizeof REMOVED[0]; i++) {
         lua_pushnil(L);
@@ -563,6 +574,7 @@ static LuaScript *findLuaScript(const char *mod, const char *folder) {
 static void fillNewScriptGameData(LuaScript *s);
 static unsigned long long hashBothGameDataOf(LuaScript *s, int *known);
 static void keepGameDataThroughLoad(LuaScript *s, unsigned long long before, int known, const char *file);
+static void installBattleReplayScripts(void);
 static LuaScript *newLuaScript(const char *mod, const char *folder, const char *path) {
     LuaScript *s = calloc(1, sizeof *s);
     if (s) snprintf(s->mod, sizeof s->mod, "%s", mod);
@@ -577,6 +589,7 @@ static LuaScript *newLuaScript(const char *mod, const char *folder, const char *
     *(LuaScript **)lua_getextraspace(s->L) = s;
     luaScripts[luaScriptCount++] = s;
     fillNewScriptGameData(s);
+    installBattleReplayScripts();
     return s;
 }
 
@@ -591,7 +604,10 @@ static void loadLuaScript(const char *mod, const char *folder) {
     s->mainTried = 1;
     int known = 0;
     unsigned long long before = hashBothGameDataOf(s, &known);
-    if (callLuaProtected(s, pushLuaScriptFile, s, 0)) writeLog("lua_script_loaded", "mod=%s version=%s path=%s", mod, modVersionText(mod), path);
+    LuaLoadPhase outer = beginLuaLoadPhase(LUA_LOAD_MAIN);
+    int ran = callLuaProtected(s, pushLuaScriptFile, s, 0);
+    endLuaLoadPhase(outer);
+    if (ran) writeLog("lua_script_loaded", "mod=%s version=%s path=%s", mod, modVersionText(mod), path);
     keepGameDataThroughLoad(s, before, known, "main");
 }
 
@@ -633,7 +649,9 @@ static int loadLuaCommandsFile(const char *mod, const char *folder) {
     int known = 0;
     unsigned long long before = hashBothGameDataOf(s, &known);
     luaCommandsLoading = 1;
+    LuaLoadPhase outer = beginLuaLoadPhase(LUA_LOAD_COMMANDS);
     int ran = callLuaProtected(s, pushLuaCommandsFile, &file, 0);
+    endLuaLoadPhase(outer);
     luaCommandsLoading = 0;
     keepGameDataThroughLoad(s, before, known, "commands");
     if (!ran) return -1;
@@ -761,6 +779,7 @@ static void retireNoMultiplayerScript(LuaScript *s) {
 }
 
 static void syncLuaScriptsBeforePass(int level) {
+    if (level == 2) luaLoadPass++;
     if (!startupFinished || level != 2) return;
     int stopped = 0, started = 0;
     NetRole role = netRoleNow();

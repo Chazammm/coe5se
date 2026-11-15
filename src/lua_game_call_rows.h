@@ -2,7 +2,7 @@
 
 #define LUA_GAME_CALLS(X) \
  \
-    X(fixPortals, WINDOWS_ONLY_CALL(RVA_FIX_PORTALS), "", 'i') \
+    X(fixPortals, MAC_COPY_CALL(RVA_FIX_PORTALS, fixPortalsCopy), "", 'i') \
     X(planeSameSpot, BOTH_BUILDS_CALL(RVA_PLANE_SAME_SPOT), "l&&", 'o') \
     X(planesAlike, MAC_COPY_CALL(RVA_PLANES_ALIKE, planesAlikeCopy), "ll", 'B') \
     X(planeAbilitySum, BOTH_BUILDS_CALL(RVA_PLANE_ABILITY_SUM), "La", 'i') \
@@ -10,15 +10,15 @@
     X(countPlayerPortals, BOTH_BUILDS_CALL(RVA_COUNT_PLAYER_PORTALS), "PEi", 'i') \
     X(countTerrainOnPlane, BOTH_BUILDS_CALL(RVA_COUNT_TERRAIN_ON_PLANE), PER_BUILD("-t-0L", "tL"), 'i') \
     X(planeOrderStep, MAC_COPY_CALL(RVA_PLANE_ORDER_STEP, planeOrderStepCopy), "li", 'i') \
-    X(planeShiftUnit, WINDOWS_ONLY_CALL(RVA_PLANESHIFT_UNIT), "uli", 'v') \
+    X(planeShiftUnit, MAC_COPY_CALL(RVA_PLANESHIFT_UNIT, planeShiftUnitCopy), "uli", 'v') \
     X(newPortalPair, BOTH_BUILDS_CALL(RVA_NEW_PORTAL_PAIR), "xyxyi", 'v') \
     X(revealPortalExits, BOTH_BUILDS_CALL(RVA_REVEAL_PORTAL_EXITS), "pi", 'i') \
-    X(planeRiseToElysium, WINDOWS_ONLY_CALL(RVA_PLANE_SPAWN_CHANCE), "liin", 'v') \
+    X(planeRiseToElysium, MAC_COPY_CALL(RVA_PLANE_SPAWN_CHANCE, planeRiseToElysiumCopy), "liin", 'v') \
     X(viewPlane, BOTH_BUILDS_CALL(RVA_VIEW_PLANE), "l", 'v') \
  \
     X(randomTeleport, BOTH_BUILDS_CALL(RVA_RANDOM_TELEPORT), "uii", PER_BUILD('b', 'v')) \
     X(popHorrors, BOTH_BUILDS_CALL(RVA_POP_HORRORS), "i", 'v') \
-    X(removeBadFollowers, WINDOWS_ONLY_CALL(RVA_REMOVE_BAD_FOLLOWERS), "", 'v') \
+    X(removeBadFollowers, MAC_COPY_CALL(RVA_REMOVE_BAD_FOLLOWERS, removeBadFollowersCopy), "", 'v') \
     X(unitPlane, MAC_COPY_CALL(RVA_UNIT_PLANE, unitPlaneCopy), "u", 'i') \
     X(unitFireResistance, BOTH_BUILDS_CALL(RVA_UNIT_RESISTANCE_1D1280), "u", 'i') \
     X(unitColdResistance, BOTH_BUILDS_CALL(RVA_UNIT_COLD_RESISTANCE), "u", 'i') \
@@ -60,11 +60,11 @@
     X(unitLikesSquare, BOTH_BUILDS_CALL(RVA_INDEP_LIKED_TERRAIN), "uxy", 'B') \
     X(unitHatesSquare, BOTH_BUILDS_CALL(RVA_INDEP_HATED_TERRAIN), "uxy", 'B') \
     X(wandererAt, BOTH_BUILDS_CALL(RVA_WANDERER_AT), "xy", 'B') \
-    X(teleportUnit, WINDOWS_ONLY_CALL(RVA_TELEPORT_UNIT), "uxy", 'v') \
-    X(unitAddXp, WINDOWS_ONLY_CALL(RVA_UNIT_ADD_XP), "ui", 'v') \
+    X(teleportUnit, MAC_COPY_CALL(RVA_TELEPORT_UNIT, teleportUnitCopy), "uxy", 'v') \
+    X(unitAddXp, MAC_COPY_CALL(RVA_UNIT_ADD_XP, unitAddXpCopy), "ui", 'v') \
     X(unitRemoveItem, RVA_UNIT_REMOVE_ITEM, "uT", 'i') \
-    X(damageUnitPlain, WINDOWS_ONLY_CALL(RVA_DAMAGE_UNIT_PLAIN), "ui", 'v') \
-    X(squareHold, WINDOWS_ONLY_CALL(RVA_SET_HOLDIT), "pxy", 'i') \
+    X(damageUnitPlain, MAC_COPY_CALL(RVA_DAMAGE_UNIT_PLAIN, damageUnitPlainCopy), "ui", 'v') \
+    X(squareHold, MAC_COPY_CALL(RVA_SET_HOLDIT, squareHoldCopy), "pxy", 'i') \
     X(spendAllApAt, BOTH_BUILDS_CALL(RVA_SPEND_ALL_AP_AT), "Pxy", 'v') \
     X(commanderUseItems, MAC_COPY_CALL(RVA_COMMANDER_USE_ITEMS, commanderUseItemsCopy), "c", 'i') \
     X(killUnit, WINDOWS_ONLY_CALL(RVA_KILL_UNIT_999), "u", 'v') \
@@ -72,9 +72,9 @@
     X(takeItem, BOTH_BUILDS_CALL(RVA_TAKE_ITEM_BY_NAME), "us", 'v') \
     X(giveRandomItem, BOTH_BUILDS_CALL(RVA_GIVE_RANDOM_ITEM), "uiii", 'v') \
  \
-    X(moveEnchants, WINDOWS_ONLY_CALL(RVA_MOVE_ENCHANTS), "xyxy", 'i') \
+    X(moveEnchants, MAC_COPY_CALL(RVA_MOVE_ENCHANTS, moveEnchantsCopy), "xyxy", 'i') \
     X(swapLocations, BOTH_BUILDS_CALL(RVA_LOCATION_SWAP), "xyxy", PER_BUILD('i', 'v')) \
-    X(moveGems, WINDOWS_ONLY_CALL(RVA_MOVE_GEMS), "xyxy", 'v') \
+    X(moveGems, MAC_COPY_CALL(RVA_MOVE_GEMS, moveGemsCopy), "xyxy", 'v') \
     X(ritualEffectFirst, WINDOWS_ONLY_CALL(RVA_RITUAL_FX_FIRST), "ra", 'i') \
     X(ritualEffectOr, WINDOWS_ONLY_CALL(RVA_RITUAL_FX_FIRST_OR), "rai", 'i') \
     X(ritualPointless, BOTH_BUILDS_CALL(RVA_RITUAL_POINTLESS), "cr", 'B') \
@@ -104,12 +104,12 @@
     X(ritualMayLearn, BOTH_BUILDS_CALL(RVA_RITUAL_MAY_LEARN), "cr", 'B') \
     X(commanderKnowsRitual, MAC_COPY_CALL(RVA_COMMANDER_KNOWS_RITUAL, commanderKnowsRitualCopy), "cr", 'B') \
     X(memorizeSpell, BOTH_BUILDS_CALL(RVA_MEMORIZE_SPELL), "uS", 'i') \
-    X(unmemorizeSpell, WINDOWS_ONLY_CALL(RVA_UNMEMORIZE_SPELL), "uS", 'i') \
+    X(unmemorizeSpell, MAC_COPY_CALL(RVA_UNMEMORIZE_SPELL, unmemorizeSpellCopy), "uS", 'i') \
     X(chooseMemorized, BOTH_BUILDS_CALL(RVA_CHOOSE_MEMORIZED), "u", 'v') \
     X(repickMemorized, WINDOWS_ONLY_CALL(RVA_UNIT_REPICK_MEMORIZED), "u", 'v') \
     X(learnRandomSpell, BOTH_BUILDS_CALL(RVA_LEARN_RANDOM_SPELL), "uii", 'i') \
     X(learnStartSpells, BOTH_BUILDS_CALL(RVA_LEARN_START_SPELLS), "u", 'v') \
-    X(commanderLearnRitual, WINDOWS_ONLY_CALL(RVA_COMMANDER_LEARN_RITUAL), "cr", 'i') \
+    X(commanderLearnRitual, MAC_COPY_CALL(RVA_COMMANDER_LEARN_RITUAL, commanderLearnRitualCopy), "cr", 'i') \
     X(learnLevelRituals, BOTH_BUILDS_CALL(RVA_LEARN_LEVEL_RITUALS), "cii", 'v') \
     X(getStartRituals, BOTH_BUILDS_CALL(RVA_GET_START_RITUALS), "c", PER_BUILD('i', 'v')) \
     X(removeEnchant, BOTH_BUILDS_CALL(RVA_REMOVE_ENCHANT), "iixy", 'i') \
@@ -132,7 +132,7 @@
     X(squareTeamAbilitySum, BOTH_BUILDS_CALL(RVA_SQUARE_TEAM_ABILITY_SUM), "pxya", 'i') \
     X(squareUnitsAbility, BOTH_BUILDS_CALL(RVA_SQUARE_UNITS_ABILITY), "Pxya0", 'i') \
     X(trollForestSpawn, WINDOWS_ONLY_CALL(RVA_TROLL_FOREST_SPAWN), "xy", 'v') \
-    X(toggleAutoRecruit, WINDOWS_ONLY_CALL(RVA_TOGGLE_AUTO_RECRUIT), "pxym", 'i') \
+    X(toggleAutoRecruit, MAC_COPY_CALL(RVA_TOGGLE_AUTO_RECRUIT, toggleAutoRecruitCopy), "pxym", 'i') \
     X(changeLoyalty, BOTH_BUILDS_CALL(RVA_CHANGE_LOYALTY), "xysi", 'i') \
     X(squareIncome, BOTH_BUILDS_CALL(RVA_SQUARE_INCOME), "pxyi", 'i') \
     X(squareGoldIncome, WINDOWS_ONLY_CALL(RVA_SQUARE_GOLD_INCOME), "pxy", 'i') \
@@ -142,7 +142,7 @@
     X(ruinSquare, BOTH_BUILDS_CALL(RVA_RUIN_SQUARE), "pxy", 'v') \
     X(digTunnelSquare, BOTH_BUILDS_CALL(RVA_DIG_TUNNEL_SQUARE), "pxy", PER_BUILD('i', 'v')) \
     X(alterTerrain, BOTH_BUILDS_CALL(RVA_ALTER_TERRAIN), "pxyiii", 'i') \
-    X(destroyGateway, WINDOWS_ONLY_CALL(RVA_DESTROY_GATEWAY), "pxyi", 'i') \
+    X(destroyGateway, MAC_COPY_CALL(RVA_DESTROY_GATEWAY, destroyGatewayCopy), "pxyi", 'i') \
     X(conscription, WINDOWS_ONLY_CALL(RVA_CONSCRIPTION), "p", 'v') \
     X(priestFreespawn, WINDOWS_ONLY_CALL(RVA_PRIEST_FREESPAWN), "p", 'v') \
     X(inquisitionSpawn, BOTH_BUILDS_CALL(RVA_INQUISITION_SPAWN), "p", 'v') \
@@ -159,14 +159,14 @@
     X(squareIsCoast, BOTH_BUILDS_CALL(RVA_SQUARE_IS_COAST), "xy", 'b') \
     X(squareEffectiveTemp, BOTH_BUILDS_CALL(RVA_SQUARE_EFFECTIVE_TEMP), "xy", 'i') \
     X(swapSquares, BOTH_BUILDS_CALL(RVA_SWAP_SQUARES), "xyxy", PER_BUILD('i', 'v')) \
-    X(teleportSquare, WINDOWS_ONLY_CALL(RVA_TELEPORT_SQUARE), "xyxy", 'v') \
+    X(teleportSquare, MAC_COPY_CALL(RVA_TELEPORT_SQUARE, teleportSquareCopy), "xyxy", 'v') \
  \
     X(unitMayBeOnLand, BOTH_BUILDS_CALL(RVA_UNIT_MAY_BE_ON_LAND), "u", 'b') \
     X(unitMagicResistance, BOTH_BUILDS_CALL(RVA_UNIT_MR), "u", 'i') \
     X(unitIsHuge, BOTH_BUILDS_CALL(RVA_UNIT_IS_HUGE), "u", 'b') \
     X(unitLifeless, WINDOWS_ONLY_CALL(RVA_UNIT_LIFELESS), "u", 'b') \
     X(unitPrimable, BOTH_BUILDS_CALL(RVA_UNIT_PRIMABLE), "u", 'b') \
-    X(unitRemoveTempAbility, WINDOWS_ONLY_CALL(RVA_UNIT_REMOVE_TEMP_ABILITY), "ua", 'b') \
+    X(unitRemoveTempAbility, MAC_COPY_CALL(RVA_UNIT_REMOVE_TEMP_ABILITY, unitRemoveTempAbilityCopy), "ua", 'b') \
     X(checkFollowerLinks, BOTH_BUILDS_CALL(RVA_CHECK_FOLLOWER_LINKS), "c", 'v') \
     X(orderBurnForest, BOTH_BUILDS_CALL(RVA_ORDER_BURN_FOREST), PER_BUILD("0c", "c"), 'v') \
     X(orderChopForest, BOTH_BUILDS_CALL(RVA_ORDER_CHOP_FOREST), PER_BUILD("0c", "c"), 'v') \
@@ -245,8 +245,8 @@
     X(openPlaneInfo, BOTH_BUILDS_CALL(RVA_PLANE_INFO_SCREEN), "~l", 'v') \
     X(openSquareInfo, BOTH_BUILDS_CALL(RVA_SQUARE_INFO), "~pxyi", 'v') \
     X(openCeremonies, WINDOWS_ONLY_CALL(RVA_CEREMONY_SCREEN), "~c", 'v') \
-    X(openRitualScreen, BOTH_BUILDS_CALL(RVA_RITUAL_SCREEN), "~u", 'v') \
-    X(openLibrary, BOTH_BUILDS_CALL(RVA_LIBRARY_SCREEN), "~c", 'v') \
+    X(openRitualScreen, BOTH_BUILDS_CALL(RVA_RITUAL_SCREEN), "~c", 'v') \
+    X(openLibrary, BOTH_BUILDS_CALL(RVA_LIBRARY_SCREEN), "~u", 'v') \
     X(openChopBurn, BOTH_BUILDS_CALL(RVA_CHOP_BURN_SCREEN), PER_BUILD("~", "~^"), 'v') \
     X(openSlaveHunt, BOTH_BUILDS_CALL(RVA_SLAVE_HUNT_SCREEN), PER_BUILD("~", "~^"), 'v') \
     X(openArmyMenu, BOTH_BUILDS_CALL(RVA_ARMY_COMMANDS_MENU), "~c", 'v') \
@@ -255,13 +255,13 @@
     X(monsterPicker, WINDOWS_ONLY_CALL(RVA_MONSTER_PICKER), "~iia", 'i') \
     X(classPicker, BOTH_BUILDS_CALL(RVA_CLASS_PICKER), "@~", 'i') \
     X(countCommandersWithAp, BOTH_BUILDS_CALL(RVA_COUNT_COMMANDERS_WITH_AP), "p", 'i') \
-    X(selectedCommanderDone, WINDOWS_ONLY_CALL(RVA_COMMANDER_SET_DONE), "", 'v') \
+    X(selectedCommanderDone, MAC_COPY_CALL(RVA_COMMANDER_SET_DONE, selectedCommanderDoneCopy), "", 'v') \
     X(selectNextCommander, BOTH_BUILDS_CALL(RVA_SELECT_NEXT_COMMANDER), "", 'v') \
     X(selectPrevCommander, WINDOWS_ONLY_CALL(RVA_SELECT_PREV_COMMANDER), "", 'v') \
  \
     X(countUnitsAt, BOTH_BUILDS_CALL(RVA_COUNT_UNITS_AT), "Pxys", 'i') \
     X(countUnits, BOTH_BUILDS_CALL(RVA_COUNT_UNITS), "PLs", 'i') \
-    X(nearestUnitAbilityIs, WINDOWS_ONLY_CALL(RVA_NEAREST_UNIT_ABILITY_IS), "Lxyaii", 'i') \
+    X(nearestUnitAbilityIs, BOTH_COPY_CALL(RVA_NEAREST_UNIT_ABILITY_IS, nearestUnitAbilityIsCopy), "Lxyaii", 'i') \
     X(armyAtForPlayer, MAC_COPY_CALL(RVA_ARMY_AT_FOR_PLAYER, armyAtForPlayerCopy), "Pxy", 'b') \
     X(commanderTheName, MAC_COPY_CALL(RVA_COMMANDER_THE_NAME, commanderTheName), "c", 'z') \
     X(playerRitualFlags, WINDOWS_ONLY_CALL(RVA_PLAYER_RITUAL_FLAGS), "p", 'i') \
@@ -271,7 +271,7 @@
     X(afflictionImmune, BOTH_BUILDS_CALL(RVA_AFFLICTION_IMMUNE), "uU", 'b') \
     X(soullessForm, BOTH_BUILDS_CALL(RVA_SOULLESS_FORM), "u", 'i') \
  \
-    X(addBenefit, WINDOWS_ONLY_CALL(RVA_ADD_BENEFIT), "uU", 'v') \
+    X(addBenefit, MAC_COPY_CALL(RVA_ADD_BENEFIT, addBenefitCopy), "uU", 'v') \
     X(heroArrival, WINDOWS_ONLY_CALL(RVA_HERO_ARRIVAL), "p", 'v') \
     X(cleanSquare, BOTH_BUILDS_CALL(RVA_CLEAN_SQUARE), "xyi", 'v') \
     X(initSquareGems, BOTH_BUILDS_CALL(RVA_INIT_SQUARE_GEMS), "xy", 'v') \
@@ -292,7 +292,7 @@
     X(revelsSpawn, WINDOWS_ONLY_CALL(RVA_REVELS_SPAWN), "xy", 'v') \
     X(forestShepherdSpawn, WINDOWS_ONLY_CALL(RVA_FOREST_SHEPHERD_SPAWN), "xy", 'v') \
  \
-    X(setSquareOwner, WINDOWS_ONLY_CALL(RVA_SQUARE_SET_OWNER), "xyp", 'v') \
+    X(setSquareOwner, MAC_COPY_CALL(RVA_SQUARE_SET_OWNER, setSquareOwnerCopy), "xyp", 'v') \
     X(findAfflictedUnitAt, BOTH_BUILDS_CALL(RVA_FIND_AFFLICTED_UNIT_AT), "PxyiUU", 'i') \
     X(classAbilityNth, BOTH_BUILDS_CALL(RVA_CLASS_ABILITY_NTH), "Cai", 'i') \
     X(countSideUnits, WINDOWS_ONLY_CALL(RVA_COUNT_SIDE_UNITS), "pxy", 'i') \

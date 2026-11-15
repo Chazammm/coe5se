@@ -1,2 +1,2 @@
 #pragma once
-#define COE5SE_VERSION "3.4.3"
+#define COE5SE_VERSION "3.4.4"

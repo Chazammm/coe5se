@@ -88,9 +88,11 @@ static int checkSplitMinUnitsCode(void);
 static int checkGameStartOnceCode(void);
 static int installTopBarIncomeDraws(void);
 static int installSquarePanelIcons(void);
+static int installComputedHook(CallSite site);
 static int prepareSiteCode(CallSite site) {
     if (site == SITE_TOP_BAR_INCOME) return installTopBarIncomeDraws();
     if (site == SITE_SQUARE_PANEL_WRAP) return installSquarePanelIcons();
+    if (site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS) return installComputedHook(site);
     if (site == SITE_GAME_SAVE) return hookSaveFileOpens();
     if (site == SITE_GAME_START) return checkGameStartOnceCode();
     if (site == SITE_AI_SPLIT_ARMY) return checkSplitMinUnitsCode();
