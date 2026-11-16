@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 53
+#define ENTRY_HOOK_COUNT 56
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -50,6 +50,9 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"ai_redistribute_items", 0x0734b0, 5, 0, {{0, 0}}},
     {"commander_use_items", 0x185060, 5, 0, {{0, 0}}},
     {"unit_attack_row", 0x0d7570, 5, 0, {{0, 0}}},
+    {"new_unit", 0x1297b0, 8, 0, {{0, 0}}},
+    {"unit_spell_weapon_level", 0x2e7050, 6, 0, {{0, 0}}},
+    {"unit_path_level", 0x2e6f40, 6, 0, {{0, 0}}},
     {"net_put_unit_record", 0x1e7990, 7, 0, {{0, 0}}},
     {"net_get_unit_items", 0x069480, 5, 0, {{0, 0}}},
     {"save_battle_replay", 0x0f1780, 6, 0, {{0, 0}}},
@@ -106,6 +109,9 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"ai_redistribute_items", 0x000000, 0, 0, {{0, 0}}},
     {"commander_use_items", 0x000000, 0, 0, {{0, 0}}},
     {"unit_attack_row", 0x3f184c, 16, 0, {{0, 0}}},
+    {"new_unit", 0x46e828, 16, 0, {{0, 0}}},
+    {"unit_spell_weapon_level", 0x000000, 0, 0, {{0, 0}}},
+    {"unit_path_level", 0x4bb46c, 16, 0, {{0, 0}}},
     {"net_put_unit_record", 0x000000, 0, 0, {{0, 0}}},
     {"net_get_unit_items", 0x000000, 0, 0, {{0, 0}}},
     {"save_battle_replay", 0x000000, 0, 0, {{0, 0}}},

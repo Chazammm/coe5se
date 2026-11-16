@@ -426,37 +426,62 @@ static int installMacFactionSites(void) {
 }
 
 #define MAC_REDIRECTED_MAX 64
-static struct { unsigned int rva; void *hook; } macRedirected[MAC_REDIRECTED_MAX];
+static struct { unsigned int rva; void *hook; unsigned char *trampoline; int on; } macRedirected[MAC_REDIRECTED_MAX];
 static int macRedirectedCount;
 
-static int macRedirectCalls(unsigned int rva, void *hook, const char *name) {
+static int macPointBranches(const unsigned char *from, unsigned char **to, void *hook, int *found) {
     const struct mach_header_64 *mh = (const struct mach_header_64 *)gameBase;
     unsigned long size;
-    unsigned char *text = getsectiondata(mh, "__TEXT", "__text", &size), *target = gameBase + rva, *trampoline = NULL;
-    int pointed = 0, found = 0;
+    unsigned char *text = getsectiondata(mh, "__TEXT", "__text", &size);
+    int pointed = 0;
+    *found = 0;
     for (unsigned long i = 0; text && i + 4 <= size; i += 4) {
         uint32_t w;
         memcpy(&w, text + i, 4);
         uint32_t op = w >> 26;
         if (op != 0x25 && op != 0x05) continue;
         int32_t imm = (int32_t)(w << 6) >> 6;
-        if (text + i + (intptr_t)imm * 4 != target) continue;
-        found++;
-        if (!trampoline && !(trampoline = newTrampoline(hook))) break;
-        uint32_t nw = (op << 26) | ((uint32_t)((trampoline - (text + i)) >> 2) & 0x3ffffffu);
+        if (text + i + (intptr_t)imm * 4 != from) continue;
+        ++*found;
+        if (!*to && !(*to = newTrampoline(hook))) break;
+        uint32_t nw = (op << 26) | ((uint32_t)((*to - (text + i)) >> 2) & 0x3ffffffu);
         pointed += writeGameCode(text + i, &nw, 4);
-    }
-    writeLog("mac_calls_redirected", "function=%s found=%d pointed=%d", name, found, pointed);
-    if (pointed && macRedirectedCount < MAC_REDIRECTED_MAX) {
-        macRedirected[macRedirectedCount].rva = rva;
-        macRedirected[macRedirectedCount++].hook = hook;
     }
     return pointed;
 }
 
+static int macRedirectCalls(unsigned int rva, void *hook, const char *name) {
+    int entry = -1, found = 0;
+    for (int i = 0; i < macRedirectedCount; i++)
+        if (macRedirected[i].rva == rva && macRedirected[i].hook == hook) entry = i;
+    unsigned char *trampoline = entry >= 0 ? macRedirected[entry].trampoline : NULL;
+    int pointed = macPointBranches(gameBase + rva, &trampoline, hook, &found);
+    writeLog("mac_calls_redirected", "function=%s found=%d pointed=%d", name, found, pointed);
+    if (pointed && entry < 0 && macRedirectedCount < MAC_REDIRECTED_MAX) {
+        entry = macRedirectedCount++;
+        macRedirected[entry].rva = rva;
+        macRedirected[entry].hook = hook;
+        macRedirected[entry].trampoline = trampoline;
+    }
+    if (pointed && entry >= 0) macRedirected[entry].on = 1;
+    return pointed;
+}
+
+static int macRestoreCalls(unsigned int rva, void *hook, const char *name) {
+    for (int i = 0; i < macRedirectedCount; i++) {
+        if (macRedirected[i].rva != rva || macRedirected[i].hook != hook || !macRedirected[i].on) continue;
+        unsigned char *game = gameBase + rva;
+        int found = 0, pointed = macPointBranches(macRedirected[i].trampoline, &game, NULL, &found);
+        writeLog("mac_calls_restored", "function=%s found=%d pointed=%d", name, found, pointed);
+        if (pointed == found) macRedirected[i].on = 0;
+        return pointed == found;
+    }
+    return 1;
+}
+
 static void *macRedirectedHook(unsigned int rva) {
     for (int i = 0; i < macRedirectedCount; i++)
-        if (macRedirected[i].rva == rva) return macRedirected[i].hook;
+        if (macRedirected[i].rva == rva && macRedirected[i].on) return macRedirected[i].hook;
     return NULL;
 }
 

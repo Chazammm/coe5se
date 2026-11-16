@@ -1112,6 +1112,7 @@
 #define RVA_BERSERK_END                        ADDR(        0x0b71b0,          0x1003cab58)
 #define RVA_BATTLE_MESSAGE                     ADDR(        0x100500,          0x1005818d0)
 #define RVA_BATTLE_CRC                         ADDR(        0x0b62b0,          0x1004c1304)
+#define RVA_BATTLE_PREEOF_CRC_CALL             ADDR(        0x0f3820,          0x1003e6004)
 #define RVA_BATTLE_FIELD_CHECK                 ADDR(        0x0f1640,          0x1003b8900)
 #define RVA_BATTLE_CLOUD_STEP                  ADDR(        0x0c0e00,          0x1003e750c)
 #define RVA_BATTLE_ENSNARE_CHECK               ADDR(        0x0d3d70,          0x1003eafd0)
@@ -1138,6 +1139,11 @@
 #define RVA_BATTLE_ENEMY_EXTENTS               ADDR(        0x123358e0,        MAC_NOT_LOOKED_UP)
 #define RVA_BATTLE_GRID                        ADDR(        0x11fb18c0,        0x10ca5a188)
 #define BATTLE_ROWS                            20
+#define BATTLE_COLUMNS_MAX                     0x600
+#define BATTLE_CELL_SIZE                       24
+#define BATTLE_CELL_OBJECT                     4
+#define BATTLE_CELL_FLAGS                      8
+#define BATTLE_CELL_GROUND                     12
 #define RVA_BATTLE_SPEED_SETTING               ADDR(        0x1a3b3ec,         0x1048937ec)
 #define UNIT_BATTLE_SIDE                       0x110
 #define UNIT_ATTACKS_MADE                      0x111
@@ -2405,6 +2411,11 @@
 #define RVA_VISUAL_FX_CHAIN_X                  ADDR(        0x43ea3c,          0x100872c30)
 #define RVA_VISUAL_FX_CHAIN_Y                  ADDR(        0x43ea84,          0x100872c34)
 #define RVA_BATTLE_CELL_PX                     ADDR(        0x43e284,          0x1049c81b4)
+#define RVA_BATTLE_VIEW_ORIGIN_X               ADDR(        0x43e5fc,          0x1048937b8)
+#define RVA_BATTLE_VIEW_ORIGIN_Y               ADDR(        0x43e72c,          0x1048937bc)
+#define RVA_BATTLE_VIEW_SCROLL_X               ADDR(        0x5804ea4,         0x10c922a04)
+#define RVA_BATTLE_VIEW_SCROLL_Y               ADDR(        0x5804ea0,         0x10c922a08)
+#define RVA_BATTLE_CELL_AT_POINT               ADDR(        0x1009f0,          MAC_INLINED)
 #define RVA_BATTLE_SCREEN_CARRY_US             ADDR(        0x5804e84,         0x10c96df44)
 #define RVA_ADD_FLY_WEAPON                     ADDR(        0x101640,          0x100584ff8)
 #define RVA_FLY_WEAPONS                        ADDR(        0x65612b0,         0x10c9b6088)
@@ -2548,6 +2559,7 @@
 #define TERRAIN_LIFEFORCE                      0x44
 #define TERRAIN_ABILITIES                      0x58
 #define TERRAIN_ABILITY_PAIRS                  4
+#define TERRAIN_FORT_PARTS                     0x48
 #define TERRAIN_FLAGS                          0x50
 #define TERRAIN_FLAG_PORT                      0x400000000000000
 #define TERRAIN_FLAG_SIGHT_SQUARE_ONLY         0x2000000
@@ -3549,6 +3561,7 @@
 #define RVA_SUMMONED_UNIT_SETUP                ADDR(        0x2d3160,          0x100356a74)
 #define RVA_FIND_MONSTER_RANDOM                ADDR(        0x1d9e30,          MAC_INLINED)
 #define RVA_MONSTER_UNIT_FIRST                 ADDR(        0x106600,          MAC_INLINED)
+#define RVA_NEW_UNIT_UNIQUE_CALL               ADDR(        0x129890,          MAC_INLINED)
 #define RVA_RITUAL_PROMOTE_EXISTING            ADDR(        0x2b23d0,          0x1005632e8)
 #define RVA_MAP_X_BOUND                        RVA_MAP_DEPTH
 #define RVA_LAST_TERRAIN                       ADDR(        0x1b185b4,         0x1059bcc7c)
@@ -3939,6 +3952,11 @@
 #define RVA_SDL_POLL_EVENT                     ADDR_DIFFERS(WIN_INLINED,       0x10000f764)
 #define RVA_SDL_POLL_EVENT_SLOT                ADDR_DIFFERS(0x33a580,          0x100852020)
 #define RVA_SDL_PUSH_EVENT_SLOT                ADDR(        WIN_NO_EQUIVALENT, 0x100852038)
+#define RVA_SDL_GET_KEYBOARD_STATE_SLOT        ADDR(        WIN_NO_EQUIVALENT, 0x100852318)
+#define RVA_SDL_START_TEXT_INPUT_SLOT          ADDR(        WIN_NO_EQUIVALENT, 0x100852360)
+#define RVA_SDL_IS_TEXT_INPUT_ACTIVE_SLOT      ADDR(        WIN_NO_EQUIVALENT, 0x100852368)
+#define RVA_SDL_STOP_TEXT_INPUT_SLOT           ADDR(        WIN_NO_EQUIVALENT, 0x100852370)
+#define RVA_SDL_GET_MOUSE_STATE_SLOT           ADDR(        WIN_NO_EQUIVALENT, 0x100852400)
 #define RVA_SWAP_WINDOW                        ADDR(        WIN_INLINED,       MAC_INLINED)
 #define RVA_WAIT_SWAP_CALL                     ADDR_DIFFERS(0x240437,          0x10048c2e8)
 #define RVA_SDL_GL_SWAP_WINDOW                 ADDR_DIFFERS(WIN_INLINED,       0x100010c40)
@@ -4108,6 +4126,7 @@
 #define RVA_TRACE_B                            ADDR(        0x0288f0,          0x10033a9c0)
 #define RVA_TRACE_C                            ADDR(        0x028ce0,          0x10033a8ac)
 #define RVA_DEBUG_LEVEL                        ADDR(        0x42d01c,          0x1059bcc78)
+#define RVA_DEBUG_SHOW_HIDDEN                  ADDR(        0x58243a4,         MAC_IN_CODE)
 #define RVA_TRACE_B_CHECK                      ADDR(        0x028924,          0x10033aa00)
 #define RVA_TRACE_C_CHECK                      ADDR(        0x028d14,          0x10033a8ec)
 #define RVA_TRACE_ERROR                        ADDR(        0x028a90,          0x10033a62c)
