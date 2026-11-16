@@ -1855,13 +1855,21 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "rec_bonus.h"
 #include "lua_units.h"
 #include "lua_data_files.h"
+// @platform-split test_field_editor: Mac keeps legacy fields; the owned editor is Windows-only.
+#ifdef __APPLE__
 #include "lua_test_battle.h"
+#include "lua_test_field_capabilities_mac.h"
+#else
+#include "lua_test_field_editor.h"
+#include "lua_test_unit_state.h"
+#endif
 #include "lua_ui.h"
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "read_filter.h"
 #include "preview_world.h"
 #include "lua_loading.h"
+/* Definitions follow upstream item-slot helpers below. */
 #include "game_data.h"
 #include "content_travel.h"
 #include "plane_words.h"
@@ -1974,6 +1982,9 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_GAME_MENU)) installWaitIdBounds();
     if (featureOn(FEATURE_GAME_MENU)) installInlinedButtonRows();
     if (featureOn(FEATURE_MAP_EDITOR)) installMapEditorHooks();
+#ifndef __APPLE__
+    // Owned-field hooks install only when a caller explicitly opens a test field.
+#endif
     if (featureOn(FEATURE_COMMANDER_LINES)) installCommanderLineHooks();
 #ifndef __aarch64__
     if (featureOn(FEATURE_GAME_SAVE)) gameSaveInit();
