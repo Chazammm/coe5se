@@ -11,10 +11,10 @@ local function itemNamed(name)
 end
 api.wrap('MAIN_MENU_WAIT',function(next,...)
     local id=next(...);if started then return id end;started=true
-    test('current_upstream_independent_surface',function()
+    test('current_upstream_and_complete_candidate_surface',function()
         assert(type(api.loadedContentOrigin)=='function')
-        assert(api.testFieldEditorCapabilities==nil and api.setTestFieldConfiguration==nil,'Unrelated editor implementation leaked into independent branch')
-        assert(api.monsterHasRanged(api.findMonster('Archer'))==nil,'Independent branch unexpectedly includes Ranged patch')
+        assert(type(api.testFieldEditorCapabilities)=='function' and type(api.setTestFieldConfiguration)=='function')
+        assert(api.monsterHasRanged(api.findMonster('Archer'))==true,'Complete candidate lost the Ranged patch')
         assert(api.get('monsterMod',api.findMonster('Shell Priest'))=='CrabCult','Current upstream monster-origin getter was lost')
     end)
     test('observed_active_mod_item_and_explicit_qa_spells',function()
@@ -58,6 +58,6 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         assert(api.unitNoLand(0)==nil,'Unrelated no_game guard changed')
     end)
     local pass=true;for _,row in pairs(out)do if type(row)=='table' and row.status=='FAIL'then pass=false end end
-    out.complete={status=pass and 'PASS' or 'FAIL',scope='Native standalone content-origin branch; no full Sandbox editor claim'};save()
+    out.complete={status=pass and 'PASS' or 'FAIL',scope='Native content-origin checks in the complete candidate; no full Sandbox editor claim'};save()
     return id
 end,-100)

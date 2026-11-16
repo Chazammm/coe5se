@@ -350,8 +350,12 @@ static int openTestFieldFrom(lua_State *L, const char *call) {
     LuaScript *s = checkLuaScript(L);
     TestFieldSpec *spec = calloc(1, sizeof *spec);
     if (!spec) return luaL_error(L, "out of memory");
+    uint64_t expectedSession = testFieldLife.session;
     const char *reason = !gameCodeMatches ? "game_code_differs" : G32(RVA_ACTIVE_PLAYER) >= 0 ? "in_game"
                        : testField.open ? "already_open" : readTestFieldSpec(L, spec);
+    /* Argument metamethods may open a field before validation returns. */
+    if (!reason && (testField.open || testFieldLife.session != expectedSession || G32(RVA_ACTIVE_PLAYER) >= 0))
+        reason = "context_changed";
     lua_Integer monster = spec->monster, spell = spec->spell, standIn = spec->standIn;
     int spellWeapon = spell >= 0 && spell < spellTableRecords() ? spellSlot((int)spell)->weapon : -1;
     if (!reason)
@@ -687,6 +691,7 @@ static int lCloseTestField(lua_State *L) {
 static int lAddTestFieldUnits(lua_State *L) {
     checkLuaMainThread(L, "coe5.addTestFieldUnits");
     LuaScript *s = checkLuaScript(L);
+    uint64_t expectedSession = testFieldLife.session;
     const char *side = luaL_checkstring(L, 1);
     int friends = !strcmp(side, "friends"), enemies = !strcmp(side, "enemies");
     int player = friends ? 0 : TEST_BATTLE_ENEMY_PLAYER;
@@ -698,6 +703,9 @@ static int lAddTestFieldUnits(lua_State *L) {
                        : testFieldIsFinalView() ? "final_read_only"
                        : !friends && !enemies ? "bad_side"
                                               : readTestFieldGroups(L, 2, &groups, friends ? "bad_friend" : "bad_enemy");
+    /* Keep argument callbacks from redirecting an operation to another field. */
+    if (!reason && (!testField.open || testFieldLife.session != expectedSession ||
+                    _stricmp(s->mod, testField.owner) || testField.fighting || testFieldIsFinalView())) reason = "context_changed";
     if (!reason && !groups.units) reason = "bad_count";
     int uniqueMonster = -1, existingUnique = -1;
     long long uniqueRequested = 0;

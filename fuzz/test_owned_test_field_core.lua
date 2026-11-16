@@ -38,10 +38,10 @@ api.wrap('BATTLE_WAIT',function(next,...)
 end)
 api.wrap('MAIN_MENU_WAIT',function(next,...)
     local id=next(...);if started then return id end;started=true
-    test('capabilities_and_invalid_inputs_without_unrelated_modules',function()
+    test('capabilities_and_invalid_inputs_in_complete_candidate',function()
         local c=assert(api.testFieldEditorCapabilities());assert(c.emptyEditor==1 and c.state==1 and c.lifecycle==1 and c.multipleUnique==1)
-        assert(c.configuration==0 and c.cursedRemoval==0 and c.restoreHigherKnown==0)
-        assert(api.setTestFieldConfiguration==nil and api.testFieldFinalState==nil and api.battleView==nil and api.loadedContentOrigin==nil)
+        assert(c.configuration==1 and c.cursedRemoval==1 and c.restoreHigherKnown==1)
+        assert(type(api.setTestFieldConfiguration)=='function' and type(api.testFieldFinalState)=='function' and type(api.battleView)=='function' and type(api.loadedContentOrigin)=='function')
         local s,why=api.testFieldState();assert(s==nil and why=='not_open')
         local ok;ok,why=api.removeTestFieldUnit(2147483647);assert(not ok)
     end)
@@ -110,6 +110,28 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         end
         assert(count==5 and seen.Forest and seen.Plain,'Required verified land subset missing')
     end)
+    test('argument_callback_cannot_redirect_add_to_replacement_field',function()
+        open{emptyEditor=true,friends={},enemies={}}
+        local original=assert(api.testFieldLifecycle()).session;local calls=0
+        local group=setmetatable({},{__index=function(_,key)
+            if key=='monster'then calls=calls+1;close();open{emptyEditor=true,friends={},enemies={}};return 13 end
+            if key=='count'then return 1 end
+        end})
+        local added,why=api.addTestFieldUnits('friends',{group});local replacement=assert(api.testFieldLifecycle()).session
+        out.reentrant_add={original_session=original,replacement_session=replacement,callbacks=calls,accepted=added and 1 or 0,result=tostring(why),replacement_units=#state().units}
+        assert(calls==1 and replacement~=original)
+        assert(not added and why=='context_changed' and #state().units==0,'Add mutated a field opened during argument validation')
+    end)
+    test('argument_callback_cannot_overwrite_newly_opened_field',function()
+        close();local calls=0
+        local spec=setmetatable({emptyEditor=true,friends={},enemies={}},{__index=function(_,key)
+            if key=='allowMultipleUnique'then calls=calls+1;open{emptyEditor=true,friends={},enemies={}};return false end
+        end})
+        local accepted,why=api.openTestField(spec)
+        assert(calls==1 and not accepted and why=='context_changed')
+        assert(api.testFieldLifecycle().open and #state().units==0,'Validation replaced the callback-owned field')
+        out.reentrant_open={callbacks=calls,accepted=0,result=why,replacement_units=0}
+    end)
     local pass=not fatal;for _,r in pairs(out)do if type(r)=='table' and (r.status=='FAIL' or r.status=='NOT_RUN')then pass=false end end
-    out.complete={status=pass and 'PASS' or 'FAIL',scope='Current standalone field core; presentation/configuration are absent'};save();return id
+    out.complete={status=pass and 'PASS' or 'FAIL',scope='Core contracts in the complete single-PR candidate'};save();return id
 end,-100)

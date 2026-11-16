@@ -58,8 +58,8 @@ end)
 api.wrap('MAIN_MENU_WAIT',function(next,...)
     local id=next(...);if started then return id end;started=true
     test('scoped_surface_and_invalid_contexts',function()
-        local c=assert(api.testFieldEditorCapabilities());assert(c.configuration==0 and c.cursedRemoval==0)
-        assert(api.setTestFieldConfiguration==nil and api.loadedContentOrigin==nil)
+        local c=assert(api.testFieldEditorCapabilities());assert(c.configuration==1 and c.cursedRemoval==1)
+        assert(type(api.setTestFieldConfiguration)=='function' and type(api.loadedContentOrigin)=='function')
         assert(api.battleView()==nil);assert(api.testFieldFinalState()==nil)
         local ok,why=api.setTestFieldTextFocus(true);assert(not ok and why=='not_open')
         local drawn=api.ui.drawMonsterIconFit(0,0,-1,20,13);assert(not drawn)
@@ -96,5 +96,5 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         end
     end)
     local passed=not fatal;for _,r in pairs(out)do if type(r)=='table' and (r.status=='FAIL' or r.status=='NOT_RUN')then passed=false end end
-    out.complete={status=passed and 'PASS' or 'FAIL',scope='Native presentation branch; modal Inspect and typed input need visible testing'};save();return id
+    out.complete={status=passed and 'PASS' or 'FAIL',scope='Native presentation checks in the complete candidate; modal Inspect and typed input need visible testing'};save();return id
 end,-100)
