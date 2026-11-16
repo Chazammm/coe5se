@@ -13,12 +13,13 @@ then start at the main menu. Read the probe's `results.ini`; require every
 test group and `[complete]` to report `PASS`. Retain failures and stop after
 unverified cleanup. Do not run these probes inside a campaign.
 
-The origin test needs a separately enabled fixture that changes an existing
-item, spell and school and adds one of each; its expected fixture identities
-are recorded in that probe. It deliberately distinguishes untouched,
-modified and newly defined loaded content. Third-party content is optional
-and is not bundled here. Presentation checks include native readback and
-draw callbacks; they do not replace a visible mouse-and-keyboard check.
+The origin test uses `test_loaded_content_origin.c5m` as a separately enabled
+QA mod: it changes an existing item, adds a school and adds spells to that
+school and Hydromancy. It also expects the separately installed CrabCult
+item named in the probe; CrabCult is not bundled here. The test distinguishes
+untouched, modified and newly defined loaded content. Presentation checks
+include native readback and draw callbacks; they do not replace a visible
+mouse-and-keyboard check.
 
 The two `test_field_terrain_*_test.c` executables test argument parsing and the
 accepted terrain policy offline. Compile the argument test with the Lua
