@@ -104,10 +104,10 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     if (len == sizeof "newmonster" - 1 && !strncmp(line, "newmonster", len)) noteMonsterMade(mod);
 }
 
-static void runModCommandLine(const char *line,int mod,int level) {
-    void *token=contentOriginBeginLine(line,mod,level);
-    runModCommandLineBody(line,mod,level);
-    contentOriginEndLine(token);
+static void runModCommandLine(const char *line, int mod, int level) {
+    void *token = beginContentOriginLine(line, mod, level);
+    runModCommandLineBody(line, mod, level);
+    endContentOriginLine(token);
 }
 
 // @platform-split preview_world: Windows only for now; on Mac coe5.setPreviewLineEdits doesn't exist, so nothing is ever armed

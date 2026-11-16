@@ -129,12 +129,16 @@ static int buildUnitAttackRows(int unit, UnitAttackRow rows[MONSTER_ATTACK_MAX],
 
 typedef int (*UnitAttackRowFn)(int unit, int slot, int *type, int *weapon, long long *value);
 static UnitAttackRowFn gameUnitAttackRow;
-/* Optional local owned-test-field adjustment. NULL leaves upstream behavior. */
-static void (*testFieldAttackAdjustment)(int unit,int type,int weapon,long long *value);
+static void (*adjustTestFieldAttackRow)(int unit, int type, int weapon, long long *value);
 static int unitAttackRowHook(int unit, int slot, int *type, int *weapon, long long *value) {
     if (!unitWeaponRowsDiffer(unit)) {
-        int result=gameUnitAttackRow(unit,slot,type,weapon,value);
-        if(result>=0 && testFieldAttackAdjustment)testFieldAttackAdjustment(unit,*type,*weapon,value);
+        int result = gameUnitAttackRow(unit, slot, type, weapon, value);
+#ifdef __APPLE__
+        int hasRow = *weapon >= 0;
+#else
+        int hasRow = result >= 0;
+#endif
+        if (hasRow && adjustTestFieldAttackRow) adjustTestFieldAttackRow(unit, *type, *weapon, value);
         return result;
     }
 #ifdef __APPLE__
@@ -148,17 +152,37 @@ static int unitAttackRowHook(int unit, int slot, int *type, int *weapon, long lo
     }
     if (slot < 0 || slot >= count) return -1;
     *type = rows[slot].type, *weapon = rows[slot].weapon, *value = rows[slot].value;
-    if(testFieldAttackAdjustment)testFieldAttackAdjustment(unit,*type,*weapon,value);
+    if (adjustTestFieldAttackRow) adjustTestFieldAttackRow(unit, *type, *weapon, value);
     return rows[slot].weapon;
 }
 
 static int itemSlotWeaponsState;
+static int itemSlotWeaponsLent;
 
 static int installItemSlotWeapons(void) {
+    if (itemSlotWeaponsLent) {
+        itemSlotWeaponsLent = 0;
+        itemSlotWeaponsState = 1;
+        writeLog("item_slot_weapons_installed", "hooks=1 from=test_field");
+    }
     if (itemSlotWeaponsState) return itemSlotWeaponsState > 0;
     void *target = gameBase + RVA_UNIT_ATTACK_ROW;
     int ok = fanpatchHookCreate(target, (void *)unitAttackRowHook, (void **)&gameUnitAttackRow) && fanpatchHookEnable(target, 1);
     itemSlotWeaponsState = ok ? 1 : -1;
     writeResultLog(ok, "item_slot_weapons_installed", "hooks=%d", ok);
     return ok;
+}
+
+static int lendUnitAttackRowHook(void) {
+    if (itemSlotWeaponsState || itemSlotWeaponsLent) return itemSlotWeaponsState > 0 || itemSlotWeaponsLent;
+    void *target = gameBase + RVA_UNIT_ATTACK_ROW;
+    itemSlotWeaponsLent = fanpatchHookCreate(target, (void *)unitAttackRowHook, (void **)&gameUnitAttackRow) && fanpatchHookEnable(target, 1);
+    return itemSlotWeaponsLent;
+}
+
+static int returnUnitAttackRowHook(void) {
+    if (!itemSlotWeaponsLent) return 1;
+    if (!fanpatchHookEnable(gameBase + RVA_UNIT_ATTACK_ROW, 0)) return 0;
+    itemSlotWeaponsLent = 0;
+    return 1;
 }

@@ -144,12 +144,12 @@ static int refusedTableLine(const char *line, size_t len, int mod, int level);
 static void popupTablesLeftOut(void);
 static void drawTablesLeftOut(void);
 static int spellLineHook(const char *line, size_t len, int mod, int level);
-static void *contentOriginBeginLine(const char *line,int mod,int level);
-static void contentOriginEndLine(void *token);
+static void *beginContentOriginLine(const char *line, int mod, int level);
+static void endContentOriginLine(void *token);
 static void contentOriginsBeforePass(int level);
-static void contentOriginsResetPaths(void);
-static void contentOriginNotePath(int path,int mod,int created);
-static void contentOriginNoteSpell(int spell,int mod,int created);
+static void resetContentOriginPaths(void);
+static void noteContentOriginPath(int path, int mod, int created);
+static void noteContentOriginSpell(int spell, int mod, int created);
 static int healArmyLineHook(const char *line, size_t len, const char *args, int mod, int level);
 static void healArmyReset(void);
 static void healArmyBlockStored(int slot);
@@ -259,11 +259,9 @@ static int mainMenuWaiting;
 static int previewWorldAsked(void);
 static void dropUnusedPreviewAsk(void);
 static int previewFieldTakesEvent(const void *event);
-#ifndef __APPLE__
 static int testFieldTextTakesEvent(const void *event);
-static void testFieldTextReset(void);
+static void resetTestFieldText(void);
 static int testFieldTextPollReady;
-#endif
 #define PREVIEW_EDIT_ADDS_MAX 16
 static int previewEditsArmed(int level);
 static const char *previewEditAtPass(const char *line, int mod, int *off, int *adds, int *addCount);
@@ -1868,30 +1866,19 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_units.h"
 #include "lua_content_origin.h"
 #include "lua_data_files.h"
-// @platform-split test_field_editor: Mac keeps legacy fields; the owned editor is Windows-only.
-#ifdef __APPLE__
 #include "lua_test_battle.h"
-#include "lua_test_field_capabilities_mac.h"
-#else
-#include "lua_test_field_editor.h"
 #include "lua_test_unit_state.h"
-#endif
-#ifndef __APPLE__
 #include "lua_battle_view.h"
 #include "lua_test_field_preview.h"
-#endif
 #include "lua_ui.h"
-#ifndef __APPLE__
 #include "lua_test_field_input.h"
 #include "lua_test_field_final.h"
 #include "lua_test_field_inspect.h"
-#endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "read_filter.h"
 #include "preview_world.h"
 #include "lua_loading.h"
-/* Definitions follow upstream item-slot helpers below. */
 #include "game_data.h"
 #include "content_travel.h"
 #include "plane_words.h"
@@ -1909,9 +1896,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_card.h"
 #include "item_slot_battle.h"
 #include "item_slot_weapons.h"
-#ifndef __APPLE__
 #include "lua_test_field_loadout.h"
-#endif
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
 #include "battle_replays.h"
@@ -2007,17 +1992,6 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_GAME_MENU)) installWaitIdBounds();
     if (featureOn(FEATURE_GAME_MENU)) installInlinedButtonRows();
     if (featureOn(FEATURE_MAP_EDITOR)) installMapEditorHooks();
-#ifndef __APPLE__
-    // Owned-field hooks install only when a caller explicitly opens a test field.
-    testFieldExtensions.begin = testFieldFinalBegin;
-    testFieldExtensions.finish = testFieldFinalFinish;
-    testFieldExtensions.reset = testFieldFinalReset;
-    testFieldExtensions.readOnly = testFieldFinalViewActive;
-    testFieldExtensions.resetInput = testFieldTextReset;
-
-    testFieldConfigurationEnabled = gameCodeMatches;
-
-#endif
     if (featureOn(FEATURE_COMMANDER_LINES)) installCommanderLineHooks();
 #ifndef __aarch64__
     if (featureOn(FEATURE_GAME_SAVE)) gameSaveInit();

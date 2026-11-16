@@ -66,9 +66,7 @@ static int lBindKey(lua_State *L) {
 }
 static int lWait(lua_State *L) {
     checkLuaMainThread(L, "coe5.ui.wait");
-#ifndef __APPLE__
-    testFieldTextReset();
-#endif
+    resetTestFieldText();
     closeLuaRow(L, "coe5.ui.wait");
     luaCodeRunning--;
     uiButtonsWaiting++;
@@ -400,17 +398,12 @@ static int lDrawResourceIcon(lua_State *L) {
     return 0;
 }
 
-#ifndef __APPLE__
-/* Same validated native sprite pipeline as resource icons and monsterRow.
- * Idle monster artwork only; no second/attack frame is implied. */
-
-static int monsterIconFitRect(const float rect[4], int width, int height, float fitted[4]) {
+static int fitSpriteRect(const float rect[4], int width, int height, float fitted[4]) {
     if (width <= 0 || height <= 0 || width > INT16_MAX || height > INT16_MAX) return 0;
     double scaleX = (double)rect[2] / width, scaleY = (double)rect[3] / height;
     double scale = scaleX < scaleY ? scaleX : scaleY;
     fitted[2] = (float)(width * scale);
     fitted[3] = (float)(height * scale);
-    /* Clamp roundoff before centering so even the quad stays bounded. */
     if (fitted[2] > rect[2]) fitted[2] = rect[2];
     if (fitted[3] > rect[3]) fitted[3] = rect[3];
     fitted[0] = rect[0] + (rect[2] - fitted[2]) * 0.5f;
@@ -418,92 +411,83 @@ static int monsterIconFitRect(const float rect[4], int width, int height, float 
     return 1;
 }
 
-static int lDrawMonsterIconFit(lua_State *L) {
-    const char *call = "coe5.ui.drawMonsterIconFit";
+static int readSpriteRect(lua_State *L, const char *call, float f[4]) {
+    if (luaDrawFloats(L, call, 1, 4, f)) return 1;
+    lua_pushboolean(L, 0);
+    lua_pushliteral(L, "not_finite");
+    return 0;
+}
+
+static int spriteRectFits(const float f[4]) {
+    return f[2] > 0 && f[3] > 0 && f[2] <= 512 && f[3] <= 512 && fabsf(f[0]) <= 1000000 && fabsf(f[1]) <= 1000000 && isfinite(f[0] + f[2]) &&
+           isfinite(f[1] + f[3]);
+}
+
+static int drawFittedSprite(lua_State *L, int kind, int sprite, const float rect[4]) {
+    GAME_FN(int (*)(int, int, int), RVA_LOAD_SPRITE)(kind, sprite, UI_SPRITE_FLAGS);
+    size_t index = (size_t)kind * SPRITES_PER_KIND + (size_t)sprite;
+    int width = ((const uint16_t *)GAME_PTR(RVA_SPRITE_WIDTHS))[index], height = ((const uint16_t *)GAME_PTR(RVA_SPRITE_HEIGHTS))[index];
+    float fit[4];
+    if (!fitSpriteRect(rect, width, height, fit)) return 0;
+    GL_IMPORT(void (*)(float, float, float, float), RVA_GL_COLOR4F)(1, 1, 1, 1);
+    GAME_FN(void (*)(int, int, int, float, float, float, float, float), RVA_SPRITE_DRAW_SCALED)(kind, sprite, UI_SPRITE_FLAGS, fit[0], fit[1], fit[2], fit[3],
+                                                                                              1.0f);
+    lua_pushboolean(L, 1);
+    lua_createtable(L, 0, 7);
+    setIntField(L, "sprite", sprite);
+    setIntField(L, "sourceWidth", width);
+    setIntField(L, "sourceHeight", height);
+    static const char *const NAMES[4] = {"x", "y", "width", "height"};
+    for (int i = 0; i < 4; i++) {
+        lua_pushnumber(L, fit[i]);
+        lua_setfield(L, -2, NAMES[i]);
+    }
+    return 2;
+}
+
+static int refuseSpriteDraw(lua_State *L, const char *call, const char *reason, const char *what, lua_Integer id, int sprite) {
+    refuseLuaCall(runningLuaMod(), call, reason, "%s=%lld sprite=%d", what, (long long)id, sprite);
+    lua_pushboolean(L, 0);
+    lua_pushstring(L, reason);
+    return 2;
+}
+
+static int lDrawMonsterSprite(lua_State *L) {
+    const char *call = "coe5.ui.drawMonsterSprite";
     float f[4];
-    if (!luaDrawFloats(L, call, 1, 4, f)) {
-        lua_pushboolean(L, 0); lua_pushliteral(L, "not_finite"); return 2;
-    }
+    if (!readSpriteRect(L, call, f)) return 2;
     lua_Integer monster = luaL_checkinteger(L, 5);
-    const char *reason = NULL;
-    if (f[2] <= 0 || f[3] <= 0 || f[2] > 512 || f[3] > 512 || fabsf(f[0]) > 1000000 || fabsf(f[1]) > 1000000 ||
-        !isfinite(f[0] + f[2]) || !isfinite(f[1] + f[3]) || !isUsedMonster(monster))
-        reason = "out_of_range";
-    if (reason) {
-        refuseLuaCall(runningLuaMod(), call, reason, "monster=%lld width=%g height=%g",
-                      (long long)monster, (double)f[2], (double)f[3]);
-        lua_pushboolean(L, 0); lua_pushstring(L, reason); return 2;
-    }
+    if (!spriteRectFits(f) || !isUsedMonster(monster)) return refuseSpriteDraw(L, call, "out_of_range", "monster", monster, -1);
     checkLuaMainThread(L, call);
     if (!luaMayDraw(L, call)) {
-        lua_pushboolean(L, 0); lua_pushliteral(L, "not_drawing"); return 2;
+        lua_pushboolean(L, 0);
+        lua_pushliteral(L, "not_drawing");
+        return 2;
     }
     int sprite = *(const int *)(monsterRecord((int)monster) + (RVA_MONSTER_SPRITES - RVA_MONSTER_TABLE));
-    if (sprite < 0 || sprite >= SPRITES_PER_KIND) reason = "bad_sprite";
-    if (!reason) {
-        GAME_FN(int (*)(int, int, int), RVA_LOAD_SPRITE)(SPRITE_KIND_MONSTER, sprite, UI_SPRITE_FLAGS);
-        size_t index = (size_t)SPRITE_KIND_MONSTER * SPRITES_PER_KIND + (size_t)sprite;
-        int width = ((const uint16_t *)GAME_PTR(RVA_SPRITE_WIDTHS))[index];
-        int height = ((const uint16_t *)GAME_PTR(RVA_SPRITE_HEIGHTS))[index];
-        float fit[4];
-        if (!monsterIconFitRect(f, width, height, fit)) reason = "bad_sprite_size";
-        else {
-            GL_IMPORT(void (*)(float, float, float, float), RVA_GL_COLOR4F)(1, 1, 1, 1);
-            GAME_FN(void (*)(int, int, int, float, float, float, float, float), RVA_SPRITE_DRAW_SCALED)
-                (SPRITE_KIND_MONSTER, sprite, UI_SPRITE_FLAGS, fit[0], fit[1], fit[2], fit[3], 1.0f);
-            lua_pushboolean(L, 1);
-            lua_createtable(L, 0, 7);
-            lua_pushinteger(L, sprite); lua_setfield(L, -2, "sprite");
-            lua_pushinteger(L, width); lua_setfield(L, -2, "sourceWidth");
-            lua_pushinteger(L, height); lua_setfield(L, -2, "sourceHeight");
-            lua_pushnumber(L, fit[0]); lua_setfield(L, -2, "x");
-            lua_pushnumber(L, fit[1]); lua_setfield(L, -2, "y");
-            lua_pushnumber(L, fit[2]); lua_setfield(L, -2, "width");
-            lua_pushnumber(L, fit[3]); lua_setfield(L, -2, "height");
-            return 2;
-        }
-    }
-    refuseLuaCall(runningLuaMod(), call, reason, "monster=%lld sprite=%d", (long long)monster, sprite);
-    lua_pushboolean(L, 0); lua_pushstring(L, reason); return 2;
+    if (sprite < 0 || sprite >= SPRITES_PER_KIND) return refuseSpriteDraw(L, call, "bad_sprite", "monster", monster, sprite);
+    int results = drawFittedSprite(L, SPRITE_KIND_MONSTER, sprite, f);
+    return results ? results : refuseSpriteDraw(L, call, "bad_sprite_size", "monster", monster, sprite);
 }
 
-/* Loaded native item art, fitted with the same verified full-quad rule as
- * monster icons; includes active-mod item records and sprite replacements. */
-static int lDrawItemIconFit(lua_State *L) {
-    const char *call="coe5.ui.drawItemIconFit";float f[4];
-    if(!luaDrawFloats(L,call,1,4,f)){lua_pushboolean(L,0);lua_pushliteral(L,"not_finite");return 2;}
-    lua_Integer item=luaL_checkinteger(L,5);const char *reason=NULL;
-    if(f[2]<=0 || f[3]<=0 || f[2]>512 || f[3]>512 || fabsf(f[0])>1000000 || fabsf(f[1])>1000000 ||
-       !isfinite(f[0]+f[2]) || !isfinite(f[1]+f[3]) || item<0 || item>=tableRecords(TABLE_ITEM) ||
-       !*(const char*)(tableAddress(TABLE_ITEM)+(size_t)item*ITEM_SIZE))reason="out_of_range";
-    checkLuaMainThread(L,call);
-    if(!reason && !luaMayDraw(L,call))reason="not_drawing";
-    int sprite=-1;
-    if(!reason) {
-        sprite=*(const short*)(tableAddress(TABLE_ITEM)+(size_t)item*ITEM_SIZE+ITEM_SPRITE);
-        if(sprite<0 || sprite>=SPRITES_PER_KIND)reason="bad_sprite";
+static int lDrawItemSprite(lua_State *L) {
+    const char *call = "coe5.ui.drawItemSprite";
+    float f[4];
+    if (!readSpriteRect(L, call, f)) return 2;
+    lua_Integer item = luaL_checkinteger(L, 5);
+    if (!spriteRectFits(f) || item < 0 || item >= tableRecords(TABLE_ITEM) || !*(const char *)(tableAddress(TABLE_ITEM) + (size_t)item * ITEM_SIZE))
+        return refuseSpriteDraw(L, call, "out_of_range", "item", item, -1);
+    checkLuaMainThread(L, call);
+    if (!luaMayDraw(L, call)) {
+        lua_pushboolean(L, 0);
+        lua_pushliteral(L, "not_drawing");
+        return 2;
     }
-    if(!reason) {
-        GAME_FN(int (*)(int,int,int),RVA_LOAD_SPRITE)(SPRITE_KIND_ITEM,sprite,UI_SPRITE_FLAGS);
-        size_t at=(size_t)SPRITE_KIND_ITEM*SPRITES_PER_KIND+(size_t)sprite;
-        int w=((const uint16_t*)GAME_PTR(RVA_SPRITE_WIDTHS))[at],h=((const uint16_t*)GAME_PTR(RVA_SPRITE_HEIGHTS))[at];float fit[4];
-        if(!monsterIconFitRect(f,w,h,fit))reason="bad_sprite_size";
-        else {
-            GL_IMPORT(void (*)(float,float,float,float),RVA_GL_COLOR4F)(1,1,1,1);
-            GAME_FN(void (*)(int,int,int,float,float,float,float,float),RVA_SPRITE_DRAW_SCALED)
-                (SPRITE_KIND_ITEM,sprite,UI_SPRITE_FLAGS,fit[0],fit[1],fit[2],fit[3],1.0f);
-            lua_pushboolean(L,1);lua_newtable(L);
-            lua_pushinteger(L,sprite);lua_setfield(L,-2,"sprite");
-            lua_pushinteger(L,w);lua_setfield(L,-2,"sourceWidth");lua_pushinteger(L,h);lua_setfield(L,-2,"sourceHeight");
-            for(int i=0;i<4;i++){lua_pushnumber(L,fit[i]);lua_setfield(L,-2,(const char*[]){"x","y","width","height"}[i]);}
-            return 2;
-        }
-    }
-    refuseLuaCall(runningLuaMod(),call,reason,"item=%lld",(long long)item);
-    lua_pushboolean(L,0);lua_pushstring(L,reason);return 2;
+    int sprite = *(const short *)(tableAddress(TABLE_ITEM) + (size_t)item * ITEM_SIZE + ITEM_SPRITE);
+    if (sprite < 0 || sprite >= SPRITES_PER_KIND) return refuseSpriteDraw(L, call, "bad_sprite", "item", item, sprite);
+    int results = drawFittedSprite(L, SPRITE_KIND_ITEM, sprite, f);
+    return results ? results : refuseSpriteDraw(L, call, "bad_sprite_size", "item", item, sprite);
 }
-
-#endif
 
 #define NAME_BOX_MONSTER_SPRITE 0x21
 static int lNameBox(lua_State *L) {
@@ -512,9 +496,7 @@ static int lNameBox(lua_State *L) {
     lua_Integer max = luaL_optinteger(L, 4, 32);
     luaL_argcheck(L, max >= 1 && max <= NAME_BOX_LENGTH_MAX, 4, "maxLength must be 1 to 42");
     checkLuaMainThread(L, "coe5.ui.nameBox");
-#ifndef __APPLE__
-    testFieldTextReset();
-#endif
+    resetTestFieldText();
     int held = 0, last = G32(RVA_MONSTER_COUNT);
     for (int m = 0; m <= last && monsterRecord(m) && !held; m++)
         held = *(const int *)(monsterRecord(m) + (RVA_MONSTER_SPRITES - RVA_MONSTER_TABLE)) == wanted;

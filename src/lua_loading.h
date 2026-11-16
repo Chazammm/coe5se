@@ -1,9 +1,7 @@
 #pragma once
 
-#ifndef __APPLE__
 static int lTestFieldLoadoutState(lua_State *L);
 static int lSetTestFieldConfiguration(lua_State *L);
-#endif
 
 #ifdef COE5SE_EXTRA_LUA_HEADER
 #include COE5SE_EXTRA_LUA_HEADER
@@ -12,40 +10,16 @@ static int lSetTestFieldConfiguration(lua_State *L);
 #endif
 
 static const luaL_Reg LUA_COE5[] = {
-#ifdef __APPLE__
-    {"testBattle", lTestBattleMac}, {"openTestField", lOpenTestFieldMac},
-#else
-    {"testBattle", lTestBattle}, {"openTestField", lOpenTestField},
-#endif
-#ifdef __APPLE__
-    {"testFieldTerrains", lTestFieldTerrains},
-    {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
-#else
-    {"testFieldTerrains", lTestFieldTerrains},
-    {"setTestFieldSpells", lSetTestFieldSpells},
-    {"removeTestFieldUnit", lRemoveTestFieldUnit},
-    {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
-    {"testFieldState", lTestFieldState},
-    {"testFieldUnitState", lTestFieldUnitState},
-    {"testFieldPointerButtons", lTestFieldPointerButtons},
-    {"testFieldSpellState", lTestFieldSpellState},
-    {"memorizeTestFieldSpell", lMemorizeTestFieldSpell},
-    {"testFieldLifecycle", lTestFieldLifecycle},
-    {"testFieldFootprint", lTestFieldFootprint},
-    {"testFieldPlacementPreflight", lTestFieldPlacementPreflight},
-    {"inspectTestFieldUnit", lInspectTestFieldUnit},
-    {"inspectTestFieldItem", lInspectTestFieldItem},
-    {"testFieldFinalState", lTestFieldFinalState},
-    {"inspectTestFieldFinalUnit", lInspectTestFieldFinalUnit},
-    {"setTestFieldTextFocus", lSetTestFieldTextFocus},
-    {"takeTestFieldTextEvents", lTakeTestFieldTextEvents},
-    {"battleView", lBattleView},
-    {"battleScreenToCell", lBattleScreenToCell},
-    {"battleCellToScreen", lBattleCellToScreen},
-    {"testFieldLoadoutState", lTestFieldLoadoutState},
-    {"setTestFieldConfiguration", lSetTestFieldConfiguration},
-#endif
-    {"loadedContentOrigin", lLoadedContentOrigin},
+    {"testBattle", lTestBattle}, {"openTestField", lOpenTestField}, {"testFieldTerrains", lTestFieldTerrains},
+    {"removeTestFieldUnit", lRemoveTestFieldUnit}, {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
+    {"testFieldState", lTestFieldState}, {"testFieldUnitState", lTestFieldUnitState}, {"testFieldPointerButtons", lTestFieldPointerButtons},
+    {"testFieldSpellState", lTestFieldSpellState}, {"memorizeTestFieldSpell", lMemorizeTestFieldSpell}, {"testFieldLifecycle", lTestFieldLifecycle},
+    {"testFieldFootprint", lTestFieldFootprint}, {"testFieldPlacementPreflight", lTestFieldPlacementPreflight},
+    {"inspectTestFieldUnit", lInspectTestFieldUnit}, {"inspectTestFieldItem", lInspectTestFieldItem}, {"testFieldFinalState", lTestFieldFinalState},
+    {"inspectTestFieldFinalUnit", lInspectTestFieldFinalUnit}, {"setTestFieldTextFocus", lSetTestFieldTextFocus},
+    {"takeTestFieldTextEvents", lTakeTestFieldTextEvents}, {"battleView", lBattleView}, {"battleScreenToCell", lBattleScreenToCell},
+    {"battleCellToScreen", lBattleCellToScreen}, {"testFieldLoadoutState", lTestFieldLoadoutState},
+    {"setTestFieldConfiguration", lSetTestFieldConfiguration}, {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
@@ -78,9 +52,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 static const luaL_Reg LUA_UI[] = {
-#ifndef __APPLE__
-    {"drawMonsterIconFit", lDrawMonsterIconFit}, {"drawItemIconFit", lDrawItemIconFit},
-#endif
+    {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
     {"screenBegin", lScreenBegin}, {"sectionBegin", lSectionBegin}, {"sectionEnd", lSectionEnd}, {"text", lText},
     {"checkbox", lCheckbox}, {"choice", lChoice}, {"tooltip", lTooltip}, {"buttonRow", lButtonRow},
     {"listBegin", lListBegin}, {"listRow", lListRow}, {"listEnd", lListEnd}, {"bindEscape", lBindEscape},

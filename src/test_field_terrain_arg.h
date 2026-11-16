@@ -1,9 +1,6 @@
 #pragma once
 
-/* Shared with the standalone parser regression. Does not read or mutate game state.
- * lua_tointegerx accepts numeric strings: check the type first intentionally. */
-static const char *readTestFieldTerrainArg(lua_State *L, int table, int last, int tableMax,
-                                         lua_Integer *terrain, int *specified) {
+static const char *readTestFieldTerrainArg(lua_State *L, int table, int last, int tableMax, lua_Integer *terrain, int *specified) {
     *terrain = 0;
     *specified = 0;
     lua_getfield(L, table, "terrain");

@@ -174,17 +174,6 @@ static UNUSED int previewLeftPressStep(PreviewLeftPress *press, int *buttons, in
 // ---- A tool's text field, pure -------------------------------------------------------------------
 #define PREVIEW_FIELD_KEYS_MAX 50
 #define PREVIEW_FIELD_TEXT_MAX 4
-#define SDL_SCANCODE_COUNT     512
-#define SDL_TEXT_INPUT         0x303
-#define SDL_EVENT_REPEAT       13
-#define SDL_EVENT_SCANCODE     16
-#define SDL_EVENT_MOD          24
-#define SDL_EVENT_TEXT         12
-#define SDLK_F4                0x4000003d
-#define SDLK_KP_ENTER          0x40000058
-#define SDLK_M                 0x6d
-#define SDL_KMOD_ALT           0x300
-#define SDL_KMOD_GUI           0xc00
 typedef struct { int key; char text[PREVIEW_FIELD_TEXT_MAX + 1]; } PreviewFieldKey;
 typedef struct {
     int on;

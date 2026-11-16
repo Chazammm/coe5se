@@ -184,6 +184,31 @@ static unsigned int unitListSheetHook(void) {
 #define SDL_FOCUS_LOST         13
 #define SDL_EVENT_SYM          20
 #define SDL_EVENT_WINDOW_EVENT 12
+#define SDL_SCANCODE_COUNT     512
+#define SDL_TEXT_EDITING       0x302
+#define SDL_TEXT_INPUT         0x303
+#define SDL_TEXT_BYTES         32
+#define SDL_EVENT_REPEAT       13
+#define SDL_EVENT_SCANCODE     16
+#define SDL_EVENT_MOD          24
+#define SDL_EVENT_TEXT         12
+#define SDLK_F4                0x4000003d
+#define SDLK_KP_ENTER          0x40000058
+#define SDLK_M                 0x6d
+#define SDL_KMOD_CTRL          0xc0
+#define SDL_KMOD_ALT           0x300
+#define SDL_KMOD_GUI           0xc00
+
+// @platform-split sdl_functions: Windows takes SDL2.dll's export, Mac the function in SDL's dynamic API table slot
+#ifdef __APPLE__
+#define SDL_FUNCTION(name, slot) (*(void **)GAME_PTR(slot))
+#else
+static void *sdlExport(const char *name) {
+    HMODULE sdl = GetModuleHandleA("SDL2.dll");
+    return sdl ? (void *)GetProcAddress(sdl, name) : NULL;
+}
+#define SDL_FUNCTION(name, slot) sdlExport(name)
+#endif
 #define SDLK_LCTRL             0x400000e0
 #define SDLK_LSHIFT            0x400000e1
 #define SDLK_LALT              0x400000e2
@@ -243,11 +268,7 @@ static unsigned long gameFrames;
 
 static int pollEventHook(void *event) {
     int got;
-#ifdef __APPLE__
-    do got = nextPollEvent(event); while (got && event && previewFieldTakesEvent(event));
-#else
     do got = nextPollEvent(event); while (got && event && (testFieldTextTakesEvent(event) || previewFieldTakesEvent(event)));
-#endif
     if (!got) {
         gameFrames++;
         writeHeldKeys();
@@ -525,9 +546,7 @@ static void keyRebindInit(void) {
                 wrapInnermost(SITE_UNIT_LIST_WAIT, (void *)keyWait_UNIT_LIST, (void **)&nextKeyWait_UNIT_LIST) +
                 wrapInnermost(SITE_FILE_BROWSER_WAIT, (void *)keyWait_FILE_BROWSER, (void **)&nextKeyWait_FILE_BROWSER);
     int poll = wrapSite(SITE_POLL_EVENT, (void *)pollEventHook, (void **)&nextPollEvent);
-#ifndef __APPLE__
     testFieldTextPollReady = poll != 0;
-#endif
     int texts = wrapSite(SITE_KEY_TEXT_BAR, (void *)keyTextBarHook, (void **)&nextKeyTextBar) +
                 wrapInnermost(SITE_MAP_MENU_BUTTON_TEXT, (void *)menuButtonTextHook, (void **)&nextMenuButtonText) +
                 wrapSite(SITE_KEY_HELP_TEXT, (void *)keyHelpTextHook, (void **)&nextKeyHelpText) +

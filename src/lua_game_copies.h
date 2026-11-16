@@ -149,6 +149,25 @@ static int spellPathWeightCopy(int path) {
     if (p == 0x14 || (p <= 0x3b && (0x800000580000000ULL >> (p & 0x3f)) & 1) || p == 0x21 || p == 0x3a) return 75;
     return p == 0x37 ? 75 : 100;
 }
+static UNUSED int monsterBattleSizeCopy(int monster) {
+    if (monster < 0) return 1;
+    unsigned long long flags = copyMonsterWord(monster, COPY_MONSTER_FLAGS);
+    if (flags & (1ULL << 52)) return 1;
+    if (flags & (1ULL << 53)) return 2;
+    int huge = (copyMonsterWord(monster, MONSTER_MOVE_FLAGS) & 2) != 0, width = 0;
+    GAME_FN(void (*)(int, int *, int *, int *), RVA_MONSTER_SPRITE_SIZE)(*(const int *)(monsterRecord(monster) + (RVA_MONSTER_SPRITES - RVA_MONSTER_TABLE)), &width, NULL, NULL);
+    return width >= 151 || huge ? 3 : width >= 101 ? 2 : 1;
+}
+static int monsterHasRangedCopy(int monster) {
+    const unsigned char *m = monster < 0 ? NULL : monsterRecord(monster);
+    if (!m || *(const short *)(m + MONSTER_RANK) == 1) return 0;
+    for (int i = 0; i < MONSTER_ATTACK_MAX; i++) {
+        int type = *(const int *)(m + MONSTER_ATTACKS + (size_t)i * MONSTER_ATTACK_SIZE);
+        if (type <= 0) return 0;
+        if (type <= 22 && (0x6cc8ecu >> type) & 1u) return 1;
+    }
+    return 0;
+}
 static int memorizeAllowanceCopy(int u, int path) {
     int level = GAME_FN(int (*)(int, int), RVA_UNIT_PATH_LEVEL)(u, path);
     return level < 1 ? 0 : level + 1;

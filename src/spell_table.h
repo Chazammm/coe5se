@@ -230,7 +230,7 @@ static void restoreShippedSpells(const char *reason) {
 static void storeSpell(void) {
     if (spellBlock.slot) {
         *spellSlot(spellBlock.slot) = spellBlock.record;
-        contentOriginNoteSpell(spellBlock.slot,spellBlock.mod,0);
+        noteContentOriginSpell(spellBlock.slot, spellBlock.mod, 0);
         return;
     }
     if (!spellBlock.hasPath || !spellBlock.hasLevel || !spellBlock.hasWeapon) return;
@@ -248,7 +248,7 @@ static void storeSpell(void) {
     *spellSlot(slot + 1) = spellTable.shippedEnd;
     *spellSlot(slot) = spellBlock.record;
     spellTable.spellMods[spellTable.modSpells++] = spellBlock.mod;
-    contentOriginNoteSpell(slot,spellBlock.mod,1);
+    noteContentOriginSpell(slot, spellBlock.mod, 1);
     spellBlock.slot = slot;
     healArmyBlockStored(slot);
     writeLog("spell_added", "mod=%s slot=%d name=%s path=%d level=%d weapon=%d dmg=%lld flags=0x%llx line=%d", mod, slot,
