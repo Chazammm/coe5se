@@ -73,6 +73,7 @@
 --   Keep data in a file            coe5.writeIni("last", {Player1 = {Class = 3}}), coe5.readIni("last").Player1.Class
 --   A battle with no game          coe5.testBattle(coe5.findMonster("Old Wizard"), -1, coe5.findMonster("Spearman"), 40)
 --   Mixed groups on a test field   local ok, units = coe5.openTestField{commander = wizard, enemies = {{spearman, 5}, {wolf, 4}}}
+--   An empty editor field          local ok, units = coe5.openTestField{emptyEditor = true, terrain = 2}   (Forest; coe5.testFieldState())
 --   Where a unit stands in battle  coe5.get("unitBattleX", unit), coe5.get("unitBattleY", unit)
 --   Text to the clipboard          coe5.copyText("newweapon \"Laser\"\n")
 --   Text as a new mod              coe5.saveNewMod("My Laser", "newweapon \"Laser\"\ndmg 12\n")
@@ -305,6 +306,8 @@ function require(name) end
 ---| "UNIT_FLAGS"               # fn(next, unit): the unit's move word (the value unitMoveFlags reads, stationary 2^35 among them): its monster's with its items' and some abilities' bits. next returns the game's own; return another whole number for the game to use. Windows and Mac hook the function itself when a script first wraps it, so a wrap runs for every call of it that isn't inlined into its caller: keep it short. A unit outside the table is refused (lua_refused reason=out_of_range) and the game's kept.
 ---| "RITUAL_CAN_CAST"          # fn(next, commander, slot): every cast check of a ritual: the ritual screen's for a row, the AI's for its plans, a repeated ritual's. next returns the game's answer with castermaxcast: 1, or a reason at 0 or below (coe5.ritual.reasonMirror, ...). Return 1 to let the commander cast, a reason to hold it back; the ritual screen shows the reason's own text. A commander or slot off the tables in next is refused (out_of_range) and the game's own goes on.
 ---| "RITUAL_LOCATION_CHECK"    # fn(next, commander, slot, x, y): every location check of a ritual (its terrain, the units and enchantments its rules count, its trade and guild rules): the ritual screen's, the AI's, a repeated ritual's, the castable-anywhere test's. x and y are the square asked about, -999 and -999 for the caster's own. next returns the game's answer: 1, or a reason at 0 or below. Return 1 to let the ritual be cast there, 0 or below to hold it back. The ritual screen tests the ritual's terrain itself (ritualTerrainAt), so a row it greys for the terrain is opened at RITUAL_SCREEN_ROW. A square that is neither -999, -999 nor on the map in next is refused (out_of_range).
+---| "CEREMONY_SCREEN_ROW"       # fn(next, id, a, b, name, costType1, cost1, costType2, cost2, costType3, cost3, costType4, cost4, hover, apCost, castable, mirrorMonster, mirrorText): one row of the Voice of El's Ceremonies screen, with RITUAL_SCREEN_ROW's arguments (the game draws both screens' rows alike). id is the ceremony + coe5.ceremony.rowUsable when the priest may perform it (the number CEREMONY_PERFORM gets, which ceremonyName names), or + coe5.ceremony.rowGreyed when greyed out (the game gives a greyed row no id; CoE5SE numbers it while a script wraps here, so coe5.get("hoveredId") tells the rows apart). hover is a greyed row's reason, the game's own words, and "" on most rows the priest may perform; each cost is gold (costType 0) or relics (12), as the game charges it; pass a and b on unchanged. On Windows the game draws five of the rows with its own copy of the row code, over which CoE5SE writes the call, so a wrap sees every row on both builds. In next, a mirrorMonster past the last monster or a costType above 50 is refused (lua_refused reason=out_of_range) and the game's own value kept. next returns nothing the game uses (nil).
+---| "CEREMONY_SCREEN_WAIT"      # fn(next, block, mode): the Voice of El's Ceremonies screen waiting for a click. The game passes block 1: the screen keeps showing its rows as they were laid out until a click, so CEREMONY_SCREEN_ROW runs only then. next(0, mode) returns 0 at the end of each frame with no click, and the screen lays its rows out again for the next frame, as the ritual screen does every frame. next returns the clicked id, which the screen then acts on.
 
 ---The game calls a script can watch with coe5.observe but not change: each decides or applies game
 ---content. before(...) gets a copy of the arguments before the call, and after(result, ...) the
@@ -731,7 +734,7 @@ function require(name) end
 ---| "unitRitualCasts"       # index: a unit, then a ritual, integer: how many times the commander whose unit it is has cast the ritual (what castermaxcast counts; only rituals with a castermaxcast are counted). Writable, 0 to 32000; 0 clears it.
 ---| "unitX"                 # index 0-98999, integer: the unit's square's x (ritualTerrainAt takes it). Writable, -1 to 999. A write moves no army record; coe5.teleportCommander and coe5.teleportUnit move a unit whole.
 ---| "unitY"                 # index 0-98999, integer: the unit's square's y. Writable, -1 to 159. See unitX for moving a unit whole.
----| "unitBattleX"           # index 0-98999, integer: the battle cell of the unit's top-left corner, during a battle or on an open test field; nil off the field. Writable, 0 to the field's width less 1: moves the unit's token there as the game's fight does, pushing aside any units under it (16 at most).
+---| "unitBattleX"           # index 0-98999, integer: the battle cell of the unit's bottom-left corner (its token's lowest x and y), during a battle or on an open test field; nil off the field. Writable, 0 to the field's width less 1: moves the unit's token there as the game's fight does, pushing aside any units under it (16 at most).
 ---| "unitBattleY"           # index 0-98999, integer: its y, 0 to 19. Writable, 0 to 19: the same move.
 ---| "unitApLeft"            # index 0-98999, integer: the unit's action points left this turn, as the game reckons them (3, 4 for fast, 2 for slow, less those used; 0 for an empty record). The ritual screen casts while it is above 0. Writable: sets the points used so this many are left (unitApUsed).
 ---| "unitApUsed"            # index 0-98999, integer: the unit's action points used this turn, the number unitApLeft subtracts; moving and the game's other actions add to it. Set it to 0 to give the unit every action point back.
@@ -2174,8 +2177,8 @@ function coe5.unitIsDemon(unit) end
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.unitAbilitySum(unit, ability, add) end
 
----Whether a monster has a ranged weapon or a spell attack.
----Windows only for now.
+---Whether a monster has a ranged weapon or a spell attack, as the game decides it: never for a front-rank monster.
+---At the main menu too.
 ---@param monster integer a monster
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.monsterHasRanged(monster) end
@@ -3959,13 +3962,15 @@ function coe5.deleteIni(name) end
 ---With `standIn`, any weapon, the spell casts with that weapon's values in place of its
 ---own weapon's, for this battle only. Returns when the battle ends; the units are gone afterwards.
 ---It also takes coe5.openTestField's table in place of its arguments, for mixed groups.
+---With an editor field's table, false and a reason when the fight is refused: coe5.fightTestField's editor field reasons.
 ---@param monster integer a monster's index (coe5.findMonster)
 ---@param spell integer|nil -1 or nil for none
 ---@param enemy integer a monster's index
 ---@param count? integer 1 or more; 40 when left out
 ---@param standIn? integer a weapon your mod made
----@overload fun(field: {commander: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean
----@return boolean shown false when refused (lua_refused): in_game, bad_monster, bad_enemy, bad_count, bad_spell, no_spell_weapon, bad_weapon, no_free_slot; with a table, also bad_friend, bad_list, no_enemies
+---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean}): boolean, string|nil
+---@return boolean shown false when refused (lua_refused): in_game, bad_monster, bad_enemy, bad_count, bad_spell, no_spell_weapon, bad_weapon, no_free_slot; with a table, also coe5.openTestField's table reasons
+---@return string|nil reason with an editor field's table, the reason when the fight was refused
 function coe5.testBattle(monster, spell, enemy, count, standIn) end
 
 ---Adds a line to the unit card's traits, after the game's own and CoE5SE's (Polymorph Immunity and the rest), on
@@ -3982,6 +3987,15 @@ function coe5.addTraitLine(line) end
 ---@return {name: string, path: integer, level: integer, weapon: integer, dmg: integer}|nil info nil past the table or for an empty slot
 function coe5.spellInfo(spell) end
 
+---Which mod made a loaded item, spell or magic path, and which mod last changed it, from the mod lines the game read.
+---kind is created_by_mod, modified_by_mod, baseline (the game's own, untouched) or unknown (a change came from where
+---CoE5SE didn't see it). historyComplete is always false.
+---@param kind "item"|"spell"|"spellschool"
+---@param id integer an id in that table
+---@return {id: integer, kind: string, modded: boolean, observed: boolean, definedBy: string|nil, lastModifiedBy: string|nil, historyComplete: false, scope: string}|nil origin nil when refused (lua_refused): game_code_differs, bad_content
+---@return string|nil reason the reason, with that nil
+function coe5.loadedContentOrigin(kind, id) end
+
 ---Opens a test field from the main menu, with no game: a commander of `monster` and `count` units of `enemy`
 ---(the independents) deployed on a grass field, as coe5.testBattle has them, and left standing. Draw it a
 ---frame at a time with coe5.drawTestField, attack with coe5.fireTestField, fight with coe5.fightTestField,
@@ -3990,30 +4004,39 @@ function coe5.spellInfo(spell) end
 ---group a monster's index and a count (1 when left out). Friends follow the commander. No count is capped, and the
 ---enemies need at least one unit; spell and standIn are optional fields. The units come back as the second value,
 ---and coe5.closeTestField takes every one of them off.
----@overload fun(field: {commander: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies: {[1]: integer, [2]?: integer}[]}): boolean, {commander: integer, friends: integer[], enemies: integer[]}|nil
+---Any of terrain, allowMultipleUnique or emptyEditor in the table, even false, opens an editor field, which the
+---calls after coe5.closeTestField edit and read. It stands on terrain, a number from coe5.testFieldTerrains() (0, Plain,
+---when left out). With emptyEditor true it has no commander (leave commander out, and spell and standIn too), either
+---side may be empty, and the units' commander is -1. Without allowMultipleUnique it holds one unit of a unique monster
+---at most, and none while one lives anywhere (unique_count, unique_exists); on Mac allowMultipleUnique true is refused
+---(windows_only) for now. An editor field's refusal gives its reason as the second value.
+---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
 ---@param monster integer
 ---@param spell integer|nil
 ---@param enemy integer
 ---@param count? integer
 ---@param standIn? integer a weapon your mod made
----@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies
----@return {commander: integer, friends: integer[], enemies: integer[]}|nil units the units made, in group order
+---@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies; on an editor field also game_code_differs, bad_terrain, unsupported_terrain, bad_allow_multiple_unique, bad_empty_editor, empty_editor_commander, empty_editor_primary_attack, cleanup_unverified, temporary_square_busy, bad_unit_table, unique_count, unique_exists, lifecycle_unavailable, terrain_init_failed, context_changed, windows_only
+---@return {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil unitsOrReason the units made in group order; on an editor field, the reason when refused
 function coe5.openTestField(monster, spell, enemy, count, standIn) end
 
 ---Adds units to one side of the open test field, each group a monster's index and a count, as
 ---coe5.openTestField's table takes them. The game's own deploy places them, so the units already on the field
----keep their cells. "friends" follow the commander.
+---keep their cells. On an editor field neither side follows a commander, and the whole request is checked before a unit
+---is made.
 ---@param side "friends"|"enemies"
 ---@param groups {[1]: integer, [2]?: integer}[]
----@return integer[]|nil units the units made, nil when refused (lua_refused): not_open, bad_side, bad_friend, bad_enemy, bad_list, bad_count, no_free_slot (the game's unit table is full)
+---@return integer[]|nil units the units made, nil when refused (lua_refused): not_open, bad_side, bad_friend, bad_enemy, bad_list, bad_count, no_free_slot (the game's unit table is full), out_of_memory; on an editor field also game_code_differs, not_owner, in_fight, final_read_only, context_changed, cleanup_unverified, unique_count, unique_exists, bad_unit_table
+---@return string|nil reason on an editor field, the reason when refused
 function coe5.addTestFieldUnits(side, groups) end
 
----Moves a unit on the open test field to battle cell (x, y), its top-left corner there, to place a group exactly
+---Moves a unit on the open test field to battle cell (x, y), its token's lowest x and y there (its bottom-left corner on screen), to place a group exactly
 ---where an area attack lands. coe5.get("unitBattleX", unit) and "unitBattleY" read where a unit stands.
 ---@param unit integer
 ---@param x integer below battleWidth
 ---@param y integer 0 to 19
----@return boolean moved false when refused (lua_refused): not_open, not_on_field, off_field (the unit doesn't fit there), blocked (another unit, a tree or a boulder covers a cell of it)
+---@return boolean moved false when refused (lua_refused): not_open, not_on_field, off_field (the unit doesn't fit there), blocked (another unit, a tree or a boulder covers a cell of it); on an editor field also game_code_differs, not_owner, in_fight, final_read_only, bad_unit, bad_field, dead_unit, bad_monster
+---@return string|nil reason on an editor field, the reason when refused
 function coe5.moveTestFieldUnit(unit, x, y) end
 
 ---One frame of the battle screen on the open test field, its speed arrows working. BATTLE_DRAW and
@@ -4023,9 +4046,14 @@ function coe5.drawTestField() end
 ---The test field's commander makes one attack, as in a battle, then every projectile flies to its end: its
 ---first weapon, or its spell cast as an item casts it. The weapon reaches across the field for that attack.
 ---Units it hits take the damage.
+---@return false|nil refused false on an editor field when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, final_read_only, no_primary_unit (an empty field has no commander)
+---@return string|nil reason the reason, with that false
 function coe5.fireTestField() end
 
----The battle on the test field, as the game fights one; returns when it ends.
+---The battle on the test field, as the game fights one; returns when it ends. On an editor field, the field as the battle
+---left it is kept for coe5.testFieldFinalState(), and the field can only be read until it closes.
+---@return false|nil refused false on an editor field when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, final_read_only, cleanup_unverified, bad_field, bad_unit_table, out_of_memory, not_on_field, ambiguous_token, dead_unit, bad_monster, missing_team_a, missing_team_b (no living unit on a side)
+---@return string|nil reason the reason, with that false
 function coe5.fightTestField() end
 
 ---Ends the test field's running battle (coe5.fightTestField) as the battle screen's skip to the end does:
@@ -4033,7 +4061,174 @@ function coe5.fightTestField() end
 function coe5.stopTestFight() end
 
 ---Closes the test field: its units gone, and everything it borrowed put back.
+---On an editor field only the units it made go, wherever they stand, and it returns true, or false and a reason.
+---@return boolean|nil closed on an editor field: true, or false when refused (lua_refused): not_owner, cleanup_unverified (a unit of the field's still lives; the next editor field is refused until a close succeeds)
+---@return string|nil reason the reason, with that false
 function coe5.closeTestField() end
+
+---The terrains a test field opens on, as loaded now: a list of terrain numbers among 0 Plain, 2 Forest, 12 Mountains,
+---107 Swamp and 117 Desert.
+---@return integer[] terrains
+function coe5.testFieldTerrains() end
+
+---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
+---pointerButtons, lifecycle, multipleUnique (0 on Mac), emptyEditor, configuration, cursedRemoval, schoolLevelReduction
+---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
+---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
+function coe5.testFieldEditorCapabilities() end
+
+---Takes one unit off your editor field: hp 0 and its cells emptied, with no death or event of the game's.
+---@param unit integer a unit of the field
+---@return boolean removed false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, primary_commander (the commander of a field with one), bad_field, ambiguous_token (the unit stands on two cells), remove_failed
+---@return string|nil reason the reason, with that false
+function coe5.removeTestFieldUnit(unit) end
+
+---Every unit and cell of your editor field. units holds each living unit of both sides and each unit a cell holds, in
+---unit order, with among others unit, hp, monster, owner, generation, width, height, anchors and occupied (its cells),
+---and anchorX, anchorY when it stands on one cell. grid[x * 20 + y + 1] is cell (x, y). Each issue is a code and the
+---unit, x and y it concerns; complete is false when a part couldn't be read.
+---@return {width: integer, height: integer, emptyEditor: boolean, allowMultipleUnique: boolean, complete: boolean, units: table[], grid: {x: integer, y: integer, unit: integer, object: integer, flags: integer, ground: integer}[], issues: {code: string, unit?: integer, x?: integer, y?: integer}[]}|nil state nil when refused (lua_refused): game_code_differs, not_open, not_owner, not_editor_field, out_of_memory
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldState() end
+
+---One unit's row of coe5.testFieldState(), living or not, with the field's complete and issues.
+---@param unit integer a unit of the field
+---@return table|nil row nil when refused (lua_refused): coe5.testFieldState()'s reasons, bad_unit, not_on_field, bad_field
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldUnitState(unit) end
+
+---The mouse buttons held now, 1 left, 2 right, 4 middle, added, read from the system rather than the game's last frame,
+---in a BATTLE_WAIT frame of your open test field.
+---@return integer|nil buttons 0 to 7; nil when refused (lua_refused): game_code_differs, not_open, not_owner, not_battle_frame, sdl_mouse_unavailable
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldPointerButtons() end
+
+---A unit's spells: known and memorized (spell numbers), schools (each magic path it has a level or a spell in) and
+---valid, false when the lists break a memorization rule, with issues[1] naming it.
+---@param unit integer a unit of your editor field
+---@return {unit: integer, generation: integer, complete: boolean, valid: boolean, known: integer[], memorized: integer[], schools: {path: integer, name: string, level: integer, bonus: integer, allowance: integer, knownCount: integer, memorizedCount: integer}[], issues: table[]}|nil spells nil when refused (lua_refused): game_code_differs, not_open, not_owner, not_editor_field, bad_unit, not_on_field, dead_unit, bad_monster, bad_item
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldSpellState(unit) end
+
+---Memorizes a spell the unit knows (true) or drops it from the memorized ones (false), as the game's memorization rules
+---allow; nothing is picked at random. True when it already was so. The table says which check stopped it.
+---@param unit integer a unit of your editor field
+---@param spell integer a spell
+---@param on boolean
+---@return boolean done false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, bad_spell, bad_state, memorized_not_known, spell_level (above the unit's level in its magic path), memorize_limit (more than the level plus 1 in a path), too_many_spells (30 memorized), restore_failed
+---@return string|nil reason the reason, with that false
+---@return {stage: string, code: string, path: integer, spell: integer, actual: integer, allowed: integer, allowance: integer, level: integer}|nil detail
+function coe5.memorizeTestFieldSpell(unit, spell, on) end
+
+---The units the game made for your last editor field: created, beforeCleanup and afterCleanup, each row a unit, its
+---generation, monster, owner and square, and a reason: active, cleaned, already_dead, identity_replaced or
+---cleanup_failed. Readable after the field closes, until the next editor field opens.
+---@return table|nil lifecycle nil when refused (lua_refused): game_code_differs, lifecycle_unavailable, no_session, not_owner
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldLifecycle() end
+
+---How many battle cells a monster's token takes, width and height (1 to 3), with no unit made; with a unit of your
+---editor field, that unit as it is now.
+---@param monster integer a monster
+---@param unit? integer a unit of the field; -1 when left out
+---@return {monster: integer, unit: integer, width: integer, height: integer, exact: boolean, instance: boolean, source: string}|nil footprint nil when refused (lua_refused): bad_unit, game_code_differs, not_open, not_owner, in_fight, bad_monster, bad_sprite, bad_sprite_size, bad_footprint, and with a unit coe5.removeTestFieldUnit's first nine
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldFootprint(monster, unit) end
+
+---For each cell a token at (x, y) would take, its token's lowest x and y there: whether it is on the field and what
+---covers it (status clear, occupied, terrain, unknown or out_of_bounds), and where it is on screen; valid when every cell
+---is clear. Size and cover only: the game's own placement still decides. ignoreSelf true leaves unit's own token out.
+---@param monster integer a monster
+---@param x integer
+---@param y integer
+---@param unit? integer a unit of the field; -1 when left out
+---@param ignoreSelf? boolean
+---@return table|nil preflight nil when refused (lua_refused): coe5.testFieldFootprint's reasons, bad_type, not_battle_frame, bad_anchor
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldPlacementPreflight(monster, x, y, unit, ignoreSelf) end
+
+---The game's own card for a living unit of your editor field, as its own player sees it, with no change to its spells
+---or items; returns when the player closes it. The table says what changed while it was up and what was put back.
+---@param unit integer a unit of the field
+---@param options? {readOnly?: true}
+---@return boolean shown false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, inspect_active (a card is up), not_main_menu, text_input_hook_unavailable, not_battle_frame (the field not drawn yet), bad_options, read_only_required, text_input_unavailable, the memorization rules' reasons; after the card, identity_changed, inspect_changed_unverified, restore_failed
+---@return table|string detailsOrReason
+function coe5.inspectTestFieldUnit(unit, options) end
+
+---The same card for a unit that outlived the field's last fight, as it is now.
+---@param unit integer a unit of coe5.testFieldFinalState()
+---@param options? {readOnly?: true}
+---@return boolean shown false when refused (lua_refused): coe5.inspectTestFieldUnit's reasons, no_final_state, not_in_final_state, not_a_visible_survivor (dead, or not on one cell at the fight's end), removed_after_capture
+---@return table|string detailsOrReason
+function coe5.inspectTestFieldFinalUnit(unit, options) end
+
+---The game's card for a magic item, on your open test field. Windows only for now.
+---@param item integer an item
+---@return boolean shown false when refused (lua_refused): bad_item, game_code_differs, not_open, not_owner, in_fight, final_read_only, not_main_menu, inspect_active, text_input_unavailable, field_changed, windows_only
+---@return table|string detailsOrReason
+function coe5.inspectTestFieldItem(item) end
+
+---Your editor field as its last fight left it, read after the fight's end and before the game's own upkeep after it:
+---round, winner, units (with hp, alive, owner, team 1 or 2, status on_field, off_field, dead or unverified, and its
+---cells), grid, complete, and issues (256 at most; issueCount counts all). sceneComplete is always false: no effects or
+---projectiles are kept. When the fight ran without the capture, phase is unavailable with the issue capture_hook_unavailable.
+---@return table|nil final nil when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, no_final_state
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldFinalState() end
+
+---Takes the keyboard for a text field of your own on the test field (true), or gives it back. While you have it, typed
+---text goes to coe5.takeTestFieldTextEvents() and no key reaches the game but Alt+Tab, Alt+Enter, Alt+F4 and Win+M
+---(Cmd+M on Mac). It ends on Enter, Esc, the window losing focus, a fight, the field's close, coe5.ui.wait and
+---coe5.ui.nameBox.
+---@param on boolean
+---@return boolean done false when refused (lua_refused): bad_type, not_owner, game_code_differs, text_input_hook_unavailable, not_open, in_fight, text_input_unavailable
+---@return string|nil reason the reason, with that false
+function coe5.setTestFieldTextFocus(on) end
+
+---What was typed since the last call, 64 events at most: each {type = "text", text} (UTF-8) or a type of backspace,
+---clear (Ctrl+Backspace or Ctrl+U), submit (Enter), cancel (Esc) or blur (the window lost focus); overflow when an
+---event was lost.
+---@return {focused: boolean, overflow: boolean, events: {type: string, text?: string}[]}|nil typed nil when refused (lua_refused): not_open, not_owner
+---@return string|nil reason the reason, with that nil
+function coe5.takeTestFieldTextEvents() end
+
+---Where the test field's battlefield is on screen now, in UI units (x from the left, y up from the bottom), in a
+---BATTLE_DRAW or BATTLE_WAIT frame. originX and originY are the field's corner: baseX plus cameraX, baseY plus cameraY.
+---@return {cellSize: number, originX: number, originY: number, baseX: number, baseY: number, cameraX: number, cameraY: number, width: integer, height: integer, screenW: number, screenH: number, windowW: integer, windowH: integer}|nil view nil when refused (lua_refused): not_open, game_code_differs, not_battle_frame, invalid_battle_view
+function coe5.battleView() end
+
+---The test field's battle cell under a point in UI units, found as the game finds the cell under the pointer.
+---@param uiX number
+---@param uiY number
+---@return integer|nil x nil off the field, or when refused as coe5.battleView()
+---@return integer|nil y
+function coe5.battleScreenToCell(uiX, uiY) end
+
+---The centre of a battle cell on screen, in UI units.
+---@param x integer
+---@param y integer
+---@return number|nil uiX nil off the field, or when refused as coe5.battleView()
+---@return number|nil uiY
+function coe5.battleCellToScreen(x, y) end
+
+---A unit's items by position (0 to 19: id, -1 for none, slotType, and an item's name, cursed and permanentEffects), its
+---schools (each magic path its monster has: templateBase, its monster's level, base, the level set, level, bonus,
+---allowance) and its known and memorized spells. The first call on a field puts in what lets a path's level be set; it
+---comes out when the field closes.
+---@param unit integer a unit of your editor field
+---@return table|nil loadout nil when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, not_main_menu, training_hooks_unavailable
+---@return string|nil reason the reason, with that nil
+function coe5.testFieldLoadoutState(unit) end
+
+---Sets a unit's items, path levels and spells together, reads them back, and puts the unit back as it was when anything
+---fails. A cursed item comes off only with removeCursed, and an eye or a heart neither goes on nor comes off. The table
+---says how far it got: stage validate, committed, rejected_rollback_verified or rollback_unverified.
+---@param unit integer a unit of your editor field
+---@param state {items: integer[], schools: {[1]: integer, [2]: integer}[], known: integer[], memorized: integer[], restoreKnown?: boolean, removeCursed?: {[1]: integer, [2]: integer}} items 20 item numbers (-1 for none); schools {path, level} for every magic path its monster has, level 1 to 3, or the monster's own when higher; known and memorized 60 and 30 spells at most; removeCursed {position, item}
+---@return boolean done false when refused (lua_refused): coe5.removeTestFieldUnit's first nine, not_main_menu, training_hooks_unavailable, bad_state, bad_item_positions, bad_item, bad_schools, bad_school_level, school_not_existing, unsupported_school_level, duplicate_school, missing_school_configuration, bad_spell_list, too_many_spells, bad_spell, duplicate_spell, bad_restore_known, bad_cursed_removal, identity_changed, incomplete_native_configuration, cursed_removal_changed, cursed_removal_only, bad_existing_item, cursed_item, permanent_anatomy_item_unsupported, out_of_memory, too_many_configured_units, incompatible_slot, native_item_restriction, equipment_changes_anatomy, the memorization rules' reasons, new_spell_above_level, configuration_readback_failed, school_readback_failed, permanent_effect_changed, rollback_failed
+---@return string|nil reason the reason, with that false
+---@return table detail
+function coe5.setTestFieldConfiguration(unit, state) end
 
 ---A weapon look's name in the game's visual effect table, the numbers look and flylook take ("Fireball").
 ---@param look integer
@@ -4595,6 +4790,27 @@ function coe5.ui.resourceIcon(id, resource) end
 ---@param resource integer 0 Gold to 13 Lifeforce
 function coe5.ui.drawResourceIcon(x, y, size, resource) end
 
+---A monster's sprite fitted into the rectangle with its bottom left at (x, y), its shape kept and centred. Only in a
+---frame a script may draw in, as drawText.
+---@param x number
+---@param y number
+---@param width number above 0, up to 512
+---@param height number above 0, up to 512
+---@param monster integer a monster
+---@return boolean drawn false when refused (lua_refused): not_finite, out_of_range, not_drawing, bad_sprite, bad_sprite_size
+---@return {sprite: integer, sourceWidth: integer, sourceHeight: integer, x: number, y: number, width: number, height: number}|string drawnOrReason what was drawn, or the reason
+function coe5.ui.drawMonsterSprite(x, y, width, height, monster) end
+
+---An item's sprite, as coe5.ui.drawMonsterSprite draws a monster's.
+---@param x number
+---@param y number
+---@param width number above 0, up to 512
+---@param height number above 0, up to 512
+---@param item integer an item
+---@return boolean drawn false when refused (lua_refused): not_finite, out_of_range, not_drawing, bad_sprite, bad_sprite_size
+---@return {sprite: integer, sourceWidth: integer, sourceHeight: integer, x: number, y: number, width: number, height: number}|string drawnOrReason what was drawn, or the reason
+function coe5.ui.drawItemSprite(x, y, width, height, item) end
+
 ---How wide coe5.ui.drawText draws `text` at `size`, in UI units, by the game's own text measure, so
 ---a panel right aligns a number or cuts a long name exactly. Only in a preview world, inside a
 ---MAP_DRAW wrap. Windows only for now: on Mac the function doesn't exist.
@@ -4812,6 +5028,14 @@ coe5.ritual = {
   reasonPlane = -7,
   rowCastable = 1000,   -- a castable ritual's row id is its slot + 1000
   rowGreyed = 12288,    -- a greyed-out one's is its slot + 12288 (0x3000)
+}
+
+---The Voice of El's Ceremonies screen: its rows' ids (C: CEREMONY_ROW_*), for CEREMONY_SCREEN_ROW. A row's ceremony is its
+---id less rowUsable or rowGreyed: the number CEREMONY_PERFORM gets, which ceremonyName names.
+---@class coe5.ceremony
+coe5.ceremony = {
+  rowUsable = 10,       -- a ceremony the priest may perform: its row id is the ceremony + 10, the game's own
+  rowGreyed = 12288,    -- a greyed-out one's is the ceremony + 12288 (0x3000), CoE5SE's
 }
 
 ---A battle target check's answers (C: TARGET_USEFUL, TARGET_NOT_AFFECTED), for BATTLE_TARGET_CHECK.

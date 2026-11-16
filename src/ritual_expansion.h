@@ -248,8 +248,9 @@ static void *movePlayerBlock(void *dst, const void *src, size_t size) {
 
 static int randomRitual(int ritpow, int level) {
     static int matches[RITUAL_SLOT_CAP];
-    int count = 0;
-    for (int slot = 1; slot < RITUAL_SLOT_CAP; slot++) {
+    int count = 0, last = G32(RVA_RITUAL_COUNT);
+    int end = ritpow > 0 && last >= 0 && last < RITUAL_SLOT_CAP ? last + 1 : RITUAL_SLOT_CAP;
+    for (int slot = 1; slot < end; slot++) {
         const unsigned char *r = ritualTable + (size_t)slot * RITUAL_SIZE;
         int p = *(const int *)(r + RITUAL_RITPOW_OFFSET), l = *(const int *)(r + RITUAL_LEVEL_OFFSET);
         if ((p == ritpow || ritpow == -1) && (l == level || level == -1)) matches[count++] = slot;

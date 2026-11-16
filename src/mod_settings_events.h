@@ -2,7 +2,7 @@
 
 // ---- +setting and -setting in events -------------------------------------------------------------
 static int isSettingLine(const char *line) {
-    return (line[0] == '+' || line[0] == '-') && !strncmp(line + 1, "setting", 7) && (line[8] == ' ' || line[8] == '\t');
+    return (line[0] == '+' || line[0] == '-') && !strncmp(line + 1, "setting", 7) && (line[8] == ' ' || line[8] == '\t' || !line[8]);
 }
 
 static int hostSettingPickOr(const char *mod, const char *name, int fallback);

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define PLUGIN_API_VERSION 14
+#define PLUGIN_API_VERSION 15
 
 #define WRAP_PRIORITY_DEFAULT 0
 
@@ -125,6 +125,8 @@
 #define RITUAL_REASON_PLANE        (-7)
 #define RITUAL_ROW_CASTABLE        1000
 #define RITUAL_ROW_GREYED          12288
+#define CEREMONY_ROW_USABLE        10
+#define CEREMONY_ROW_GREYED        12288
 #define TARGET_USEFUL              1
 #define TARGET_NOT_AFFECTED        (-3)
 #define FILE_BROWSER_ROW_FIRST     10000
@@ -518,6 +520,8 @@ typedef enum {
     SITE_MODS_READ,
     SITE_RITUAL_CAN_CAST,
     SITE_RITUAL_LOCATION_CHECK,
+    SITE_CEREMONY_SCREEN_ROW,
+    SITE_CEREMONY_SCREEN_WAIT,
     SITE_COUNT
 } CallSite;
 

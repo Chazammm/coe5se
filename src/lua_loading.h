@@ -1,5 +1,8 @@
 #pragma once
 
+static int lTestFieldLoadoutState(lua_State *L);
+static int lSetTestFieldConfiguration(lua_State *L);
+
 #ifdef COE5SE_EXTRA_LUA_HEADER
 #include COE5SE_EXTRA_LUA_HEADER
 #else
@@ -7,6 +10,16 @@
 #endif
 
 static const luaL_Reg LUA_COE5[] = {
+    {"testBattle", lTestBattle}, {"openTestField", lOpenTestField}, {"testFieldTerrains", lTestFieldTerrains},
+    {"removeTestFieldUnit", lRemoveTestFieldUnit}, {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
+    {"testFieldState", lTestFieldState}, {"testFieldUnitState", lTestFieldUnitState}, {"testFieldPointerButtons", lTestFieldPointerButtons},
+    {"testFieldSpellState", lTestFieldSpellState}, {"memorizeTestFieldSpell", lMemorizeTestFieldSpell}, {"testFieldLifecycle", lTestFieldLifecycle},
+    {"testFieldFootprint", lTestFieldFootprint}, {"testFieldPlacementPreflight", lTestFieldPlacementPreflight},
+    {"inspectTestFieldUnit", lInspectTestFieldUnit}, {"inspectTestFieldItem", lInspectTestFieldItem}, {"testFieldFinalState", lTestFieldFinalState},
+    {"inspectTestFieldFinalUnit", lInspectTestFieldFinalUnit}, {"setTestFieldTextFocus", lSetTestFieldTextFocus},
+    {"takeTestFieldTextEvents", lTakeTestFieldTextEvents}, {"battleView", lBattleView}, {"battleScreenToCell", lBattleScreenToCell},
+    {"battleCellToScreen", lBattleCellToScreen}, {"testFieldLoadoutState", lTestFieldLoadoutState},
+    {"setTestFieldConfiguration", lSetTestFieldConfiguration}, {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
@@ -23,7 +36,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"hideMainMenuButton", lHideMainMenuButton}, {"addScreen", lAddScreen}, {"rebindKey", lRebindKey},
     {"addActionKey", lAddActionKey}, {"actionKey", lActionKey}, {"findMonster", lFindMonster},
     {"dataFolder", lDataFolder}, {"readIni", lReadIni}, {"writeIni", lWriteIni}, {"listIni", lListIni},
-    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"testBattle", lTestBattle}, {"openTestField", lOpenTestField}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"newUnits", lNewUnits},
+    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"newUnits", lNewUnits},
     {"monsterVariant", lMonsterVariant}, {"portalExits", lPortalExits}, {"onPortalCrossing", lOnPortalCrossing}, {"squareUnits", lSquareUnits}, {"revealMap", lRevealMap}, {"modEvents", lModEvents}, {"runModEvent", lRunModEvent}, {"centerMap", lCenterMap}, {"viewArmy", lViewArmy}, {"armies", lArmies}, {"route", lRoute},
     {"scrapRitualPlan", lScrapRitualPlan}, {"planRitual", lPlanRitual}, {"aiRitualBad", lAiRitualBad}, {"aiRitualBadTime", lAiRitualBadTime}, {"aiItemValue", lAiItemValue}, {"aiItemUseRating", lAiItemUseRating}, {"aiRandomEnemy", lAiRandomEnemy}, {"terrainMatch", lTerrainMatch},
     {"releaseFollower", lReleaseFollower}, {"transferFollower", lTransferFollower},
@@ -39,6 +52,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 static const luaL_Reg LUA_UI[] = {
+    {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
     {"screenBegin", lScreenBegin}, {"sectionBegin", lSectionBegin}, {"sectionEnd", lSectionEnd}, {"text", lText},
     {"checkbox", lCheckbox}, {"choice", lChoice}, {"tooltip", lTooltip}, {"buttonRow", lButtonRow},
     {"listBegin", lListBegin}, {"listRow", lListRow}, {"listEnd", lListEnd}, {"bindEscape", lBindEscape},
@@ -98,6 +112,7 @@ static const struct { const char *table, *name; int value; } GAME_NUMBERS[] = {
     {"ritual", "reasonImmortal", RITUAL_REASON_IMMORTAL}, {"ritual", "reasonMastery", RITUAL_REASON_MASTERY},
     {"ritual", "reasonPlane", RITUAL_REASON_PLANE}, {"ritual", "rowCastable", RITUAL_ROW_CASTABLE},
     {"ritual", "rowGreyed", RITUAL_ROW_GREYED},
+    {"ceremony", "rowUsable", CEREMONY_ROW_USABLE}, {"ceremony", "rowGreyed", CEREMONY_ROW_GREYED},
     {"screen", "fileBrowserRowFirst", FILE_BROWSER_ROW_FIRST}, {"screen", "fileBrowserDelete", FILE_BROWSER_DELETE},
     {"screen", "squareInfoOk", SQUARE_INFO_OK},
     {"target", "useful", TARGET_USEFUL}, {"target", "notAffected", TARGET_NOT_AFFECTED},

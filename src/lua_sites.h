@@ -436,6 +436,8 @@ static const LuaSite luaSites[] = {
     {"UNIT_FLAGS",                    SITE_UNIT_FLAGS,                    K_CALL,    "u:i"},
     {"RITUAL_CAN_CAST",               SITE_RITUAL_CAN_CAST,               K_CALL,    "i:ii"},
     {"RITUAL_LOCATION_CHECK",         SITE_RITUAL_LOCATION_CHECK,         K_CALL,    "i:iiii"},
+    {"CEREMONY_SCREEN_ROW",           SITE_CEREMONY_SCREEN_ROW,           K_CALL,    RITUAL_ROW_SIGNATURE},
+    {"CEREMONY_SCREEN_WAIT",          SITE_CEREMONY_SCREEN_WAIT,          K_CALL,    "i:ii"},
 };
 
 static int luaSiteGuardsReentry(CallSite site) {
@@ -677,7 +679,7 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
     }
     NextArgCheck checks[5];
     int n = 0;
-    if (ls->site == SITE_RITUAL_SCREEN_ROW) {
+    if (ls->site == SITE_RITUAL_SCREEN_ROW || ls->site == SITE_CEREMONY_SCREEN_ROW) {
         checks[n++] = (NextArgCheck){15, "mirrorMonster", LLONG_MIN, G32(RVA_MONSTER_COUNT)};
         checks[n++] = (NextArgCheck){4, "costType1", LLONG_MIN, RITUAL_COST_TYPE_MAX};
         checks[n++] = (NextArgCheck){6, "costType2", LLONG_MIN, RITUAL_COST_TYPE_MAX};
@@ -1101,7 +1103,12 @@ static u64 enterLuaWrap(void *gate, const LuaArgs *a) {
         return 0;
     }
     CallSite site = luaSites[w->site].site;
-    LuaArgs split;
+    LuaArgs split, ceremonyRow;
+    if (site == SITE_CEREMONY_SCREEN_ROW && (int)a->a[0] == 0) {
+        ceremonyRow = *a;
+        numberGreyedCeremonyRow(ceremonyRow.a);
+        a = &ceremonyRow;
+    }
     if (site == SITE_AI_SPLIT_ARMY) {
         split = *a;
         split.a[1] = (u64)(long long)splitMinUnits();

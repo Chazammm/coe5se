@@ -144,6 +144,12 @@ static int refusedTableLine(const char *line, size_t len, int mod, int level);
 static void popupTablesLeftOut(void);
 static void drawTablesLeftOut(void);
 static int spellLineHook(const char *line, size_t len, int mod, int level);
+static void *beginContentOriginLine(const char *line, int mod, int level);
+static void endContentOriginLine(void *token);
+static void contentOriginsBeforePass(int level);
+static void resetContentOriginPaths(void);
+static void noteContentOriginPath(int path, int mod, int created);
+static void noteContentOriginSpell(int spell, int mod, int created);
 static int healArmyLineHook(const char *line, size_t len, const char *args, int mod, int level);
 static void healArmyReset(void);
 static void healArmyBlockStored(int slot);
@@ -253,6 +259,9 @@ static int mainMenuWaiting;
 static int previewWorldAsked(void);
 static void dropUnusedPreviewAsk(void);
 static int previewFieldTakesEvent(const void *event);
+static int testFieldTextTakesEvent(const void *event);
+static void resetTestFieldText(void);
+static int testFieldTextPollReady;
 #define PREVIEW_EDIT_ADDS_MAX 16
 static int previewEditsArmed(int level);
 static const char *previewEditAtPass(const char *line, int mod, int *off, int *adds, int *addCount);
@@ -666,12 +675,15 @@ static int makeGameDataWritable(void *address, size_t size) {
 static int prepareSiteCode(CallSite site);
 static void gameStartPrepOnce(void), removeGameStartOnceJump(void);
 static unsigned char *generatedSiteCall(CallSite site), *generatedSiteTarget(CallSite site);
+static unsigned char *writtenSiteCall(CallSite site, int i);
 
 static int siteThroughSlot[SITE_COUNT];
 static unsigned char *siteCallAt(CallSite site, int i) {
     unsigned char *generated = generatedSiteCall(site);
     if (generated) return i == 0 ? generated : NULL;
-    return i < MAX_SITE_CALLS && SITES[site].rvas[i] ? gameBase + SITES[site].rvas[i] : NULL;
+    int own = 0;
+    while (own < MAX_SITE_CALLS && SITES[site].rvas[own]) own++;
+    return i < own ? gameBase + SITES[site].rvas[i] : writtenSiteCall(site, i - own);
 }
 static int topBarIncomeAsGame(int player, int resource, int income);
 static int squarePanelWrapAsGame(int right, int limit, int line);
@@ -1791,6 +1803,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "table_move.h"
 #include "spell_table.h"
 #include "spell_paths.h"
+#include "content_origin.h"
 #include "offset_names.h"
 #include "name_lists.h"
 #include "monster_flags.h"
@@ -1826,6 +1839,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "trace_filter.h"
 #include "trace_log_file.h"
 #include "seal_events.h"
+#include "ceremony_rows.h"
 #include "data_area_max.h"
 #include "map_editor.h"
 #include "top_bar_income.h"
@@ -1854,9 +1868,16 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "shop_offers.h"
 #include "rec_bonus.h"
 #include "lua_units.h"
+#include "lua_content_origin.h"
 #include "lua_data_files.h"
 #include "lua_test_battle.h"
+#include "lua_test_unit_state.h"
+#include "lua_battle_view.h"
+#include "lua_test_field_preview.h"
 #include "lua_ui.h"
+#include "lua_test_field_input.h"
+#include "lua_test_field_final.h"
+#include "lua_test_field_inspect.h"
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "read_filter.h"
@@ -1879,6 +1900,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_card.h"
 #include "item_slot_battle.h"
 #include "item_slot_weapons.h"
+#include "lua_test_field_loadout.h"
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
 #include "battle_replays.h"

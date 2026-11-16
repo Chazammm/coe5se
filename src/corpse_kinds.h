@@ -12,6 +12,8 @@
 #define RITUAL_FX_RAISE_ANIMALS    967
 #define RITUAL_FX_PUT_CORPSES      1070
 #define PUT_CORPSES_SCALED         10000
+#define FAR_RAISE_STAND_IN         1
+#define FAR_SUMMON_COMMANDER       (-1)
 #define RAISE_SUMMON_CONTROL       0x3e5
 #define RAISE_SUMMON_FAIL_PLAYER   0x18
 #define ABILITY_VOIDSANITY         99
@@ -100,11 +102,11 @@ static int putCorpseDiceCount(const CorpseAmount *a, int percent) {
 }
 
 enum { CORPSE_RULE_PUT, CORPSE_RULE_RAISE_DEAD, CORPSE_RULE_RAISE_ANIMALS, CORPSE_RULE_RAISE_CORPSES, CORPSE_RULE_DROPPED, CORPSE_RULE_NEED,
-       CORPSE_RULE_EXCLUDE, CORPSE_RULE_MAX_RAISE };
+       CORPSE_RULE_EXCLUDE, CORPSE_RULE_MAX_RAISE, CORPSE_RULE_FAR_RAISE_DEAD, CORPSE_RULE_FAR_RAISE_ANIMALS, CORPSE_RULE_FAR_RAISE_CORPSES };
 
 typedef struct {
     int ritual, type, occurrence, mask, custom, line;
-    int cap, commander, deadsAbove, animalsAbove, putsAbove, kindless;
+    int cap, commander, deadsAbove, animalsAbove, putsAbove, kindless, standIn;
     CorpseAmount amount;
     char mod[64], monster[MONSTER_NAME_SIZE];
 } CorpseRule;
@@ -442,6 +444,37 @@ static int currentCorpseRitual(const char *word, int mod) {
     return -1;
 }
 
+static int readRaiseKinds(const char *word, const char *args, const char *p, int mod, int type, int *mask, long long *cap) {
+    int custom = -1, read = readCorpseKind(&p, mask, &custom), hasCap = 0;
+    *cap = 0;
+    if (read < 0) {
+        refuseC5mLine(word, spellModName(mod), "unknown_corpse_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), unknownCorpseKindName);
+        return 0;
+    }
+    if (read > 0 && (skipSpaces(&p), !isLineEnd(p))) {
+        if (readSpellNumber(&p, cap)) hasCap = 1;
+        else read = 0;
+    }
+    if (!read || (skipSpaces(&p), !isLineEnd(p))) {
+        refuseC5mLine(word, spellModName(mod), "bad_kind", "line=%d text=%.40s", G32(RVA_MOD_LINE), args);
+        return 0;
+    }
+    if (hasCap && (*cap < 1 || *cap > CORPSE_RAISE_CAP_MAX)) {
+        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d value=%lld min=1 max=%d", G32(RVA_MOD_LINE), *cap, CORPSE_RAISE_CAP_MAX);
+        return 0;
+    }
+    if (custom >= 0) {
+        refuseC5mLine(word, spellModName(mod), "custom_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), customCorpseKinds[custom].name);
+        return 0;
+    }
+    if (*mask & ~(type == CORPSE_RULE_RAISE_DEAD ? CORPSE_MASK_HUMANOID : CORPSE_MASK_ANIMAL)) {
+        refuseC5mLine(word, spellModName(mod), type == CORPSE_RULE_RAISE_DEAD ? "not_humanoid" : "not_animal", "line=%d text=%.40s",
+                      G32(RVA_MOD_LINE), args);
+        return 0;
+    }
+    return 1;
+}
+
 static const char *corpseWordLineHook(const char *line, size_t len, int mod, int level) {
     if (level != 2) return line;
     static char rewritten[64];
@@ -452,18 +485,29 @@ static const char *corpseWordLineHook(const char *line, size_t len, int mod, int
     else if (len == 12 && !strncmp(line, "raiseanimals", len)) type = CORPSE_RULE_RAISE_ANIMALS, word = "raiseanimals";
     else return line;
     const char *p = line + len;
+    skipSpaces(&p);
+    if (type != CORPSE_RULE_PUT) {
+        if (isLineEnd(p)) return line;
+        int mask = 0;
+        long long cap = 0;
+        if (!readRaiseKinds(word, line + len, p, mod, type, &mask, &cap)) return NULL;
+        int ritual = currentCorpseRitual(word, mod);
+        if (ritual < 0) return NULL;
+        int id = type == CORPSE_RULE_RAISE_DEAD ? RITUAL_FX_RAISE_DEAD : RITUAL_FX_RAISE_ANIMALS;
+        if (!addCorpseRule(word, mod, type, ritualEffectCount(ritual, id), mask, -1, NULL)) return NULL;
+        corpseRules[corpseRuleCount - 1].cap = (int)cap;
+        snprintf(rewritten, sizeof rewritten, "%s", word);
+        return rewritten;
+    }
     long long n = 0;
     CorpseAmount amount = {0};
-    skipSpaces(&p);
-    if (type == CORPSE_RULE_PUT) {
-        int amountRead = readCorpseAmount(&p, &amount);
-        if (!amountRead) return line;
-        if (amountRead < 0 || (amount.count && !corpseDiceFit(&amount, 1))) {
-            refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.40s max=%d", G32(RVA_MOD_LINE), line + len, PUT_CORPSES_SCALED - 1);
-            return NULL;
-        }
-        n = amount.plus;
+    int amountRead = readCorpseAmount(&p, &amount);
+    if (!amountRead) return line;
+    if (amountRead < 0 || (amount.count && !corpseDiceFit(&amount, 1))) {
+        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.40s max=%d", G32(RVA_MOD_LINE), line + len, PUT_CORPSES_SCALED - 1);
+        return NULL;
     }
+    n = amount.plus;
     skipSpaces(&p);
     int kindless = isLineEnd(p);
     if (kindless && !amount.count) return line;
@@ -472,48 +516,25 @@ static const char *corpseWordLineHook(const char *line, size_t len, int mod, int
         refuseC5mLine(word, spellModName(mod), "unknown_corpse_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), unknownCorpseKindName);
         return NULL;
     }
-    long long cap = 0;
-    int hasCap = 0;
-    if (read > 0 && type != CORPSE_RULE_PUT && (skipSpaces(&p), !isLineEnd(p))) {
-        if (readSpellNumber(&p, &cap)) hasCap = 1;
-        else read = 0;
-    }
     if (!read || (skipSpaces(&p), !isLineEnd(p))) {
         refuseC5mLine(word, spellModName(mod), "bad_kind", "line=%d text=%.40s", G32(RVA_MOD_LINE), line + len);
         return NULL;
     }
-    if (hasCap && (cap < 1 || cap > CORPSE_RAISE_CAP_MAX)) {
-        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d value=%lld min=1 max=%d", G32(RVA_MOD_LINE), cap, CORPSE_RAISE_CAP_MAX);
-        return NULL;
-    }
-    if (custom >= 0 && type != CORPSE_RULE_PUT) {
-        refuseC5mLine(word, spellModName(mod), "custom_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), customCorpseKinds[custom].name);
-        return NULL;
-    }
-    int allowed = type == CORPSE_RULE_RAISE_DEAD ? CORPSE_MASK_HUMANOID : type == CORPSE_RULE_RAISE_ANIMALS ? CORPSE_MASK_ANIMAL : CORPSE_MASK_ALL;
-    if (mask & ~allowed) {
-        refuseC5mLine(word, spellModName(mod), type == CORPSE_RULE_RAISE_DEAD ? "not_humanoid" : "not_animal", "line=%d text=%.40s",
-                      G32(RVA_MOD_LINE), line + len);
-        return NULL;
-    }
-    if (type == CORPSE_RULE_PUT && custom < 0 && onlyCorpseKind(mask) < 0) {
+    if (custom < 0 && onlyCorpseKind(mask) < 0) {
         refuseC5mLine(word, spellModName(mod), "not_one_kind", "line=%d text=%.40s", G32(RVA_MOD_LINE), line + len);
         return NULL;
     }
-    if (type == CORPSE_RULE_PUT && !amount.count && n <= 0) {
+    if (!amount.count && n <= 0) {
         refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d value=%lld min=1", G32(RVA_MOD_LINE), n);
         return NULL;
     }
     int ritual = currentCorpseRitual(word, mod);
     if (ritual < 0) return NULL;
-    int id = type == CORPSE_RULE_PUT ? RITUAL_FX_PUT_CORPSES : type == CORPSE_RULE_RAISE_DEAD ? RITUAL_FX_RAISE_DEAD : RITUAL_FX_RAISE_ANIMALS;
-    if (!addCorpseRule(word, mod, type, ritualEffectCount(ritual, id), mask, custom, NULL)) return NULL;
+    if (!addCorpseRule(word, mod, type, ritualEffectCount(ritual, RITUAL_FX_PUT_CORPSES), mask, custom, NULL)) return NULL;
     CorpseRule *added = &corpseRules[corpseRuleCount - 1];
-    added->cap = (int)cap;
     if (amount.count) added->amount = amount, added->kindless = kindless;
-    if (type == CORPSE_RULE_PUT && amount.count) snprintf(rewritten, sizeof rewritten, "putcorpses 1");
-    else if (type == CORPSE_RULE_PUT) snprintf(rewritten, sizeof rewritten, "putcorpses %lld", n);
-    else snprintf(rewritten, sizeof rewritten, "%s", word);
+    if (amount.count) snprintf(rewritten, sizeof rewritten, "putcorpses 1");
+    else snprintf(rewritten, sizeof rewritten, "putcorpses %lld", n);
     return rewritten;
 }
 
@@ -578,44 +599,94 @@ static void corpseTypeLine(const char *word, const char *args, int mod, int leve
 static void corpsekindLine(const char *args, int mod, int level) { corpseTypeLine("corpsekind", args, mod, level); }
 static void corpsetypeLine(const char *args, int mod, int level) { corpseTypeLine("corpsetype", args, mod, level); }
 
-static void raisecorpsesLine(const char *args, int mod, int level) {
-    if (level != 2) return;
+typedef struct {
+    int mask, custom, commander;
+    long long cap;
+    char name[MONSTER_NAME_SIZE];
+} RaiseCorpsesArgs;
+
+static int readRaiseCorpses(const char *word, const char *args, int mod, RaiseCorpsesArgs *out) {
     const char *p = args;
-    int mask = 0, custom = -1;
-    char name[MONSTER_NAME_SIZE] = "";
+    memset(out, 0, sizeof *out);
+    out->custom = -1;
     skipSpaces(&p);
-    int ok = readCorpseKind(&p, &mask, &custom);
+    int ok = readCorpseKind(&p, &out->mask, &out->custom);
     if (ok < 0) {
-        refuseC5mLine("raisecorpses", spellModName(mod), "unknown_corpse_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), unknownCorpseKindName);
-        return;
+        refuseC5mLine(word, spellModName(mod), "unknown_corpse_kind", "line=%d name=%.63s", G32(RVA_MOD_LINE), unknownCorpseKindName);
+        return 0;
     }
     skipSpaces(&p);
-    int commander = 0;
-    long long cap = 0;
     if (ok && *p == '"') {
         const char *end = strchr(p + 1, '"');
         size_t prefix = sizeof COMMANDER_SUMMON_PREFIX - 1;
-        commander = end && !strncmp(p + 1, COMMANDER_SUMMON_PREFIX, prefix);
-        const char *start = p + 1 + (commander ? prefix : 0);
+        out->commander = end && !strncmp(p + 1, COMMANDER_SUMMON_PREFIX, prefix);
+        const char *start = p + 1 + (out->commander ? prefix : 0);
         size_t n = end ? (size_t)(end - start) : 0;
-        ok = end && end > start && n < sizeof name;
-        if (ok) memcpy(name, start, n), name[n] = '\0', p = end + 1;
+        ok = end && end > start && n < sizeof out->name;
+        if (ok) memcpy(out->name, start, n), out->name[n] = '\0', p = end + 1;
     } else ok = 0;
     skipSpaces(&p);
-    if (ok && !isLineEnd(p)) ok = readSpellNumber(&p, &cap) && cap >= 1 && cap <= CORPSE_RAISE_CAP_MAX;
+    if (ok && !isLineEnd(p)) ok = readSpellNumber(&p, &out->cap) && out->cap >= 1 && out->cap <= CORPSE_RAISE_CAP_MAX;
     skipSpaces(&p);
     if (!ok || !isLineEnd(p)) {
-        refuseC5mLine("raisecorpses", spellModName(mod), "bad_value", "line=%d text=%.60s", G32(RVA_MOD_LINE), args);
-        return;
+        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.60s", G32(RVA_MOD_LINE), args);
+        return 0;
     }
+    return 1;
+}
+
+static void raisecorpsesLine(const char *args, int mod, int level) {
+    if (level != 2) return;
+    RaiseCorpsesArgs a;
+    if (!readRaiseCorpses("raisecorpses", args, mod, &a)) return;
     int ritual = currentCorpseRitual("raisecorpses", mod);
     if (ritual < 0) return;
-    if (!addCorpseRule("raisecorpses", mod, CORPSE_RULE_RAISE_CORPSES, 0, mask, custom, name)) return;
+    if (!addCorpseRule("raisecorpses", mod, CORPSE_RULE_RAISE_CORPSES, 0, a.mask, a.custom, a.name)) return;
     CorpseRule *r = &corpseRules[corpseRuleCount - 1];
-    r->cap = (int)cap, r->commander = commander;
+    r->cap = (int)a.cap, r->commander = a.commander;
     r->deadsAbove = ritualEffectCount(ritual, RITUAL_FX_RAISE_DEAD);
     r->animalsAbove = ritualEffectCount(ritual, RITUAL_FX_RAISE_ANIMALS);
     r->putsAbove = ritualEffectCount(ritual, RITUAL_FX_PUT_CORPSES);
+}
+
+static CorpseRule *addFarRaiseRule(const char *word, int mod, int type, int mask, int custom, const char *monster) {
+    int ritual = currentCorpseRitual(word, mod);
+    if (ritual < 0) return NULL;
+    if (!addCorpseRule(word, mod, type, ritualEffectCount(ritual, RITUAL_FX_PUT_CORPSES), mask, custom, monster)) return NULL;
+    if (!addRitualWordEffect(ritual, RITUAL_FX_PUT_CORPSES, FAR_RAISE_STAND_IN)) {
+        corpseRuleCount--;
+        refuseC5mLine(word, spellModName(mod), "too_many_effects", "line=%d ritual=%.48s max=%d", G32(RVA_MOD_LINE),
+                      (const char *)ritualWordRecord(ritual), RITUAL_FX_MAX);
+        return NULL;
+    }
+    CorpseRule *r = &corpseRules[corpseRuleCount - 1];
+    r->standIn = 1;
+    return r;
+}
+
+static void farRaiseLine(const char *word, int type, const char *args, int mod, int level) {
+    if (level != 2) return;
+    int raise = type == CORPSE_RULE_FAR_RAISE_DEAD ? CORPSE_RULE_RAISE_DEAD : CORPSE_RULE_RAISE_ANIMALS;
+    int mask = raise == CORPSE_RULE_RAISE_DEAD ? CORPSE_MASK_HUMANOID : CORPSE_MASK_ANIMAL;
+    long long cap = 0;
+    const char *p = args;
+    skipSpaces(&p);
+    int kindless = isLineEnd(p);
+    if (!kindless && !readRaiseKinds(word, args, p, mod, raise, &mask, &cap)) return;
+    CorpseRule *r = addFarRaiseRule(word, mod, type, mask, -1, NULL);
+    if (r) r->cap = (int)cap, r->kindless = kindless;
+}
+static void farraisedeadLine(const char *args, int mod, int level) { farRaiseLine("farraisedead", CORPSE_RULE_FAR_RAISE_DEAD, args, mod, level); }
+static void farraiseanimalsLine(const char *args, int mod, int level) {
+    farRaiseLine("farraiseanimals", CORPSE_RULE_FAR_RAISE_ANIMALS, args, mod, level);
+}
+
+static void farraisecorpsesLine(const char *args, int mod, int level) {
+    if (level != 2) return;
+    RaiseCorpsesArgs a;
+    if (!readRaiseCorpses("farraisecorpses", args, mod, &a)) return;
+    CorpseRule *r = addFarRaiseRule("farraisecorpses", mod, CORPSE_RULE_FAR_RAISE_CORPSES, a.mask, a.custom, a.name);
+    if (r) r->cap = (int)a.cap, r->commander = a.commander;
 }
 
 static void needcorpsesLine(const char *args, int mod, int level) {
@@ -742,8 +813,9 @@ static void corpseWordsAfterPass(int level) {
     if (level != 2) return;
     for (int i = 0; i < corpseRuleCount; i++) {
         CorpseRule *r = &corpseRules[i];
-        if (r->type != CORPSE_RULE_RAISE_CORPSES || monsterByName(r->monster) >= 0) continue;
-        refuseC5mLine("raisecorpses", r->mod, "unknown_monster", "line=%d monster=%.48s", r->line, r->monster);
+        int distant = r->type == CORPSE_RULE_FAR_RAISE_CORPSES;
+        if ((r->type != CORPSE_RULE_RAISE_CORPSES && !distant) || monsterByName(r->monster) >= 0) continue;
+        refuseC5mLine(distant ? "farraisecorpses" : "raisecorpses", r->mod, "unknown_monster", "line=%d monster=%.48s", r->line, r->monster);
         r->type = CORPSE_RULE_DROPPED;
     }
 }
@@ -951,6 +1023,7 @@ static SenseDeadTextFn senseDeadTextGame;
 static int (*corpseRandom)(int), (*corpseOpenDie)(int), (*corpseMindless)(int);
 static int (*corpseAbilityTotal)(int, int, int, char *, int, int *);
 static int (*corpseSummon)(int, const char *, int, int, int);
+static int (*corpseFarSummon)(int, const char *, int, int, int, int);
 static void (*corpseSendSquare)(int, int, int);
 static uint64_t (*corpseProgressText)(int, const char *, ...);
 static void (*corpsePlaySample)(int, int);
@@ -1040,10 +1113,17 @@ static int castRaiseCap(const CorpseCast *cast, int cap) {
     return cap > 0 && cap < room ? cap : room;
 }
 
-static void runRaiseCorpsesLine(CorpseCast *cast, const CorpseRule *r) {
+static void farRaiseSummon(int unit, const char *name, int count, int commander, int player, int x, int y) {
+    for (int left = count; left > 0;) {
+        int n = commander ? 1 : left < SUMMON_AT_SQUARE_COUNT_MAX ? left : SUMMON_AT_SQUARE_COUNT_MAX;
+        corpseFarSummon(unit, name, commander ? FAR_SUMMON_COMMANDER : n, player, x, y);
+        left -= n;
+    }
+}
+
+static void raiseCorpsesOn(CorpseCast *cast, const CorpseRule *r, int x, int y, int farPlayer) {
     int unit = cast->unit;
     if (unit < 0 || unit >= UNIT_TABLE_MAX) return;
-    int x = G32(RVA_UNIT_X + (size_t)unit * UNIT_SIZE), y = G32(RVA_UNIT_X + 4 + (size_t)unit * UNIT_SIZE);
     short *corpses = squareCorpses(x, y);
     int mask = cast->human ? r->mask : CORPSE_MASK_ALL, custom = cast->human ? r->custom : -1, cap = castRaiseCap(cast, r->cap);
     if (cap < 0) return;
@@ -1063,11 +1143,18 @@ static void runRaiseCorpsesLine(CorpseCast *cast, const CorpseRule *r) {
     takeSelectedCorpses(corpses, mask, custom, raised);
     putExcludedCorpsesBack(corpses, &excluded);
     corpseSendSquare((short)G16(RVA_UNIT_PLAYER + (size_t)unit * UNIT_SIZE), x, y);
-    if (r->commander)
+    if (farPlayer >= 0) farRaiseSummon(unit, r->monster, raised, r->commander, farPlayer, x, y);
+    else if (r->commander)
         for (int i = 0; i < raised; i++) corpseSummon(unit, r->monster, RAISE_SUMMON_CONTROL, COMMANDER_SUMMON_COUNT, RAISE_SUMMON_FAIL_PLAYER);
     else corpseSummon(unit, r->monster, RAISE_SUMMON_CONTROL, raised, RAISE_SUMMON_FAIL_PLAYER);
     int root = gameSquareRoot(raised);
     addInsanity(unit, root + 1 + corpseOpenDie(root * 2));
+}
+
+static void runRaiseCorpsesLine(CorpseCast *cast, const CorpseRule *r) {
+    int unit = cast->unit;
+    if (unit < 0 || unit >= UNIT_TABLE_MAX) return;
+    raiseCorpsesOn(cast, r, G32(RVA_UNIT_X + (size_t)unit * UNIT_SIZE), G32(RVA_UNIT_X + 4 + (size_t)unit * UNIT_SIZE), -1);
 }
 
 static void runWaitingRaiseCorpses(CorpseCast *cast, int type, int prior) {
@@ -1172,6 +1259,106 @@ static int corpseRaiseAnimals(int commander) {
     return corpseRaise(raiseAnimalsGame, commander, CORPSE_RULE_RAISE_ANIMALS, cast ? &cast->raiseAnimals : NULL);
 }
 
+// ---- Far raises: farraisedead, farraiseanimals and farraisecorpses on the ritual's target square ----------
+#define TERRAIN_PYRAMIDS           165
+#define TERRAIN_SPHINX             166
+
+typedef struct {
+    int kind, upToAll;
+    const char *first, *second;
+} RaisePair;
+static const RaisePair RAISE_DEAD_PAIRS[] = {
+    {CORPSE_KIND_HUMAN, 1, "Longdead", "Soulless"},
+    {CORPSE_KIND_SMALL, 0, "Little Longdead", "Little Soulless"},
+    {CORPSE_KIND_GIANT, 0, "Longdead Giant", "Soulless Giant"},
+    {CORPSE_KIND_VANARA, 0, "Longdead Vanara", "Soulless Vanara"},
+    {CORPSE_KIND_BANDAR, 0, "Longdead Bandar", "Soulless Bandar"},
+};
+static const RaisePair RAISE_ANIMALS_PAIRS[] = {
+    {CORPSE_KIND_SMALL_ANIMAL, 1, "Longdead Animal", "Restless Carcass"},
+    {CORPSE_KIND_LARGE_ANIMAL, 1, "Longdead Beast", "Carcass Beast"},
+    {CORPSE_KIND_MARKATA, 1, "Longdead Markata", "Soulless Markata"},
+};
+#define RAISE_PAIRS_MAX 5
+
+static int farRaisePlayer(const CorpseCast *cast, int occurrence) {
+    int caster = (short)G16(RVA_UNIT_PLAYER + (size_t)cast->unit * UNIT_SIZE), player = caster, puts = 0;
+    unsigned char *record = ritualWordRecord(cast->ritual);
+    for (int s = 0; s < RITUAL_FX_MAX && ritualWordEffect(record, s)[0]; s++) {
+        const long long *fx = ritualWordEffect(record, s);
+        if (fx[0] == RITUAL_FX_PUT_CORPSES && puts++ == occurrence) break;
+        if (fx[0] == RITUAL_FX_SETPLAYER) player = fx[1] == -1 ? caster : (int)fx[1];
+    }
+    return player;
+}
+
+static void farRaiseVanilla(CorpseCast *cast, const CorpseRule *r, int player, int x, int y) {
+    int animals = r->type == CORPSE_RULE_FAR_RAISE_ANIMALS, unit = cast->unit;
+    int group = animals ? CORPSE_MASK_ANIMAL : CORPSE_MASK_HUMANOID, mask = (cast->human ? r->mask : group) & group;
+    int cap = castRaiseCap(cast, r->cap);
+    short *corpses = squareCorpses(x, y);
+    if (cap < 0 || !corpses) return;
+    fitCustomCorpses(corpses);
+    CorpsesAside excluded;
+    setExcludedCorpsesAside(cast, corpses, &excluded);
+    short seen[SQUARE_CORPSE_KINDS] = {0}, aside[SQUARE_CORPSE_KINDS] = {0};
+    for (int k = 0; k < SQUARE_CORPSE_KINDS; k++)
+        if (mask & 1 << k) seen[k] = corpses[k];
+    if (cap > 0) capCorpses(seen, mask, cap, aside);
+    if (!countCorpses(seen, mask)) {
+        putExcludedCorpsesBack(corpses, &excluded);
+        if (cast->holdsFailures) {
+            cast->heldFailure = 1;
+            return;
+        }
+        corpsePlaySample(RAISE_FAILED_SAMPLE, 0);
+        corpseProgressText(4000, animals ? "Ritual failed due to no animal corpses found." : "Ritual failed due to no humanoid corpses found.");
+        return;
+    }
+    const RaisePair *pairs = animals ? RAISE_ANIMALS_PAIRS : RAISE_DEAD_PAIRS;
+    int count = animals ? (int)(sizeof RAISE_ANIMALS_PAIRS / sizeof RAISE_ANIMALS_PAIRS[0]) : (int)(sizeof RAISE_DEAD_PAIRS / sizeof RAISE_DEAD_PAIRS[0]);
+    int firsts[RAISE_PAIRS_MAX] = {0}, seconds[RAISE_PAIRS_MAX] = {0}, total = 0;
+    for (int i = 0; i < count; i++) {
+        int n = seen[pairs[i].kind];
+        if (n <= 0) continue;
+        firsts[i] = corpseRandom(pairs[i].upToAll ? n + 1 : n);
+        if (n - firsts[i] > 0) seconds[i] = corpseRandom(n - firsts[i]) + 1;
+    }
+    short terrain;
+    memcpy(&terrain, gameBase + RVA_SQUARE_RECORDS + ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE + SQUARE_TERRAIN_TYPE, 2);
+    if (!animals && (terrain == TERRAIN_PYRAMIDS || terrain == TERRAIN_SPHINX)) firsts[0] += seconds[0], seconds[0] = 0;
+    for (int i = 0; i < count; i++) {
+        corpses[pairs[i].kind] = (short)(corpses[pairs[i].kind] - firsts[i] - seconds[i]);
+        total += firsts[i] + seconds[i];
+    }
+    fitCustomCorpses(corpses);
+    putExcludedCorpsesBack(corpses, &excluded);
+    cast->raisedAny = 1;
+    cast->raisedTotal += total;
+    corpseSendSquare((short)G16(RVA_UNIT_PLAYER + (size_t)unit * UNIT_SIZE), x, y);
+    for (int i = 0; i < count; i++) {
+        farRaiseSummon(unit, pairs[i].first, firsts[i], 0, player, x, y);
+        farRaiseSummon(unit, pairs[i].second, seconds[i], 0, player, x, y);
+    }
+    if (animals) addInsanity(unit, corpseOpenDie(total / 2) + 2);
+    else {
+        int root = gameSquareRoot(total);
+        addInsanity(unit, root + 1 + corpseOpenDie(root * 2));
+    }
+}
+
+static const CorpseRule *farRaiseAt(int ritual, int occurrence) {
+    for (int i = 0; i < corpseRuleCount; i++)
+        if (corpseRules[i].ritual == ritual && corpseRules[i].standIn && corpseRules[i].occurrence == occurrence) return &corpseRules[i];
+    return NULL;
+}
+
+static int ritualHasFarRaise(int ritual) {
+    for (int i = 0; i < corpseRuleCount; i++)
+        if (corpseRules[i].ritual == ritual && corpseRules[i].standIn && corpseRules[i].type != CORPSE_RULE_DROPPED) return 1;
+    return 0;
+}
+
 static const char *corpsePutText(int x, int y) {
     CorpseCast *cast = currentCorpseCast();
     int occurrence = cast ? cast->puts++ : -1;
@@ -1181,6 +1368,15 @@ static const char *corpsePutText(int x, int y) {
     long long n = value >= PUT_CORPSES_SCALED ? (value - PUT_CORPSES_SCALED) * cast->percent / 100 : value;
     int added = n <= 0 ? 0 : n < corpses[CORPSE_KIND_HUMAN] ? (int)n : corpses[CORPSE_KIND_HUMAN];
     corpses[CORPSE_KIND_HUMAN] = (short)(corpses[CORPSE_KIND_HUMAN] - added);
+    const CorpseRule *distant = farRaiseAt(cast->ritual, occurrence);
+    if (distant) {
+        runWaitingRaiseCorpses(cast, CORPSE_RULE_PUT, occurrence);
+        if (cast->unit < 0 || cast->unit >= UNIT_TABLE_MAX) return squareTextGame(x, y);
+        int player = farRaisePlayer(cast, occurrence);
+        if (distant->type == CORPSE_RULE_FAR_RAISE_CORPSES) raiseCorpsesOn(cast, distant, x, y, player);
+        else if (distant->type != CORPSE_RULE_DROPPED) farRaiseVanilla(cast, distant, player, x, y);
+        return squareTextGame(x, y);
+    }
     const CorpseRule *rule = corpseRuleFor(cast->ritual, CORPSE_RULE_PUT, occurrence);
     if (rule && rule->amount.count) added = putCorpseDiceCount(&rule->amount, cast->percent);
     runWaitingRaiseCorpses(cast, CORPSE_RULE_PUT, occurrence);
@@ -1199,6 +1395,7 @@ static CanCastFn nextCorpseCanCast;
 static int ritualRaiseFindsCorpses(int commander, int ritual) {
     short *corpses = commanderCorpses(commander);
     if (!corpses) return 1;
+    if (ritualHasFarRaise(ritual)) return 1;
     CorpseCast cast = {.ritual = ritual, .unit = G32(RVA_COMMANDERS + (size_t)commander * COMMANDER_SIZE), .human = 1, .percent = 100};
     int raises = 0;
     for (int t = 0; t < 2; t++) {
@@ -1332,6 +1529,10 @@ static int pointCorpseCall(const CorpseCall *c, int index) {
 }
 #endif
 
+#ifndef COE5SE_CORPSE_LEAVE_HOOK
+#define COE5SE_CORPSE_LEAVE_HOOK corpseLeave
+#endif
+
 static void corpseKindsInit(void) {
     executeRitualGame = GAME_FN(ExecuteRitualFn, RVA_EXECUTE_RITUAL);
     raiseDeadGame = GAME_FN(RaiseFn, RVA_RAISE_DEAD);
@@ -1345,16 +1546,19 @@ static void corpseKindsInit(void) {
     corpseMindless = GAME_FN(int (*)(int), RVA_UNIT_MINDLESS);
     corpseAbilityTotal = GAME_FN(int (*)(int, int, int, char *, int, int *), RVA_UNIT_ABILITY_TOTAL);
     corpseSummon = GAME_FN(int (*)(int, const char *, int, int, int), RVA_RITUAL_SUMMON_UNITS);
+    corpseFarSummon = GAME_FN(int (*)(int, const char *, int, int, int, int), RVA_SUMMON_AT_SQUARE);
     corpseSendSquare = GAME_FN(void (*)(int, int, int), RVA_NET_SEND_SQUARE);
     corpseProgressText = GAME_FN(uint64_t (*)(int, const char *, ...), RVA_PROGRESS_TEXT);
     corpsePlaySample = GAME_FN(void (*)(int, int), RVA_PLAY_SAMPLE);
     int words = apiAddModCommand("corpsetype", corpsetypeLine) + apiAddModCommand("corpsekind", corpsekindLine) +
                 apiAddModCommand("raisecorpses", raisecorpsesLine) + apiAddModCommand("newcorpsetype", newcorpsetypeLine) +
                 apiAddModCommand("newcorpsekind", newcorpsekindLine) + apiAddModCommand("needcorpses", needcorpsesLine) +
-                apiAddModCommand("excludecorpses", excludecorpsesLine) + apiAddModCommand("maxraise", maxraiseLine);
+                apiAddModCommand("excludecorpses", excludecorpsesLine) + apiAddModCommand("maxraise", maxraiseLine) +
+                apiAddModCommand("farraisedead", farraisedeadLine) + apiAddModCommand("farraiseanimals", farraiseanimalsLine) +
+                apiAddModCommand("farraisecorpses", farraisecorpsesLine);
     static const CorpseCall CALLS[] = {
-        {RVA_DAMAGE_LEAVE_CORPSE_CALL, RVA_UNIT_LEAVE_CORPSE, (void *)corpseLeave, "damage_leave_corpse"},
-        {RVA_HP_LOSS_LEAVE_CORPSE_CALL, RVA_UNIT_LEAVE_CORPSE, (void *)corpseLeave, "hp_loss_leave_corpse"},
+        {RVA_DAMAGE_LEAVE_CORPSE_CALL, RVA_UNIT_LEAVE_CORPSE, (void *)COE5SE_CORPSE_LEAVE_HOOK, "damage_leave_corpse"},
+        {RVA_HP_LOSS_LEAVE_CORPSE_CALL, RVA_UNIT_LEAVE_CORPSE, (void *)COE5SE_CORPSE_LEAVE_HOOK, "hp_loss_leave_corpse"},
         {RVA_RITUAL_RAISE_DEAD_CALL, RVA_RAISE_DEAD, (void *)corpseRaiseDead, "ritual_raise_dead"},
         {RVA_RITUAL_RAISE_ANIMALS_CALL, RVA_RAISE_ANIMALS, (void *)corpseRaiseAnimals, "ritual_raise_animals"},
         {RVA_RITUAL_PUT_CORPSES_TEXT_CALL, RVA_SQUARE_TEXT, (void *)corpsePutText, "ritual_put_corpses"},
@@ -1368,6 +1572,6 @@ static void corpseKindsInit(void) {
         cast = wrapSite(SITE_EXECUTE_RITUAL, (void *)corpseExecuteRitual, (void **)&nextCorpseExecute);
         canCast = wrapSite(SITE_RITUAL_SCREEN_CAN_CAST, (void *)corpseScreenCanCast, (void **)&nextCorpseCanCast);
     }
-    writeResultLog(words == 8 && calls == count && cast && newWorld && canCast, "corpse_kinds_installed",
-                   "words=%d of 8 calls=%d of %d cast=%d new_world=%d can_cast=%d", words, calls, count, cast, newWorld, canCast);
+    writeResultLog(words == 11 && calls == count && cast && newWorld && canCast, "corpse_kinds_installed",
+                   "words=%d of 11 calls=%d of %d cast=%d new_world=%d can_cast=%d", words, calls, count, cast, newWorld, canCast);
 }

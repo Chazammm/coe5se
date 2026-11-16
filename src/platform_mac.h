@@ -4,6 +4,7 @@
 #include <dlfcn.h>
 #include <fnmatch.h>
 #include <mach-o/dyld.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -249,6 +250,12 @@ static PLATFORM_UNUSED BOOL GetModuleHandleExA(DWORD flags, LPCSTR address, HMOD
     Dl_info info;
     *out = dladdr(address, &info) ? info.dli_fbase : NULL;
     return *out != NULL;
+}
+
+static PLATFORM_UNUSED DWORD GetCurrentThreadId(void) {
+    uint64_t id = 0;
+    pthread_threadid_np(NULL, &id);
+    return (DWORD)id;
 }
 
 #ifndef PLATFORM_NO_DLLMAIN

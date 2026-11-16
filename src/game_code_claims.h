@@ -25,6 +25,12 @@ static const char *gameCodeRangeOwner(unsigned rva, unsigned size) {
         for (int k = 0; k < MAX_SITE_CALLS && SITES[s].rvas[k]; k++)
             if (codeRangesOverlap(rva, size, SITES[s].rvas[k], SITE_CALL_BYTES)) return SITES[s].name;
     if (codeRangesOverlap(rva, size, RVA_SEAL_EVENT_SWITCH, SEAL_SWITCH_BYTES)) return "seal_events";
+#ifndef __APPLE__
+    static const unsigned CEREMONY_ROW_JUMPS[] = {RVA_CEREMONY_ROW_WORSHIPPED, RVA_CEREMONY_ROW_NOT_SETTLEMENT, RVA_CEREMONY_ROW_SEAL,
+                                                  RVA_CEREMONY_ROW_SEALS_BROKEN, RVA_CEREMONY_ROW_FAVOR};
+    for (size_t i = 0; i < sizeof CEREMONY_ROW_JUMPS / sizeof CEREMONY_ROW_JUMPS[0]; i++)
+        if (codeRangesOverlap(rva, size, CEREMONY_ROW_JUMPS[i], 5)) return "ceremony_rows";
+#endif
     return NULL;
 }
 

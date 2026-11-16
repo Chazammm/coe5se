@@ -761,6 +761,7 @@ static void modsRunHook(int level) {
     aiClassBeforePass(level);
     modEventsBeforePass(level);
     contentWritesBeforePass(level);
+    contentOriginsBeforePass(level);
     nextModsRun(level);
     finishReading();
     spellsAfterPass(level, spellPasses);

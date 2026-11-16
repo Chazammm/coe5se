@@ -89,6 +89,7 @@ static int checkGameStartOnceCode(void);
 static int installTopBarIncomeDraws(void);
 static int installSquarePanelIcons(void);
 static int installComputedHook(CallSite site);
+static int patchCeremonyRowCopies(void);
 static int prepareSiteCode(CallSite site) {
     if (site == SITE_TOP_BAR_INCOME) return installTopBarIncomeDraws();
     if (site == SITE_SQUARE_PANEL_WRAP) return installSquarePanelIcons();
@@ -97,6 +98,7 @@ static int prepareSiteCode(CallSite site) {
     if (site == SITE_GAME_START) return checkGameStartOnceCode();
     if (site == SITE_AI_SPLIT_ARMY) return checkSplitMinUnitsCode();
     if (site == SITE_SEAL_EVENT) return patchSealEventStep();
+    if (site == SITE_CEREMONY_SCREEN_ROW) return patchCeremonyRowCopies();
     return 1;
 }
 #endif
