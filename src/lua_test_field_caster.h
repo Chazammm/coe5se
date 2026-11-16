@@ -100,6 +100,10 @@ static const char *testFieldCasterRead(int unit, TestFieldCasterSnapshot *s) {
     return testFieldCasterValidate(unit, s);
 }
 
+static const char *testFieldSpellSnapshotProblem(int unit) {
+    TestFieldCasterSnapshot s;
+    return testFieldCasterRead(unit, &s);
+}
 
 static void testFieldCasterInt(lua_State *L, const char *key, lua_Integer value) {
     lua_pushinteger(L, value); lua_setfield(L, -2, key);

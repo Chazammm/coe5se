@@ -253,6 +253,11 @@ static int mainMenuWaiting;
 static int previewWorldAsked(void);
 static void dropUnusedPreviewAsk(void);
 static int previewFieldTakesEvent(const void *event);
+#ifndef __APPLE__
+static int testFieldTextTakesEvent(const void *event);
+static void testFieldTextReset(void);
+static int testFieldTextPollReady;
+#endif
 #define PREVIEW_EDIT_ADDS_MAX 16
 static int previewEditsArmed(int level);
 static const char *previewEditAtPass(const char *line, int mod, int *off, int *adds, int *addCount);
@@ -1863,7 +1868,16 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_editor.h"
 #include "lua_test_unit_state.h"
 #endif
+#ifndef __APPLE__
+#include "lua_battle_view.h"
+#include "lua_test_field_preview.h"
+#endif
 #include "lua_ui.h"
+#ifndef __APPLE__
+#include "lua_test_field_input.h"
+#include "lua_test_field_final.h"
+#include "lua_test_field_inspect.h"
+#endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "read_filter.h"
@@ -1984,6 +1998,12 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_MAP_EDITOR)) installMapEditorHooks();
 #ifndef __APPLE__
     // Owned-field hooks install only when a caller explicitly opens a test field.
+    testFieldExtensions.begin = testFieldFinalBegin;
+    testFieldExtensions.finish = testFieldFinalFinish;
+    testFieldExtensions.reset = testFieldFinalReset;
+    testFieldExtensions.readOnly = testFieldFinalViewActive;
+    testFieldExtensions.resetInput = testFieldTextReset;
+
 #endif
     if (featureOn(FEATURE_COMMANDER_LINES)) installCommanderLineHooks();
 #ifndef __aarch64__

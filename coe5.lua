@@ -5213,3 +5213,190 @@ function coe5.memorizeTestFieldSpell(unit, spell, on) end
 ---@return table|nil lifecycle
 ---@return string|nil reason
 function coe5.testFieldLifecycle() end
+
+---Experimental Windows 5.43 read-only geometry for the owning mod's idle main-menu TestField.
+---For a monster template, follows native fixed-size flags and native frame-size fallback; no
+---temporary unit is created. With unit, validates the living owned generation and measures its
+---CURRENT native monster, which overrides monster and reflects transformations. Width/height are
+---1..3 cells extending towards positive X/Y from the lower-left anchor. Items and HP are not inputs
+---to the native size getters. Native dimension metadata caches may be populated, but no units,
+---RNG, scenario records or drawing operations are changed. exact describes CURRENT geometry,
+---not validity of a placement or a promise that a future spawn variant will have that geometry.
+---@param monster integer used monster ID
+---@param unit? integer optional concrete TestField instance, or -1 for the template
+---@return table|nil footprint {monster,unit,width,height,source,anchor,exact,instance,spawnVariantVerified}
+---@return string|nil reason
+function coe5.testFieldFootprint(monster, unit) end
+
+---Experimental read-only full-footprint geometry/occupancy check. Same ownership/idle guards as
+---testFieldFootprint; additionally requires BATTLE_DRAW/BATTLE_WAIT including post-next Lua wraps
+---for a current camera. There is no last-drawn-frame exception for this preview API.
+---Optional unit selects current instance geometry; ignoreSelf=true excludes only that instance
+---from occupancy, suitable for Move. Copy must leave ignoreSelf false. Native units and terrain
+---object handles are checked over every covered cell, with validated handles before size reads.
+---Each cell status is clear/occupied/terrain/out_of_bounds/unknown. screenX/screenY are UI centres
+---using the native view transformation, also for adjacent out-of-bounds red edge cells; anchors
+---are bounded to -3..fieldWidth+3 and -3..fieldHeight+3. No out-of-bounds grid reads occur.
+---Always partial=true, reason=geometry_and_occupancy_only: valid=true only means all measured cells
+---are in bounds and have no known occupancy. Ground/special placement rules and future variants
+---are not fully proven; actual native placement remains authoritative. No temporary units/writes.
+---@param monster integer
+---@param x integer lower-left anchor
+---@param y integer lower-left anchor
+---@param unit? integer concrete instance, or -1
+---@param ignoreSelf? boolean default false; true requires unit
+---@return table|nil preview footprint fields plus {valid:boolean,partial:boolean,reason:string,cells:table[]}
+---@return string|nil reason refusal code; preview.reason instead describes a successful partial check
+function coe5.testFieldPlacementPreflight(monster, x, y, unit, ignoreSelf) end
+
+---Experimental genuine native unit card for one owned living TestField generation, READ-ONLY.
+---Requires main thread, owning idle main-menu field, installed input hook and a valid caster
+---snapshot BEFORE opening. Allowed within BATTLE_WAIT or after drawTestField has returned for the
+---SAME lifecycle session; a new field is refused before its first frame has been drawn.
+---Uses native viewer=-1/mode=2/ciok=0: owner-only mutators are unavailable and Exit skips the native
+---chooseMemorized finalizer. The native show-all-spells UI flag is borrowed then restored so both
+---teams' actual known/memorized lists can be viewed. This is the selected instance, not a template.
+---The entry fanpatch can still normalize spell arrays. A pure known/memorized change is restored
+---exactly only when identity and ALL other unit-record bytes remain unchanged; no whole-record
+---restore occurs. Unexpected other changes, replaced identity or failed readback return failure
+---and must stop editing until inspected/recovered. Never treat a failed call as verified RO.
+---Clears owned pending input and consumes held closing-key tails. Lua UI must also wait for
+---physical mouse release before processing another editor action. No editable mode is exposed.
+---@param unit integer
+---@param options? {readOnly?:boolean} defaults true; false is refused
+---@return boolean verified
+---@return table|string detailsOrReason success details; refusal code on failure
+---@return table|nil details failure-after-card details, otherwise omitted
+function coe5.inspectTestFieldUnit(unit, options) end
+
+---LOCAL EXPERIMENT: genuine native item metadata card, not an editable unit card.
+---Owned open main-menu test field only; not in simulation/final view/reentrant Inspect.
+---Windows 5.43 code match and native input hook required; loaded item ID checked.
+---Preserves RNG indices and consumes closing input. Caller must verify all owned unit state
+---after return; readOnly/source alone do not claim a verified complete field snapshot.
+---@param item integer
+---@return boolean opened
+---@return table|string detail {source='native_item_card',readOnly=true} or refusal
+function coe5.inspectTestFieldItem(item) end
+
+---Experimental Windows 5.43 final UNIT/CELL snapshot of the caller's own TestField. Main thread,
+---same still-open lifecycle session, after fightTestField returns. Capture occurs after all 75
+---native aftermath ticks, immediately BEFORE afterFightUpkeep. Native upkeep, temporary-unit
+---removal and grid clearing still run unchanged. This does not retain/recreate the native scene.
+---source is post_aftermath_before_upkeep. captured says the boundary was reached; complete means
+---all current owned generations and every in-bounds cell were read/validated at that boundary.
+---sceneComplete is ALWAYS false: projectiles, effects, animation, sound and transition history
+---are not captured. Missing/unsafe evidence is explicit in issues; never infer missing positions.
+---A stopped/aborted fight that did not reach the boundary returns an unavailable, incomplete
+---snapshot with captured=false, rather than presenting an empty final field as complete.
+---units is sorted by native ID and includes tracked actors AND terrain objects, including dead
+---and off-field records: {unit,generation,kind,readable,hp,alive,monster,sprite,owner,team,worldX,
+---worldY,width,height,anchorCount,anchors,occupied,status,createdMonster,createdOwner,
+---createdDuringFight,ownerChanged,monsterChanged,identityMatches,currentHP,currentAlive,
+---currentMonster,currentOwner,inspectable,inspectReason,anchorLayer,occupiedSource}. kind is
+---actor/terrain; status is on_field/off_field/dead/unverified. Anchors use named {x,y} fields.
+---For primary-layer actors, occupied is verified by native battleUnitAt over the full footprint.
+---Terrain objects have actual object-layer anchors and native dimensions, but occupied is empty;
+---object_layer_has_no_unit_hit_footprint explicitly marks the unavailable actor-hit footprint.
+---No routed position is reconstructed: routeStatus=not_classified; nativeFleeMarker only reports
+---a raw marker. createdDuringFight identifies a new owned generation, not a proven summon cause.
+---hp/alive/monster/owner describe capture time. current* and inspectable describe later native
+---readback; a captured living temporary summon may already be removed_after_capture. Use
+---inspectTestFieldFinalUnit only when inspectable, and label that card as CURRENT native state.
+---grid contains every width*20 cell in column-first order: {x,y,unit,object,flags,ground,hit}.
+---issues is capped at 256 entries; issueCount is the total and issuesTruncated reports the cap.
+---The final view is read-only until close/rebuild; Back/Reset/Rematch must use the separately
+---preserved original scenario. Snapshot reads never copy actor records, revive units, or repair
+---the native grid. Close/new open invalidates this snapshot and its saved native handles.
+---@return table|nil state {source:string,phase:string,captured:boolean,complete:boolean,sceneComplete:boolean,coverage:string,session:integer,width:integer,height:integer,round:integer,winner:integer,units:table[],grid:table[],issues:table[],issueCount:integer,issuesTruncated:boolean}
+---@return string|nil reason windows_only, game_code_differs, not_open, not_owner, in_fight, no_final_state
+function coe5.testFieldFinalState() end
+
+---Experimental genuine READ-ONLY native card for a visible actor in testFieldFinalState. This
+---views the CURRENT living native record, not historical snapshot HP, equipment, spells, form or
+---owner. Requires the same owned lifecycle/generation, a captured living actor with one actual
+---anchor, and the same drawn-frame/input-hook guards as inspectTestFieldUnit. Terrain objects,
+---dead/off-field captures, replaced generations and removed temporary summons are refused.
+---Combat may change spell levels/selections: prepare-phase quota validity is not required here;
+---safe named spell IDs and readable native items/identity remain required. Uses the same native
+---viewer=-1/mode=2/ciok=0, full record comparison, borrowed-UI-flag restoration, input-release
+---barrier and narrowly permitted exact inline-spell-array restoration as inspectTestFieldUnit.
+---No whole-record restore, resurrection or final-snapshot edits occur. Success details include
+---readOnly=true, verified=true, finalView=true, currentNativeState=true, identityMatches,
+---spellsChanged/spellsRestored, hpChanged/itemsChanged and source=native_unit_card. Failure after
+---opening can include unverified details: callers must preserve the snapshot and stop editing.
+---@param unit integer captured native unit ID, not a scenario model ID
+---@param options? {readOnly?:boolean} defaults true; false is refused
+---@return boolean verified
+---@return table|string detailsOrReason success details; reason such as removed_after_capture on failure
+---@return table|nil details failure-after-card details, otherwise omitted
+function coe5.inspectTestFieldFinalUnit(unit, options) end
+
+---Experimental direct text focus for the owning, idle main-menu test field. Uses the already
+---loaded SDL2 text-input service and installed PollEvent dispatcher before native hotkeys.
+---Captures committed UTF-8 and editing keys; restores prior SDL text input on blur/close/fight.
+---Focus loss queues blur, Enter/Escape submit/cancel and blur. Held key tails stay consumed until
+---keyup. Window switching shortcuts remain native. Unsupported dispatchers refuse explicitly.
+---@param focused boolean
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldTextFocus(focused) end
+
+---Drains up to 64 queued input events (text/backspace/clear/submit/cancel/blur). text events carry
+---UTF-8 text. Ctrl+U or Ctrl+Backspace clears. AltGr is not interpreted as a Ctrl shortcut.
+---overflow reports lost/invalid events; no IME preedit is rendered, only committed text.
+---@return table|nil state {focused:boolean,overflow:boolean,events:table[]}
+---@return string|nil reason
+function coe5.takeTestFieldTextEvents() end
+
+---Experimental read-only Windows 5.43 view of an open main-menu test field during a BATTLE_DRAW
+---or BATTLE_WAIT callback/wrap, including code after next(). Query after WAIT next for current
+---camera/input, and during DRAW for matching overlays. Same UI units as uiPointerX/Y: Y increases
+---upwards. originX/Y is the lower-left field edge; cameraX/Y are native offsets in UI units.
+---Read-only during a fight too; unavailable on ordinary campaign battle screens. No camera writes.
+---@return {cellSize:number, originX:number, originY:number, baseX:number, baseY:number, cameraX:number, cameraY:number, width:integer, height:integer, screenW:integer, screenH:integer, windowW:integer, windowH:integer}|nil view
+function coe5.battleView() end
+
+---Experimental: native battle pointer conversion in battleView's permitted context. Pass UI
+---coordinates, not desktop/window pixels. Uses native half-open cell rectangles; nil off screen
+---or outside the field. Does not test UI occlusion, occupancy, footprint or terrain standability.
+---Use existing battleUnitAt for native unit hit testing and moveTestFieldUnit for placement.
+---@param uiX number
+---@param uiY number
+---@return integer|nil x
+---@return integer|nil y
+function coe5.battleScreenToCell(uiX, uiY) end
+
+---Experimental: projects an in-bounds field cell's centre into current UI units (Y up).
+---A valid cell may project outside the visible screen after camera movement. Same context and
+---availability as battleView; nil for an invalid cell or unavailable view.
+---@param x integer
+---@param y integer
+---@return number|nil uiX
+---@return number|nil uiY
+function coe5.battleCellToScreen(x, y) end
+
+---Experimental Windows test-field drawing helper. Measures the game's loaded native sprite frame,
+---centers and scales it inside a lower-left UI rectangle with aspect ratio preserved. Texture
+---padding remains part of the frame; all geometry stays inside the rectangle. No row may borrow
+---another row's space. Does not alter shared sprite dimensions or native monster definitions.
+---@param x number
+---@param y number
+---@param width number
+---@param height number
+---@param monster integer
+---@return boolean drawn
+---@return table|string metricsOrReason {sprite,sourceWidth,sourceHeight,x,y,width,height}, or refusal
+function coe5.ui.drawMonsterIconFit(x, y, width, height, monster) end
+
+---LOCAL EXPERIMENT: loaded native item sprite, including active-mod art, fitted inside the
+---bottom-left rectangle. Same finite/draw-context/texture guards as drawMonsterIconFit.
+---No asset copying, guessed icons or shared sprite-dimension changes.
+---@param x number
+---@param y number
+---@param width number
+---@param height number
+---@param item integer
+---@return boolean drawn
+---@return table|string metricsOrReason {sprite,sourceWidth,sourceHeight,x,y,width,height}, or refusal
+function coe5.ui.drawItemIconFit(x, y, width, height, item) end
