@@ -232,6 +232,8 @@ static void noExplodeAfterPass(int level);
 static void noExplodeBeforePass(int level);
 static void beamWidthBeforePass(int level);
 static void beamWidthTextLine(int weapon);
+static void lookColorBeforePass(int level);
+static int beamFlyDraws(int index);
 static void recBonusLineHook(const char *line, size_t len, int mod, int level);
 static void recBonusBeforePass(int level);
 static int recBonusOfferCopy(int player, const unsigned char *record, unsigned char *copy);
@@ -1834,6 +1836,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "kill_transforms.h"
 #include "weapon_traits.h"
 #include "heal_army.h"
+#include "look_color.h"
 #include "beam_width.h"
 #include "no_explode.h"
 #include "trace_filter.h"
@@ -2028,6 +2031,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_WEAPON_TRAITS)) weaponTraitsInit();
     if (featureOn(FEATURE_SPELL_WORDS)) healArmyInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) beamWidthInit();
+    if (featureOn(FEATURE_WEAPON_TRAITS)) lookColorInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) traitLinesInit();
     if (featureOn(FEATURE_NO_EXPLODE)) noExplodeInit();
     if (featureOn(FEATURE_RANDOM_EVENTS)) randomEventsInit();

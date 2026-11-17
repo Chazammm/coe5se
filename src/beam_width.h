@@ -149,6 +149,10 @@ static void beamFlyLaunched(int attacker, int weapon, int x, int y) {
 #define BEAM_TRAIL_SLOTS     512
 #define BEAM_TRAIL_SIZE_PER  4.0f
 
+static int beamFlyDraws(int index) {
+    return index >= 0 && index < FLY_WEAPONS_MAX && beamFly[index].width >= 2 && beamFly[index].lines ? beamFly[index].width : 1;
+}
+
 static void beamFlyDrawLanes(int index, void (*draw)(int index)) {
     const BeamFly *b = &beamFly[index];
     unsigned fromField = b->acrossRows ? FLY_WEAPON_FROM_Y : FLY_WEAPON_FROM_X, toField = b->acrossRows ? FLY_WEAPON_TO_Y : FLY_WEAPON_TO_X;
@@ -212,7 +216,8 @@ static int beamAddFlyWeapon(int attacker, int weapon, unsigned long long dmg, in
     return ok;
 }
 static void gameFlyWeaponDrawFx(int index) { GAME_FN(void (*)(int), RVA_FLY_WEAPON_DRAW_FX)(index); }
-static void beamFlyWeaponDrawFx(int index) { beamFlyDraw(index, gameFlyWeaponDrawFx); }
+static void beamFlyDrawGame(int index) { beamFlyDraw(index, gameFlyWeaponDrawFx); }
+static void beamFlyWeaponDrawFx(int index) { lookColorFlyDraw(index, beamFlyDrawGame); }
 
 static int beamAreaCells(int unit, int x, int y, int aoe, int level, int weapon) {
     int count = GAME_FN(AreaCellsFn, RVA_WEAPON_AREA_CELLS)(unit, x, y, aoe, level);

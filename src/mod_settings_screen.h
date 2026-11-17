@@ -752,6 +752,7 @@ static void modsRunHook(int level) {
     weaponTraitsBeforePass(level);
     noExplodeBeforePass(level);
     beamWidthBeforePass(level);
+    lookColorBeforePass(level);
     recBonusBeforePass(level);
     corpseWordsBeforePass(level);
     commanderCastsBeforePass(level);

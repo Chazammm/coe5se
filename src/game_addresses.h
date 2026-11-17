@@ -1041,6 +1041,28 @@
 #define RVA_UNIT_MAY_BE_ON_LAND                ADDR_DIFFERS(0x31faa0,          0x100548048)
 #define UNIT_STATE_FLYING_OVER_WATER           0x2000000000
 #define UNIT_STATE_HAS_ATTACKED                0x400000000000
+#define UNIT_STATE_ROUND_16                    0x10000
+#define UNIT_STATE_BATTLE_SUMMON               0x20000
+#define UNIT_STATE_TAGALONG                    0x200000000
+#define UNIT_STATE_PETRIFIED                   0x1000000000
+#define UNIT_STATE_REMOVE_AFTER_BATTLE         0x40000000000
+#define UNIT_STATE_SPREAD_COLLAPSE             0x100000000000
+#define UNIT_STATE_FREE_BITS                   0xffff800000000000
+#define RVA_UNIT_CURE_ALL_AFFLICTIONS          ADDR(        0x0bb220,          MAC_NOT_FOUND)
+#define RVA_CURE_LIFELESS_BORROW               ADDR_DIFFERS(0x0bb3d7,          0x1003f76e4)
+#define RVA_DAMAGE_LEGION_WORD_ZERO            ADDR(        0x0bea4e,          0x1003b9d90)
+#define RVA_DAMAGE_SPLIT_COPY_MARK             ADDR_DIFFERS(0x0be7d3,          0x1003b98d0)
+#define RVA_DAMAGE_DESTROYED_TREE_CLEAR        ADDR_DIFFERS(0x0beba3,          0x1003ba210)
+#define RVA_REFORM_MERGE_WORD_COPY             ADDR(        0x3274f7,          0x100568710)
+#define RVA_REFORM_REINCARNATE_CURE_CALL       ADDR(        0x327ec2,          0x100568b48)
+#define RVA_BATTLE_TRANSFORM_WORD_MASK         ADDR_DIFFERS(0x0e054b,          0x1003cacd8)
+#define RVA_NEW_UNIT_TEMP_BIT                  ADDR_DIFFERS(0x129aec,          0x10046ec24)
+#define RVA_EVENT_MAKEAFF_OR                   ADDR(        0x1c79a9,          0x10052e6ec)
+#define RVA_RITUAL_AFFTARG_OR                  ADDR(        0x2c820b,          0x10056208c)
+#define RVA_UNIT_ADD_EYE_AFFLICTION            ADDR(        0x0bba50,          0x1003f72ec)
+#define RVA_CLEAR_ALL_BATTLE_REMOVE_BIT        ADDR(        0x116860,          MAC_NOT_FOUND)
+#define RVA_BATTLE_CLEAR_BIT16                 ADDR_DIFFERS(0x0d0cd7,          0x1003eda9c)
+#define RVA_FIGHT_CLEAR_BIT42                  ADDR(        0x0f399b,          0x1003e6d44)
 #define RVA_CRASH_LANDING_CHECK                ADDR(        0x113b30,          MAC_INLINED)
 #define RVA_TURN_UNIT_UPKEEP                   ADDR(        0x143a70,          0x100399a14)
 #define RVA_UPKEEP_SOUL_CONTRACTS              ADDR(        0x1462f1,          0x10039ea9c)
@@ -2409,6 +2431,8 @@
 #define RVA_VISUAL_FX_TABLE                    ADDR(        0x1b1dfc0,         0x100834780)
 #define VISUAL_FX_SIZE                         0x30
 #define VISUAL_FX_ROWS                         300
+#define VISUAL_FX_FLAGS                        0x08
+#define VISUAL_FX_COUNT                        0x0c
 #define RVA_PARTICLES                          ADDR(        0x124477a0,        0x107efbc5c)
 #define PARTICLE_SIZE                          0x30
 #define PARTICLES_MAX                          140000
@@ -2416,6 +2440,7 @@
 #define RVA_PARTICLE_FREE_HINT                 ADDR(        0x57f1084,         0x1067c5674)
 #define PARTICLE_FLAGS                         0x00
 #define PARTICLE_SIZE_PX                       0x18
+#define PARTICLE_R                             0x20
 #define RVA_PARTICLE_ADD                       ADDR(        0x051d00,          0x100350dd4)
 #define RVA_PARTICLE_ADD_AT                    ADDR(        0x051e30,          MAC_INLINED)
 #define RVA_PARTICLES_UPDATE                   ADDR(        0x051720,          MAC_INLINED)
@@ -2935,6 +2960,11 @@
 #define RVA_UNIT_TRAIT_LIST_ITEM_CALL          ADDR(        0x17eb25,          0x100525ff8)
 #define RVA_ABILITY_DESCRIPTIONS               ADDR(        0x1abc260,         0x10487ff38)
 #define RVA_ABILITY_LOOKUP_CALL                ADDR(        0x1d0f0f,          0x10051c95c)
+#define RVA_CARD_LINE_COUNT                    ADDR(        0x1aa51fc,         0x1008735cc)
+#define RVA_ABILITY_LIST_LINE_CAP              ADDR_DIFFERS(0x1d0f1e,          0x10051c968)
+#define RVA_UNIT_CARD_LINES_RESET              ADDR(        0x1d59b2,          0x100523114)
+#define RVA_UNIT_BENEFIT_LINES                 ADDR(        0x1d3810,          0x100520158)
+#define RVA_UNIT_AFFLICTION_LIST_CALL          ADDR(        0x1d5a34,          0x100523198)
 #define RVA_UNIT_CARD                          ADDR(        0x1d4290,          0x100521160)
 #define RVA_MEMORIZE_SPELL                     ADDR(        0x2e6d70,          0x1004bc44c)
 #define RVA_UNMEMORIZE_SPELL                   ADDR(        0x2e4280,          MAC_INLINED)
