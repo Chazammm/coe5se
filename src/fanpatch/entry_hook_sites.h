@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 67
+#define ENTRY_HOOK_COUNT 71
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -70,6 +70,10 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"weapon_hit", 0x0dcaa0, 5, 0, {{0, 0}}},
     {"ai_item_use_rating", 0x183790, 5, 0, {{0, 0}}},
     {"immortal_reform_place", 0x326de0, 5, 0, {{0, 0}}},
+    {"commander_army_ap_left", 0x328880, 6, 0, {{0, 0}}},
+    {"commander_ap_left", 0x3289a0, 10, 0, {{0, 0}}},
+    {"commander_add_ap_used", 0x12c210, 8, 1, {{4, 0x12c31f}}},
+    {"shipmove_spend_ap", 0x104fd0, 8, 1, {{4, 0x10531d}}},
 };
 #else
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
@@ -140,5 +144,9 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"weapon_hit", 0x3c1f7c, 16, 0, {{0, 0}}},
     {"ai_item_use_rating", 0x4e8420, 16, 0, {{0, 0}}},
     {"immortal_reform_place", 0x5682b0, 16, 0, {{0, 0}}},
+    {"commander_army_ap_left", 0x56a728, 16, 0, {{0, 0}}},
+    {"commander_ap_left", 0x56a66c, 16, 0, {{0, 0}}},
+    {"commander_add_ap_used", 0x481578, 16, 0, {{0, 0}}},
+    {"shipmove_spend_ap", 0x481120, 16, 0, {{0, 0}}},
 };
 #endif

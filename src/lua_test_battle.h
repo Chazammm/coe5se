@@ -182,7 +182,7 @@ static const char *testFieldUniqueProblem(int commander, const TestFieldSide *fr
     *requested = 0;
     long long *counts = calloc(MONSTER_TABLE_MAX, sizeof *counts);
     if (!counts) return "out_of_memory";
-    if (commander >= 0 && commander < MONSTER_TABLE_MAX && monsterAbility(commander, MONSTER_ABILITY_UNIQUE) > 0) counts[commander] = 1;
+    if (commander >= 0 && commander < MONSTER_TABLE_MAX && monsterAbility(commander, MONSTER_ABILITY_UNIQUE) > 0) counts[uniqueGroupStandIn(commander)] = 1;
     const TestFieldSide *sides[2] = {friends, enemies};
     for (int side = 0; side < 2; side++) {
         if (!sides[side]) continue;
@@ -190,6 +190,7 @@ static const char *testFieldUniqueProblem(int commander, const TestFieldSide *fr
             int m = sides[side]->groups[g].monster;
             long long n = sides[side]->groups[g].count;
             if (m < 0 || m >= MONSTER_TABLE_MAX || monsterAbility(m, MONSTER_ABILITY_UNIQUE) <= 0) continue;
+            m = uniqueGroupStandIn(m);
             counts[m] = counts[m] > LLONG_MAX - n ? LLONG_MAX : counts[m] + n;
         }
     }
@@ -206,10 +207,11 @@ static const char *testFieldUniqueProblem(int commander, const TestFieldSide *fr
     for (int unit = 0; !reason && unit < UNIT_TABLE_MAX; unit++) {
         size_t at = (size_t)unit * UNIT_SIZE;
         int m = G16(RVA_UNIT_MONSTER + at);
-        if (m >= 0 && m < MONSTER_TABLE_MAX && counts[m] && G16(RVA_UNIT_HP + at) > 0) {
+        int key = m >= 0 && m < MONSTER_TABLE_MAX && G16(RVA_UNIT_HP + at) > 0 ? uniqueGroupStandIn(m) : -1;
+        if (key >= 0 && counts[key]) {
             *monster = m;
             *existing = unit;
-            *requested = counts[m];
+            *requested = counts[key];
             reason = "unique_exists";
         }
     }

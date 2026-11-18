@@ -25,6 +25,13 @@ static struct { int kind, index; unsigned int file; } blockRecord = {BLOCK_RECOR
 
 typedef struct { char tag[LANGUAGE_TAG_MAX + 1], name[LANGUAGE_NAME_MAX + 1]; } DeclaredLanguage;
 
+typedef struct {
+    int open;
+    int tags;
+    int pickReached;
+    char tag[LANGUAGE_TAG_MAX + 1];
+} LanguageScan;
+
 static struct {
     char pick[LANGUAGE_TAG_MAX + 1];
     int pickRead;
@@ -32,6 +39,10 @@ static struct {
     int open;
     unsigned int file;
     int rank;
+    int defaultReads;
+    int translationMods;
+    unsigned char oneLanguage[MOD_TABLE_MAX];
+    char defaultTag[LANGUAGE_TAG_MAX + 1];
     char tag[LANGUAGE_TAG_MAX + 1];
     DeclaredLanguage *declared;
     int declaredCount, declaredCapacity;
@@ -128,6 +139,46 @@ static void saveLanguagePick(const char *tag) {
 }
 
 // ---- The pass ----------------------------------------------------------------------------------
+static int scanModLanguages(int mod, LanguageScan *out);
+static int modEnabled(int mod);
+
+static void findTranslationMods(void) {
+    int reached = 0, several = 0;
+    memset(languages.oneLanguage, 0, sizeof languages.oneLanguage);
+    languages.defaultTag[0] = '\0';
+    languages.translationMods = 0;
+    for (int m = 0; m <= G32(RVA_MOD_LAST_INDEX) && m < MOD_TABLE_MAX; m++) {
+        if (!modEnabled(m) || !modName(m)[0]) continue;
+        LanguageScan scan;
+        int contentFree = scanModLanguages(m, &scan);
+        reached |= scan.pickReached;
+        if (!contentFree || scan.tags != 1) continue;
+        languages.oneLanguage[m] = 1;
+        if (!languages.translationMods++) snprintf(languages.defaultTag, sizeof languages.defaultTag, "%s", scan.tag);
+        else several |= _stricmp(languages.defaultTag, scan.tag) != 0;
+    }
+    languages.defaultReads = !languages.pick[0] || !reached;
+    if (several || !languages.defaultReads) languages.defaultTag[0] = '\0';
+    if (!languages.defaultReads) languages.translationMods = 0;
+    if (languages.translationMods)
+        writeLog("language_default_reads", "pick=%s translation_mods=%d tag=%s", languages.pick[0] ? languages.pick : "default",
+                 languages.translationMods, languages.defaultTag[0] ? languages.defaultTag : "several");
+}
+
+static const char *languageReadTag(void) { return languages.defaultReads ? languages.defaultTag : languagePick(); }
+
+static int languageBlocksRead(void) { return !languages.defaultReads || languages.translationMods > 0; }
+
+static const char *languagePassTag(void) {
+    if (languageReadTag()[0] || languageBlocksRead()) return languageReadTag();
+    return languagePick();
+}
+
+static int languageBlockRank(const char *tag, int mod) {
+    if (!languages.defaultReads) return languageRank(tag, languagePick());
+    return mod >= 0 && mod < MOD_TABLE_MAX && languages.oneLanguage[mod];
+}
+
 static void languagesBeforePass(int level) {
     if (level != 2) return;
     languages.pickRead = 0;
@@ -140,6 +191,7 @@ static void languagesBeforePass(int level) {
     memset(pickLetters.codes, 0, sizeof pickLetters.codes);
     pickLetters.count = 0;
     pickLetters.generation++;
+    findTranslationMods();
 }
 
 static int readLanguageQuoted(const char **p, char *out, size_t size);
@@ -226,7 +278,7 @@ static void openLanguageBlock(const char *args, int mod, int level) {
     languages.file = modFileNow();
     blockRecord.kind = BLOCK_RECORD_NONE;
     snprintf(languages.tag, sizeof languages.tag, "%.*s", LANGUAGE_TAG_MAX, problem ? "-" : tag);
-    languages.rank = problem ? 0 : languageRank(tag, languagePick());
+    languages.rank = problem ? 0 : languageBlockRank(tag, mod);
     if (problem) {
         if (report) refuseC5mLine(LANGUAGE_WORD, modName(mod), problem, "line=%d text=%.60s", lineNo, line);
         return;
@@ -324,12 +376,18 @@ static void languageWordLine(const char *args, int mod, int level) {
 }
 
 // ---- Content-free lines (ADR 0017) ------------------------------------------------------------
-static int scanLanguageLine(const char *word, int mayDeclare, int *open) {
-    if (!strcmp(word, LANGUAGE_WORD)) {
-        *open = mayDeclare;
-        return 1;
-    }
-    return *open;
+static int scanLanguageLine(const char *word, const char *args, int mayDeclare, LanguageScan *scan) {
+    if (strcmp(word, LANGUAGE_WORD)) return scan->open;
+    scan->open = mayDeclare;
+    char line[LANGUAGE_TAG_MAX + 64], tag[LANGUAGE_TAG_MAX + 2];
+    snprintf(line, sizeof line, "%.*s", (int)languageLineLength(args), args);
+    const char *p = line;
+    int n = mayDeclare ? readLanguageQuoted(&p, tag, sizeof tag) : -1;
+    if (n < 0 || n > LANGUAGE_TAG_MAX || !isLanguageTag(tag)) return 1;
+    if (!scan->tags) snprintf(scan->tag, sizeof scan->tag, "%.*s", LANGUAGE_TAG_MAX, tag), scan->tags = 1;
+    else if (_stricmp(scan->tag, tag)) scan->tags = 2;
+    if (languages.pick[0] && languageRank(tag, languages.pick)) scan->pickReached = 1;
+    return 1;
 }
 
 // ---- The page's line ---------------------------------------------------------------------------
@@ -340,6 +398,11 @@ static int pickedLanguageIndex(void) {
         if (rank > bestRank) best = i, bestRank = rank;
     }
     return best;
+}
+
+static int languageLettersWithoutFont(void) {
+    int reads = pickedLanguageIndex() >= 0 || (languages.defaultReads && languages.translationMods);
+    return reads && pickLetters.count ? pickLettersWithoutFont() : 0;
 }
 
 static void drawLanguagePick(void) {
@@ -353,7 +416,7 @@ static void drawLanguagePick(void) {
         const DeclaredLanguage *d = &languages.declared[i];
         radioOption(ID_LANGUAGE + 1 + i, picked == i, d->name[0] ? d->name : d->tag);
     }
-    int missing = picked >= 0 && pickLetters.count ? pickLettersWithoutFont() : 0;
+    int missing = languageLettersWithoutFont();
     if (missing > 0) {
         char label[64];
         snprintf(label, sizeof label, "No font for %d character%s", missing, missing == 1 ? "" : "s");

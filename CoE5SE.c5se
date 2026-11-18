@@ -39,8 +39,16 @@ onoff
 default 1
 restart
 parent graphics_changes
-label "Use texture array batching"
+label "Use texture array batching on the world map"
 tip "Batches map decorations at every quality, plus compatible terrain and army sprites on Windows. Preserves original detail and order. Off by default on NVIDIA. Takes effect next launch."
+
+newsetting scene_sprite_batching
+onoff
+default 0
+restart
+parent graphics_changes
+label "Use texture array batching in battles"
+tip "Windows CoE5 5.43. Batches compatible terrain, unit sprites, spell particles and projectiles with original detail and order. Unsupported draws stay native. Takes effect next launch."
 
 newsetting frame_controls
 onoff
@@ -49,11 +57,3 @@ restart
 parent graphics_changes
 label "Frame Rate Limiting"
 tip "Adds high-refresh FPS choices, GPU wait and optional precise pacing. Off installs no frame-control hooks or menu choices. Takes effect next launch."
-
-newsetting scene_sprite_batching
-onoff
-default 0
-restart
-parent graphics_changes
-label "Batch battle, location and spell graphics"
-tip "Windows CoE5 5.43. Batches compatible terrain, unit sprites, spell particles and projectiles with original detail and order. Unsupported draws stay native. Takes effect next launch."

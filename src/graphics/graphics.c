@@ -129,7 +129,6 @@ static void mod_terrain_battle(void) {
     if(opened)mod_terrain_finish(mod_scene_kind==1?2:4,before);
 }
 
-// Batches the map's prepared unit sprites and army markers in their native order.
 // @platform-split map-units: the complete draw call is mapped on Windows.
 static void mod_map_units(int a,int b,int flags) {
     void (*draw)(int,int,int)=(void (*)(int,int,int))(detail_base+RVA_MAP_DRAW_UNITS);
@@ -461,7 +460,6 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         char line[200];snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d",imports,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES));mod_log(line);
     }
 #ifdef _WIN32
-    // Map markers can use GL_REPLACE even when battle batching is off.
     ta_scene_program=!!(mod_features&(MOD_RENDERING|MOD_SCENES));
 #endif
     FpsArrayInstall imports={0};

@@ -1,6 +1,5 @@
 #pragma once
 
-// These two callers pass the native rectangle and its full texture coordinates.
 // @platform-split terrain-batching: Windows terrain rectangle calls are mapped.
 #define TERRAIN_QUADS 512u
 #define TERRAIN_UPLOADS_PER_PASS 64
@@ -30,7 +29,6 @@ static void terrain_replay(unsigned count) {
     real_gl_bind(0x0de1,(unsigned)restore);
 }
 
-// Check actual GL state before passing client-memory pointers to a draw.
 static int terrain_submission_available(void) {
     int value=0;
     ta_get_int(0x8b8d,&value);if(value)return 0;
@@ -47,13 +45,11 @@ static int terrain_submission_available(void) {
     return !arrays_is_enabled(0x8074) && !arrays_is_enabled(0x8076) && !arrays_is_enabled(0x8078);
 }
 
-// DrawElements has the same diagonal and winding as the game's triangle fan.
 static void terrain_flush(void) {
     unsigned count=terrain_count;
     if(!count)return;
     terrain_count=0;
     if(!ta_allowed_state() || !terrain_submission_available()) {terrain_replay(count);return;}
-    // The shared shader reads page zero for this batch. Preserve this unit only.
     unsigned unit=ta_multi_page?0x84c1u:0x84c0u;
     int saved_array=0,saved_sampler=0;
     ta_active_texture(unit);
@@ -85,7 +81,6 @@ static int terrain_check_client(void) {
     int element_buffer=0,unit=0x84c0,sample_buffers=0;
     if(arrays_has_vbo)arrays_get_int(0x8895,&element_buffer);
     if(arrays_client_active)arrays_get_int(0x84e1,&unit);
-    // The terrain comparison currently validates a single-sample framebuffer.
     arrays_get_int(0x80a8,&sample_buffers);
     if(element_buffer || unit!=0x84c0 || sample_buffers)return 0;
     return !arrays_is_enabled(0x8074) && !arrays_is_enabled(0x8076) && !arrays_is_enabled(0x8078);
@@ -109,7 +104,6 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
     terrain_sources[index]=arrays_texture;
     terrain_quads[index]=q;
 
-    // Match the scalar float operations used by the pinned native rectangle.
     float sx=(float)*(int *)(detail_base+RVA_WINDOW_W)/(float)*(int *)(detail_base+RVA_SCREEN_W);
     float sy=(float)*(int *)(detail_base+RVA_WINDOW_H)/(float)*(int *)(detail_base+RVA_SCREEN_H);
     float left=x*sx,right=(x+w)*sx,top=y*sy,bottom=(y+h)*sy;
@@ -124,7 +118,7 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
 static int terrain_begin_scope(void) {
     if(!arrays_enabled || !texture_array_enabled || terrain_scope || in_highest)return 0;
     if(!ta_terrain_cache.entries) {
-        terrain_draw_elements=(void (*)(unsigned,int,unsigned,const void *))GetProcAddress(ta_gl,"glDrawElements");
+        *(void **)&terrain_draw_elements=(void *)GetProcAddress(ta_gl,"glDrawElements");
         if(!terrain_draw_elements)return 0;
         ta_terrain_cache.entries=FPS_ALLOC(TA_TERRAIN_CACHE_SIZE*sizeof(*ta_terrain_cache.entries));
         if(!ta_terrain_cache.entries)return 0;

@@ -1690,6 +1690,18 @@ static int contentValueRow(const GameVar *v) {
     return -1;
 }
 
+static void contentValueRange(const GameVar *v, lua_Integer *min, lua_Integer *max) {
+    gameVarRange(v, min, max);
+    if (v->type == T_I64) *min = LUA_MININTEGER, *max = LUA_MAXINTEGER;
+    if (v->type == T_TERRAIN_INCOME) *min = SHRT_MIN, *max = USHRT_MAX;
+    if (v->type == T_RITUAL_CASTER_MAX_CAST) *min = 0, *max = COMMANDER_CAST_MAX;
+    if (v->type == T_CLASS_ABILITY || v->type == T_MONSTER_ABILITY || v->type == T_MONSTER_ATTACK) {
+        if (v->type != T_MONSTER_ATTACK || v->addr != RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_WEAPON) *min = INT_MIN, *max = INT_MAX;
+        if (v->type == T_MONSTER_ATTACK && v->addr == RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_VALUE)
+            *min = LUA_MININTEGER, *max = LUA_MAXINTEGER;
+    }
+}
+
 static int monsterAttackEnd(const unsigned char *record) {
     for (int k = 0; k < MONSTER_ATTACK_MAX; k++) {
         const unsigned char *r = record + MONSTER_ATTACKS + (size_t)k * MONSTER_ATTACK_SIZE;
@@ -1714,15 +1726,7 @@ static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int
     lua_Integer value = 0, min = 0, max = 0;
     if (v->type != T_STR && v->type != T_CLASS_STDTROOPS && v->type != T_RITUAL_SUMMONS) {
         value = luaL_checkinteger(L, arg);
-        gameVarRange(v, &min, &max);
-        if (v->type == T_I64) min = LUA_MININTEGER, max = LUA_MAXINTEGER;
-        if (v->type == T_TERRAIN_INCOME) min = SHRT_MIN, max = USHRT_MAX;
-        if (v->type == T_RITUAL_CASTER_MAX_CAST) min = 0, max = COMMANDER_CAST_MAX;
-        if (v->type == T_CLASS_ABILITY || v->type == T_MONSTER_ABILITY || v->type == T_MONSTER_ATTACK) {
-            if (v->type != T_MONSTER_ATTACK || v->addr != RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_WEAPON) min = INT_MIN, max = INT_MAX;
-            if (v->type == T_MONSTER_ATTACK && v->addr == RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_VALUE)
-                min = LUA_MININTEGER, max = LUA_MAXINTEGER;
-        }
+        contentValueRange(v, &min, &max);
         if (value < min || value > max) return refuseSetValue(L, "out_of_range", v, value, min, max);
     }
     if (!p) return shape.list != LIST_NONE ? luaL_error(L, "%s: the list ends before that index", v->name)

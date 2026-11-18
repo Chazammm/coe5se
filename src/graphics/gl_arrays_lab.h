@@ -13,7 +13,6 @@ static int arrays_enabled;
 static int arrays_lazy_bindings;
 static int arrays_client_sessions;
 static _Thread_local int arrays_scene_scope;
-// Selects original texture sampling for native particle and projectile passes.
 static _Thread_local int arrays_native_texture;
 static _Thread_local unsigned arrays_scene_caps_known,arrays_scene_caps_on;
 static _Thread_local int arrays_client_session;
@@ -186,7 +185,6 @@ static void arrays_flush(void) {
     if(!arrays_count) { if(!arrays_open && !arrays_native_open) arrays_restore_current();return; }
     long long begin=now_ticks();
     int complete=(arrays_count%4)==0;
-    // Native textures must never draw with a shader retained from a layered batch.
     if(!arrays_output_layered)array_texture_end_draw();
     int shader_ok=complete && (!arrays_output_layered || array_texture_begin_draw(&ta_sprite_cache,arrays_output_texture));
     if(!shader_ok) {
@@ -332,7 +330,6 @@ static void arrays_matrix_changed(void) {
     if(!ta_track_state){ARR_INVALIDATE();return;}
     if(arrays_matrix_mode==0x1702)array_texture_invalidate_state();
 }
-// Matrix changes submit pending vertices; model/projection changes can retain array state.
 static void arrays_matrix_boundary(void) {
     if(arrays_scene_scope && arrays_projection_capture && arrays_matrix_mode==0x1701 && !arrays_native_open)return;
     if(arrays_scene_scope && arrays_matrix_mode!=0x1702 && !arrays_native_open)arrays_flush();
@@ -361,7 +358,6 @@ ARR_WRAP1(glClear,unsigned)
 ARR_WRAP1(glEnableClientState,unsigned) ARR_WRAP1(glDisableClientState,unsigned) ARR_WRAP1(glLineWidth,float)
 ARR_WRAP2(glPixelStorei,unsigned,int)
 
-// Submits old vertices before fragment-state changes without replacing client arrays.
 static void arrays_fragment_boundary(void) {
     if(arrays_scene_scope && !arrays_native_open)arrays_flush();else arrays_end_frame();
 }
@@ -384,7 +380,6 @@ ARR_MATRIX3(glScalef) ARR_MATRIX3(glTranslatef)
 static void (*arrays_real_glTexEnvi)(unsigned,unsigned,int);
 static void arrays_glTexEnvi(unsigned target,unsigned name,int value) {
     if(target==0x2300 && name==0x2200 && (value==0x2100 || value==0x1e01)){
-        // Layered vertices already hold the correct color for either RGBA texture mode.
         if(!arrays_scene_scope || !texture_array_enabled || arrays_native_open || (arrays_count && !arrays_output_layered))arrays_fragment_boundary();
     }else arrays_end_frame();
     arrays_real_glTexEnvi(target,name,value);
@@ -412,7 +407,6 @@ ARR_WRAP4(glClearColor,float,float,float,float)
 ARR_WRAP4(glVertexPointer,int,unsigned,int,const void *) ARR_WRAP4(glTexCoordPointer,int,unsigned,int,const void *)
 ARR_WRAP1(glShadeModel,unsigned)
 static void (*arrays_real_glEnable)(unsigned);
-// Submits pending geometry before a changed fragment capability.
 static void arrays_cap_boundary(unsigned cap,int on) {
     const unsigned caps[]={0x0b44,0x0be2,0x0bc0,0x0b71,0x0c11};
     for(unsigned i=0;i<5;i++)if(cap==caps[i]){
@@ -489,7 +483,6 @@ enum { ARRAY_IMPORT_COUNT=sizeof(arrays_imports)/sizeof(arrays_imports[0]) };
 typedef struct {void *original[ARRAY_IMPORT_COUNT+1];size_t count;} FpsArrayInstall;
 typedef int (*FpsReplaceImport)(uintptr_t,void *,void *);
 
-// Retain the native pointers until both imports and draw calls are installed.
 static int arrays_install_imports(FpsArrayInstall *install,FpsReplaceImport replace) {
     for(;install->count<ARRAY_IMPORT_COUNT;install->count++) {
         size_t i=install->count;
@@ -500,7 +493,6 @@ static int arrays_install_imports(FpsArrayInstall *install,FpsReplaceImport repl
     return 1;
 }
 
-// Restore only redirects that still belong to this renderer.
 static int arrays_restore_imports(FpsArrayInstall *install,FpsReplaceImport replace) {
     int restored=1;
     while(install->count) {

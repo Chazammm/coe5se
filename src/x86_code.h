@@ -433,4 +433,41 @@ static UNUSED size_t buildBanishSquareStub(unsigned char *code, const unsigned c
     return (size_t)(p - code);
 }
 
+#define UNIQUE_COUNT_CALL_SIZE 16
+
+static UNUSED size_t buildUniqueCountCall(unsigned char *code, const unsigned char *at, const void *slot, const unsigned char *end) {
+    unsigned char *p = code;
+    *p++ = 0x8b, *p++ = 0xcb;
+    *p++ = 0xff, *p++ = 0x15;
+    int rel = (int)((const unsigned char *)slot - (at + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    *p++ = 0x44, *p++ = 0x8b, *p++ = 0xd0;
+    *p++ = 0xe9;
+    rel = (int)(end - (at + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    return (size_t)(p - code);
+}
+
+#define VOID_COUNT_CALL_SIZE 20
+
+static UNUSED size_t buildVoidCountCall(unsigned char *code, const unsigned char *at, const void *name, const void *slot, const unsigned char *end) {
+    unsigned char *p = code;
+    *p++ = 0x48, *p++ = 0x8d, *p++ = 0x0d;
+    int rel = (int)((const unsigned char *)name - (at + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    *p++ = 0xff, *p++ = 0x15;
+    rel = (int)((const unsigned char *)slot - (at + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    *p++ = 0x89, *p++ = 0xc7;
+    *p++ = 0xe9;
+    rel = (int)(end - (at + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    return (size_t)(p - code);
+}
+
 #endif

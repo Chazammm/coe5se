@@ -46,6 +46,18 @@ static void sendLanBuild(u64 slots) {
     sendNetworkCheckText(message);
 }
 
+static int lanScriptSeedFromSave;
+static void takeHostScriptSeed(unsigned seed) {
+    if (netRoleNow() != NET_ROLE_CLIENT) return;
+    if (!lanScriptSeedKnown || lanScriptSeed != seed) {
+        lanScriptSeed = seed;
+        lanScriptSeedKnown = 1;
+        lanNoticeEpoch++;
+        writeLog("lan_script_seed_read", "seed=%08x from=save", lanScriptSeed);
+    }
+    lanScriptSeedFromSave = 1;
+}
+
 static void readPersonalModList(const char *body);
 static int readLanLobbyMessage(const char *message, int lists) {
     const char *body = networkCheckBody(message, LAN_SEED_PREFIX);
@@ -56,12 +68,19 @@ static int readLanLobbyMessage(const char *message, int lists) {
             writeLogWarning("lan_script_seed_dropped", "reason=bad_text");
             return 1;
         }
-        if (netRoleNow() == NET_ROLE_CLIENT && (!lanScriptSeedKnown || lanScriptSeed != (unsigned)seed)) {
-            lanScriptSeed = (unsigned)seed;
-            lanScriptSeedKnown = 1;
-            lanNoticeEpoch++;
-            writeLog("lan_script_seed_read", "seed=%08x", lanScriptSeed);
+        if (netRoleNow() != NET_ROLE_CLIENT || (lanScriptSeedKnown && lanScriptSeed == (unsigned)seed)) return 1;
+        if (lanScriptSeedKnown) {
+            static int dropsLogged;
+            if (dropsLogged < 8) {
+                dropsLogged++;
+                writeLogWarning("lan_script_seed_dropped", "reason=%s seed=%08lx held=%08x", lanScriptSeedFromSave ? "not_the_saves" : "not_the_first", seed, lanScriptSeed);
+            }
+            return 1;
         }
+        lanScriptSeed = (unsigned)seed;
+        lanScriptSeedKnown = 1;
+        lanNoticeEpoch++;
+        writeLog("lan_script_seed_read", "seed=%08x from=lobby", lanScriptSeed);
         return 1;
     }
     body = networkCheckBody(message, LAN_BUILD_PREFIX);

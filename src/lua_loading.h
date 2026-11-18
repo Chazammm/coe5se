@@ -48,7 +48,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"keepTraceLines", lKeepTraceLines}, {"addPlane", lAddPlane}, {"setPlaneShape", lSetPlaneShape}, {"planeIndex", lPlaneIndex}, {"factionSlot", lFactionSlot}, {"addFaction", lAddFaction},
     {"setPlaneTint", lSetPlaneTint}, {"clearPlaneTint", lClearPlaneTint}, {"setTerrainLooks", lSetTerrainLooks},
     {"setRandomEventsOff", lSetRandomEventsOff}, {"randomEventsOff", lRandomEventsOff},
-    {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter},
+    {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter}, {"addTransport", lAddTransport},
     {"giveAffliction", lGiveAffliction}, {"cureAffliction", lCureAffliction}, {"hasAffliction", lHasAffliction},
     {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
     {"afflictionValue", lAfflictionValue}, {"setAfflictionTurn", lSetAfflictionTurn}, {"setAfflictionValue", lSetAfflictionValue},
@@ -763,6 +763,7 @@ static void markScriptPlanesRestarting(const char *mod);
 static void markScriptFactionsRestarting(const char *mod);
 static void markScriptLooksRestarting(const char *mod);
 static void markScriptBattleMapsRestarting(const char *mod);
+static void markScriptTransportsRestarting(const char *mod);
 static void dropScriptPlanes(const char *mod);
 static void dropScriptFactions(const char *mod);
 
@@ -789,6 +790,7 @@ static void retireContentScripts(const char *reason) {
         markScriptFactionsRestarting(s->mod);
         markScriptLooksRestarting(s->mod);
         markScriptBattleMapsRestarting(s->mod);
+        markScriptTransportsRestarting(s->mod);
         dropScriptMenuRows(s);
         retireLuaScript(s, reason);
     }
@@ -799,6 +801,7 @@ static void retireNoMultiplayerScript(LuaScript *s) {
     dropScriptFactions(s->mod);
     markScriptLooksRestarting(s->mod);
     markScriptBattleMapsRestarting(s->mod);
+    markScriptTransportsRestarting(s->mod);
     dropScriptMenuRows(s);
     retireLuaScript(s, "nomultiplayer");
 }
@@ -935,6 +938,16 @@ static void takeClientScriptStop(const char *report) {
         writeLogWarning("script_stop_dropped", "reason=bad_report");
         return;
     }
+    int runs = 0;
+    for (int i = 0; i < luaScriptCount && !runs; i++) runs = !luaScripts[i]->retired && !strcmp(luaScripts[i]->mod, mod + 1) && modClassNow(mod + 1) == LUA_CLASS_CONTENT;
+    if (!runs) {
+        static int dropsLogged;
+        if (dropsLogged < 8) {
+            dropsLogged++;
+            writeLogWarning("script_stop_dropped", "reason=no_content_script mod=%.80s", mod + 1);
+        }
+        return;
+    }
     noteScriptStopOnHost(mod + 1, knownScriptStopReason(report, (size_t)(mod - report)), 1);
 }
 
@@ -958,6 +971,7 @@ static void restartLuaScript(LuaScript *s, const char *reason) {
     markScriptFactionsRestarting(mod);
     markScriptLooksRestarting(mod);
     markScriptBattleMapsRestarting(mod);
+    markScriptTransportsRestarting(mod);
     dropScriptMenuRows(s);
     dropLuaScriptWraps(s);
     dropAfflictionEffects(s);

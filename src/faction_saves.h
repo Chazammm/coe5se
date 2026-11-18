@@ -117,7 +117,8 @@ static void readLoadedSaveFactions(const char *path) {
                 int trailer[2] = {0};
                 if (at < 16 || fseek(f, at - 8, SEEK_SET) || !readFileInt(f, &trailer[0]) || !readFileInt(f, &trailer[1])) break;
                 if (trailer[1] == SAVE_TAG_FCTN) payload = readTrailedChunk(f, at, SAVE_TAG_FCTN, &size, &result);
-                else if (trailer[1] == SAVE_TAG_MODC || trailer[1] == SAVE_TAG_MODH || trailer[1] == SAVE_TAG_PLNS) at -= trailer[0] + 8;
+                else if ((trailer[1] == SAVE_TAG_MODC || trailer[1] == SAVE_TAG_MODH || trailer[1] == SAVE_TAG_PLNS) && trailer[0] >= 0 && trailer[0] <= SAVE_CHUNK_MAX)
+                    at -= (long)trailer[0] + 8;
                 else break;
             }
         }

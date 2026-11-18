@@ -1,5 +1,4 @@
 #pragma once
-// A field, its particles, and its moving projectiles are separate native passes.
 static _Thread_local unsigned mod_scene_vfx_pass;
 static void coe5seGraphicsDrawScene(void (*draw)(void)) __attribute__((unused));
 
@@ -7,12 +6,10 @@ static void coe5seGraphicsDrawScene(void (*draw)(void)) __attribute__((unused));
 #ifdef _WIN32
 static _Thread_local int mod_scene_field_arguments[3];
 
-// Forwards the current native field arguments without changing their layout.
 static void mod_scene_field_bridge(void) {
     ((void (*)(int,int,int))(detail_base+RVA_BATTLE_FIELD_DRAW))(mod_scene_field_arguments[0],mod_scene_field_arguments[1],mod_scene_field_arguments[2]);
 }
 
-// Wraps only the three verified field draws inside the common wait renderer.
 static void mod_scene_field(int a,int b,int c) {
     int previous[3];
     memcpy(previous,mod_scene_field_arguments,sizeof(previous));
@@ -23,11 +20,9 @@ static void mod_scene_field(int a,int b,int c) {
 
 static _Thread_local uintptr_t mod_scene_particle_arguments[2];
 static _Thread_local int mod_scene_particle_layer;
-// Draws a native particle layer with its saved arguments.
 static void mod_scene_particle_bridge(void) {
     ((void (*)(uintptr_t,uintptr_t,int))(detail_base+RVA_PARTICLES_DRAW))(mod_scene_particle_arguments[0],mod_scene_particle_arguments[1],mod_scene_particle_layer);
 }
-// Draws one native particle layer without repeating its selection or flicker.
 static void mod_scene_particles(uintptr_t a,uintptr_t b,int layer) {
     if(!mod_scenes_enabled || !mod_scene_kind || *(int *)(detail_base+RVA_PARTICLES_LAST)<0){
         ((void (*)(uintptr_t,uintptr_t,int))(detail_base+RVA_PARTICLES_DRAW))(a,b,layer);return;
@@ -38,7 +33,6 @@ static void mod_scene_particles(uintptr_t a,uintptr_t b,int layer) {
     coe5seGraphicsDrawScene(mod_scene_particle_bridge);
     mod_scene_particle_arguments[0]=previous[0];mod_scene_particle_arguments[1]=previous[1];mod_scene_particle_layer=previous_layer;mod_scene_vfx_pass=previous_pass;
 }
-// Draws the prepared native projectile sprites.
 static void mod_scene_projectiles(void) {
     if(!mod_scenes_enabled || !mod_scene_kind || *(int *)(detail_base+RVA_FLY_WEAPONS_LAST)<0){
         ((void (*)(void))(detail_base+RVA_FPS_SCENE_PROJECTILES_DRAW))();return;
@@ -49,7 +43,6 @@ static void mod_scene_projectiles(void) {
 }
 #endif
 
-// Marks prepared frames produced inside a supported native wait screen.
 static int mod_scene_wait(int (*next)(int,int),int kind,int a,int b) {
     int previous=mod_scene_kind;
     mod_scene_kind=kind;
@@ -70,7 +63,6 @@ SCENE_WAIT(unit_list,2)
 SCENE_WAIT(recruit,2)
 #undef SCENE_WAIT
 
-// Installs only the explicitly enabled battle/location wait markers.
 static void mod_install_scene_waits(const PluginApi *api) {
     if(!api->wrap){mod_log("fps_mod scene_batching disabled reason=wrapper_api_unavailable");return;}
     unsigned installed=0;
@@ -88,7 +80,6 @@ static void mod_install_scene_waits(const PluginApi *api) {
     char line[180];snprintf(line,sizeof(line),"fps_mod scene_batching enabled=%d wait_routes=%u original_order=1",mod_scenes_enabled,installed);mod_log(line);
 }
 
-// Keeps the native prepared draw callback and closes all buffered state on return.
 static void coe5seGraphicsDrawScene(void (*draw)(void)) {
     if(!mod_scenes_enabled || !mod_scene_kind || mod_scene_drawing){draw();return;}
     int previous_highest=in_highest,previous_scope=decor_scope,previous_scene_scope=arrays_scene_scope,previous_replace=ta_scene_replace,previous_native_texture=arrays_native_texture;

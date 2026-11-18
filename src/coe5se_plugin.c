@@ -184,6 +184,7 @@ static const char *battleMapLineHook(const char *line, size_t len, int mod, int 
 static int declinedBattleMapLine(const char *line, size_t len, int mod, int level);
 static void battleMapsBeforePass(int level);
 static void battleMapsAfterPass(int level);
+static void transportsAfterPass(int level);
 static int unitBattleCell(int unit, int *x, int *y);
 static unsigned char *battleCell(int x, int y);
 static const char *moveUnitBattleCell(int unit, int x, int y);
@@ -203,6 +204,10 @@ static void carryCopiedMonsterWords(int source, int mod);
 static int copystatsItemCarrySource(const char *line, int level);
 static void carryCopiedItemWords(int source, int mod);
 static int copyMonsterFactionRefs(int source, int target);
+static const char *growthLineHook(const char *line, size_t len, int mod, int level);
+static void growthWordsBeforePass(int level);
+static void clearMonsterGrowth(int monster);
+static int copyMonsterGrowth(int source, int target);
 static int copyritualCarrySource(const char *line, int level);
 static void carryCopiedRitualWords(int source, int mod);
 static void clearspecLineHook(const char *line, int level);
@@ -220,11 +225,21 @@ static int declinedAfflictionLine(const char *line, size_t len, int mod, int lev
 static int isNamedAfflictionEventLine(const char *line);
 static void copyAffresRules(int item, int source, int target);
 static void clearAffresRules(int item, int record);
+static void copyMonsterUniqueGroup(int source, int target);
+static void clearMonsterUniqueGroup(int monster);
+static void uniqueGroupsBeforePass(int level);
+static int countsAsNamedUnique(int monster, const unsigned char *record, const char *name);
 static void commanderCastsBeforePass(int level);
 static void itemSlotsBeforePass(int level);
 static void keepWeaponsBeforePass(int level);
 static void copyMonsterKeepsWeapons(int source, int target);
 static void clearMonsterKeepsWeapons(int monster);
+static void carryWordsBeforePass(int level);
+static void copyMonsterCarryWords(int source, int target);
+static void clearMonsterCarryWords(int monster);
+static void transportWordsBeforePass(int level);
+static void copyTransportWords(int source, int target);
+static void clearTransportWords(int monster);
 static void corpseWordsAfterPass(int level);
 static const char *killWordLineHook(const char *line, size_t len, int mod, int level);
 static void killWordsBeforePass(int level);
@@ -1891,6 +1906,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_stats.h"
 #include "kill_transforms.h"
 #include "weapon_traits.h"
+#include "unique_groups.h"
 #include "heal_army.h"
 #include "look_color.h"
 #include "beam_width.h"
@@ -1959,10 +1975,14 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "preview_lines.h"
 #include "terrain_looks.h"
 #include "battle_maps.h"
+#include "lua_transport.h"
+#include "transport_deck.h"
+#include "transport_site.h"
 #include "event_finders.h"
 #include "drown_search.h"
 #include "battle_snapshot.h"
 #include "fanpatch/fanpatch_host.h"
+#include "transport_carry.h"
 #include "item_slot_hooks.h"
 #include "item_slot_card.h"
 #include "item_slot_battle.h"
@@ -1971,6 +1991,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
 #include "battle_replays.h"
+#include "monster_growth.h"
 #include "custom_afflictions.h"
 #include "affliction_words.h"
 #include "affliction_effects.h"
@@ -2091,14 +2112,18 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_BATTLE_MAPS)) battleMapWordsInit();
     if (featureOn(FEATURE_MONSTER_FLAGS)) monsterFlagWordsInit();
     if (featureOn(FEATURE_HATES)) hatesWordsInit();
+    if (featureOn(FEATURE_UNIQUE_GROUPS)) uniqueGroupsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) ritualWordsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) corpseKindsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) killTransformsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) commanderCastsInit();
     if (featureOn(FEATURE_ITEM_SLOTS)) itemSlotsInit();
+    carrierWordsInit();
+    transportWordsInit();
     if (featureOn(FEATURE_CUSTOM_AFFLICTIONS)) customAfflictionsInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) weaponTraitsInit();
     if (featureOn(FEATURE_SPELL_WORDS)) healArmyInit();
+    if (featureOn(FEATURE_GROWTH)) growthInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) beamWidthInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) lookColorInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) traitLinesInit();

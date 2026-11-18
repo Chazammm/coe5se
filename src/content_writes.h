@@ -90,7 +90,7 @@ static const char *applyContentBytes(int kind, int index, int offset, const unsi
         return setWeaponRuleTraits(index, offset, (const char *)bytes, bad, sizeof bad);
     }
     unsigned char *record = contentRecord(kind, index);
-    if (!record || offset < 0 || width < 1 || offset + width > contentRecordSize(kind)) return "bad_record";
+    if (!record || offset < 0 || width < 1 || offset > contentRecordSize(kind) - width) return "bad_record";
     memcpy(record + offset, bytes, (size_t)width);
     if (kind == CONTENT_CLASS) memcpy(tableAddress(TABLE_CLASS_COPY) + (size_t)index * CLASS_SIZE + offset, bytes, (size_t)width);
     return NULL;
@@ -107,7 +107,7 @@ static void readContentBytes(int kind, int index, int offset, unsigned char *out
         weaponRuleTraitsText(index, offset, (char *)out, width);
     } else {
         const unsigned char *record = contentRecord(kind, index);
-        if (record && offset >= 0 && offset + width <= contentRecordSize(kind)) memcpy(out, record + offset, (size_t)width);
+        if (record && offset >= 0 && offset <= contentRecordSize(kind) - width) memcpy(out, record + offset, (size_t)width);
     }
 }
 

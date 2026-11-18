@@ -272,7 +272,6 @@ static int ta_switches_allowed(void) {
     if(ta_texture_on && !ta_forbidden && (ta_modulate || (ta_scene_replace && ta_env_mode==0x1e01)))return 1;
     return ta_refuse(FPS_FIXED_FUNCTION);
 }
-// Client pointers are valid only when neither pixel transfer uses a buffer.
 static int ta_copy_buffers_clear(void) {
     int value=0;
     ta_get_int(0x88ed,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);
@@ -316,7 +315,6 @@ static int ta_allowed_state(void) {
     }
     ta_state_ok=1;return !ta_track_state || ta_switches_allowed();
 }
-// Returns a clamped dimension of a native mip level.
 static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
 static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain) {
     int w=0,h=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
@@ -329,7 +327,6 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
     ta_get_parameter(0x0de1,0x2802,&s);ta_get_parameter(0x0de1,0x2803,&t);if(s!=0x812f || t!=0x812f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter(0x0de1,0x813c,&base);ta_get_parameter(0x0de1,0x813d,&max);
     ta_get_parameter(0x0de1,0x884c,&compare);if(base || max<0 || compare)return ta_refuse(FPS_TEXTURE_SAMPLING);
-    // Preserve every level the native sampler can use, including level-zero-only icons.
     if(ta_scene_replace || terrain){if(mi==0x2600 || mi==0x2601)*last=0;else if(max<*last)*last=max;}
     else if(max<*last)return ta_refuse(FPS_TEXTURE_SAMPLING);
     float f=0;ta_get_parameter_float(0x0de1,0x813a,&f);if(f!=-1000.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
@@ -344,7 +341,6 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
         if(width!=ta_level_size(w,level) || height!=ta_level_size(h,level) || border)return ta_refuse(FPS_TEXTURE_LEVELS);
         int rgb=terrain && (format==0x8051 || format==0x1907 || format==3);
         if(compressed || (!rgb && format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
-        // RGBA readback of an RGB texture supplies the native opaque alpha.
         for(unsigned attr=0x805c;attr<=0x805f;attr++) {
             int bits=0;ta_get_level(0x0de1,level,attr,&bits);
             if(bits!=((rgb && attr==0x805f)?0:8))return ta_refuse(FPS_TEXTURE_FORMAT);
@@ -424,8 +420,6 @@ static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLaye
     unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
     for(unsigned i=0;i<cache->size;i++) {
         FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];if(e->source && e->source!=source)continue;
-        // A scene can use rectangular textures and shorter mip chains. Retry a
-        // rejection from the stricter map policy once under the scene policy.
         if(cache->pass && e->source)e->last_pass=cache->pass;
         int retry=e->decision<0 && ((ta_scene_replace && !e->scene_checked) ||
                   (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
@@ -491,8 +485,6 @@ static void array_texture_remove(unsigned source) {
     ta_remove(&ta_terrain_cache,source);
 }
 #ifdef _WIN32
-// Evict terrain that has been out of view for several passes. The queue is
-// closed here, so a freed layer cannot be referenced by an unsubmitted tile.
 static void ta_trim_terrain_cache(FpsTextureArrayCache *cache) {
     for(unsigned i=0;i<cache->size;) {
         FpsTextureArrayEntry *entry=&cache->entries[i];

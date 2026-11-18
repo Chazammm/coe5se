@@ -192,7 +192,7 @@ static const char *const PERSONAL_CALLS[] = {
 #define PERSONAL_CALL_COUNT ((int)(sizeof PERSONAL_CALLS / sizeof PERSONAL_CALLS[0]))
 static const char *const PERSONAL_CLOSED_CALLS[] = {
     "coe5.addAffliction", "coe5.addBattleMap", "coe5.addBenefit", "coe5.addFaction", "coe5.addMapEditorLine",
-    "coe5.addPlane", "coe5.addPlayerBlessing", "coe5.addShopOffer", "coe5.addTestFieldUnits", "coe5.afflictedUnits", "coe5.afflictionEffect",
+    "coe5.addPlane", "coe5.addPlayerBlessing", "coe5.addShopOffer", "coe5.addTestFieldUnits", "coe5.addTransport", "coe5.afflictedUnits", "coe5.afflictionEffect",
     "coe5.afflictionTurn", "coe5.afflictionValue", "coe5.aiBuyOffer", "coe5.aiConquerStep", "coe5.aiExploreStep",
     "coe5.aiFarExploreStep", "coe5.aiFriendlyMoveStep", "coe5.aiMakeDefenders", "coe5.aiMakeGuardsAt", "coe5.aiRallyStep",
     "coe5.aiRandomEnemy", "coe5.aiRedistributeItems", "coe5.aiShipDropCrew", "coe5.aiShipTakeBoat", "coe5.aiShipTakeCrew",

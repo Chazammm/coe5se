@@ -378,8 +378,10 @@ static SplitCall *splitCallHere(StepContext *ctx, int row) {
     return c && c->row == row && c->site == SPLIT_STEPS_MAC[row].site && c->frameSp == ctx->sp ? c : NULL;
 }
 
+static void carriedSplitPoint(CallSite site, int start);
 static int splitStartRow(StepContext *ctx, int i) {
     const SplitStepMac *m = &SPLIT_STEPS_MAC[i];
+    carriedSplitPoint(m->site, 1);
     for (SplitCall *stale; (stale = splitCallHere(ctx, i));) {
         writeLogWarning("split_call_dropped", "site=%s reason=no_end", SITES[m->site].name);
         releaseSplitCall(stale);
@@ -477,6 +479,8 @@ static void splitRunPoint(StepContext *ctx, unsigned rva) {
                 }
             }
         }
+        for (int j = 0; j < SPLIT_STEP_COUNT && !next; j++)
+            if (SPLIT_STEPS_MAC[j].endRva == rva) carriedSplitPoint(SPLIT_STEPS_MAC[j].site, 0);
         for (int j = 0; j < SPLIT_STEP_COUNT && !next; j++)
             if (SPLIT_STEPS_MAC[j].startRva == rva && splitStartRow(ctx, j)) next = SPLIT_STEPS_MAC[j].endRva;
         rva = next;

@@ -55,7 +55,19 @@ static void forgetHeldGameData(void) {
         freeGameDataPart(&gameDataHeld[i].shared);
         for (int p = 0; p < GAME_DATA_PLAYERS; p++) freeGameDataPart(&gameDataHeld[i].players[p]);
     }
-    gameDataHeldCount = 0;
+    free(gameDataHeld);
+    gameDataHeld = NULL;
+    gameDataHeldCount = gameDataHeldCapacity = 0;
+}
+
+static int gameDataHoldsFor(const char *mod, signed char *checked) {
+    for (int i = 0; i < luaScriptCount; i++)
+        if (!strcmp(luaScripts[i]->mod, mod)) return 1;
+    int m = modIndexExact(mod);
+    if (m < 0) return 0;
+    if (!checked) return modHasScriptFile(m);
+    if (!checked[m]) checked[m] = modHasScriptFile(m) ? 1 : -1;
+    return checked[m] > 0;
 }
 
 static void saveBufferInt64(SaveBuffer *b, long long value) {
@@ -297,6 +309,26 @@ static unsigned long long hashGameDataTable(lua_State *L, int index, int *known)
 }
 
 // ---- Lua: reading a table's bytes ---------------------------------------------------------------
+#define GAME_DATA_FILL_MS_MAX      2000
+#define GAME_DATA_FILL_CLOCK_PAIRS 64
+
+static unsigned long long gameDataClockMs(void) {
+#ifdef __APPLE__
+    struct timespec t;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+    return (unsigned long long)t.tv_sec * 1000u + (unsigned long long)t.tv_nsec / 1000000u;
+#else
+    FILETIME made, ended, kernel, user;
+    if (!GetThreadTimes(GetCurrentThread(), &made, &ended, &kernel, &user)) return GetTickCount64();
+    unsigned long long k = (unsigned long long)kernel.dwHighDateTime << 32 | kernel.dwLowDateTime;
+    unsigned long long u = (unsigned long long)user.dwHighDateTime << 32 | user.dwLowDateTime;
+    return (k + u) / 10000u;
+#endif
+}
+static unsigned long long gameDataFillDeadline;
+static unsigned gameDataFillPairs;
+static int gameDataFillLate;
+
 static void readGameDataTableInto(lua_State *L, int index, const unsigned char **at);
 static void pushGameDataValue(lua_State *L, const unsigned char **at) {
     unsigned char tag = *(*at)++;
@@ -332,8 +364,14 @@ static void readGameDataTableInto(lua_State *L, int index, const unsigned char *
     int pairs = (int)((unsigned)(*at)[0] | (unsigned)(*at)[1] << 8 | (unsigned)(*at)[2] << 16 | (unsigned)(*at)[3] << 24);
     *at += 4;
     for (int i = 0; i < pairs; i++) {
+        if (!gameDataFillLate && ++gameDataFillPairs % GAME_DATA_FILL_CLOCK_PAIRS == 0 && gameDataClockMs() > gameDataFillDeadline) gameDataFillLate = 1;
+        if (gameDataFillLate) return;
         pushGameDataValue(L, at);
         pushGameDataValue(L, at);
+        if (gameDataFillLate) {
+            lua_pop(L, 2);
+            return;
+        }
         lua_rawset(L, index);
     }
 }
@@ -384,6 +422,7 @@ typedef struct {
     SaveBuffer *entry;
     int any;
     const GameDataHeld *from;
+    int slowPart;
     unsigned long long hash;
     int hashKnown;
     int refused;
@@ -401,11 +440,14 @@ static void writeGameDataPart(lua_State *L, GameDataJob *job, GameDataWriter *w,
     free(part.bytes);
 }
 
-static void fillGameDataTable(lua_State *L, const GameDataPart *part) {
+static void fillGameDataTable(lua_State *L, const GameDataPart *part, GameDataJob *job, int which) {
     clearGameDataTable(L, -1);
-    if (!part || part->size <= 0) return;
+    if (!part || part->size <= 0 || gameDataFillLate) return;
     const unsigned char *at = part->bytes;
     readGameDataTableInto(L, -1, &at);
+    if (!gameDataFillLate) return;
+    clearGameDataTable(L, -1);
+    job->slowPart = which;
 }
 
 static int runGameDataJob(lua_State *L) {
@@ -426,17 +468,20 @@ static int runGameDataJob(lua_State *L) {
         return 0;
     }
     if (job->kind == GAME_DATA_FILL) {
+        job->slowPart = -2;
+        gameDataFillDeadline = gameDataClockMs() + GAME_DATA_FILL_MS_MAX, gameDataFillPairs = 0, gameDataFillLate = 0;
         if (job->player < 0) {
             lua_pushvalue(L, gameData);
-            fillGameDataTable(L, job->from ? &job->from->shared : NULL);
+            fillGameDataTable(L, job->from ? &job->from->shared : NULL, job, -1);
             lua_pop(L, 1);
         }
         for (int slot = 0; slot < GAME_DATA_PLAYERS; slot++) {
             if (job->player >= 0 && slot != job->player) continue;
             pushPlayerDataTable(L, playerData, slot);
-            fillGameDataTable(L, job->from ? &job->from->players[slot] : NULL);
+            fillGameDataTable(L, job->from ? &job->from->players[slot] : NULL, job, slot);
             lua_pop(L, 1);
         }
+        gameDataFillLate = 0;
         if (job->player < 0) {
             lua_newtable(L);
             int extra = 0;
@@ -514,10 +559,18 @@ static int gameDataCountsFor(const LuaScript *s) {
 }
 static int gameDataStateLive(const LuaScript *s) { return s->L && !s->dead && !s->retired && !s->stopping; }
 
+static void dropSlowGameDataPart(const LuaScript *s, const GameDataJob *job, GameDataHeld *held, const char *when) {
+    if (job->slowPart < -1) return;
+    writeLogWarning("game_data_dropped", "mod=%s reason=too_slow part=%d max_ms=%d when=%s", s->mod, job->slowPart, GAME_DATA_FILL_MS_MAX, when);
+    if (held) freeGameDataPart(job->slowPart < 0 ? &held->shared : &held->players[job->slowPart]);
+}
+
 static void fillGameDataOf(LuaScript *s, int player) {
     if (!gameDataStateLive(s) || !gameDataCountsFor(s)) return;
-    GameDataJob job = {.kind = GAME_DATA_FILL, .s = s, .player = player, .from = findGameDataHeld(s->mod)};
+    GameDataHeld *held = findGameDataHeld(s->mod);
+    GameDataJob job = {.kind = GAME_DATA_FILL, .s = s, .player = player, .from = held, .slowPart = -2};
     if (!callLuaProtected(s, pushGameDataJob, &job, 0)) return;
+    dropSlowGameDataPart(s, &job, held, "load");
     if (player < 0) s->gameDataHash = job.hash, s->gameDataHashKnown = job.hashKnown;
 }
 static void fillNewScriptGameData(LuaScript *s) { fillGameDataOf(s, -1); }
@@ -705,9 +758,12 @@ static void useGameDataChunk(const SaveChunk *chunk, SaveFile kind) {
             return;
         }
     } else forgetHeldGameData();
-    int taken = 0, bad = 0;
+    int taken = 0, bad = 0, unheld = 0;
+    char firstUnheld[MOD_NAME_MAX] = "";
     GameDataEntryRead *e = malloc(sizeof *e);
     if (!e && mods) writeLogError("game_data_read", "file=%s reason=out_of_memory", SAVE_FILE_NAMES[kind]);
+    int modsHere = G32(RVA_MOD_LAST_INDEX) + 1;
+    signed char *checked = kind == SAVE_FILE_SAVE && mods && modsHere > 0 ? calloc((size_t)modsHere, 1) : NULL;
     for (int i = 0; e && i < mods; i++) {
         if (!readGameDataEntry(&c, e)) {
             bad = 1;
@@ -733,6 +789,10 @@ static void useGameDataChunk(const SaveChunk *chunk, SaveFile kind) {
             }
             continue;
         }
+        if (!gameDataHoldsFor(e->mod, checked)) {
+            if (!unheld++) snprintf(firstUnheld, sizeof firstUnheld, "%s", e->mod);
+            continue;
+        }
         GameDataHeld *h = heldGameDataFor(e->mod);
         if (!h) continue;
         int ok = !e->hasShared || setGameDataPart(&h->shared, e->shared.bytes, e->shared.size, e->mod);
@@ -740,6 +800,8 @@ static void useGameDataChunk(const SaveChunk *chunk, SaveFile kind) {
         taken++;
     }
     free(e);
+    free(checked);
+    if (unheld) writeLogWarning("game_data_refused", "reason=no_script entries=%d first=%.80s", unheld, firstUnheld);
     if (kind == SAVE_FILE_SAVE)
         for (int i = 0; i < luaScriptCount; i++) fillGameDataOf(luaScripts[i], -1);
     if (chunk || kind == SAVE_FILE_SAVE)
@@ -849,8 +911,8 @@ static void fillGameDataFromEntry(LuaScript *s, const GameDataEntryRead *e) {
         h->shared = e->shared;
         for (int k = 0; k < e->parts; k++) h->players[e->at[k].slot] = e->at[k].part;
     }
-    GameDataJob job = {.kind = GAME_DATA_FILL, .s = s, .player = -1, .from = h};
-    callLuaProtected(s, pushGameDataJob, &job, 0);
+    GameDataJob job = {.kind = GAME_DATA_FILL, .s = s, .player = -1, .from = h, .slowPart = -2};
+    if (callLuaProtected(s, pushGameDataJob, &job, 0)) dropSlowGameDataPart(s, &job, NULL, "replay");
     free(h);
 }
 

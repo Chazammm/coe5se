@@ -306,6 +306,7 @@ static int lSetPlaneShape(lua_State *L) {
 
 static int lSetTerrainLooks(lua_State *L);
 static int lAddBattleMap(lua_State *L);
+static int lAddTransport(lua_State *L);
 static int lGiveAffliction(lua_State *L), lCureAffliction(lua_State *L), lHasAffliction(lua_State *L), lUnitAfflictions(lua_State *L);
 static int lAfflictedUnits(lua_State *L), lAfflictionTurn(lua_State *L), lAfflictionValue(lua_State *L), lSetAfflictionTurn(lua_State *L);
 static int lSetAfflictionValue(lua_State *L), lRemoveAffliction(lua_State *L);

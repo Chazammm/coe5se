@@ -244,7 +244,7 @@ static void fallbackfontLine(const char *args, int mod, int level) {
     snprintf(f->path, sizeof f->path, "%s", path);
     snprintf(f->tag, sizeof f->tag, "%s", tag);
     f->mod = mod, f->inBlock = inBlock, f->failed = 0;
-    f->forPick = languageTagMatches(tag, languagePick());
+    f->forPick = languageTagMatches(tag, languagePassTag());
     hashFallbackFiles();
     writeLog("fallbackfont_added", "mod=%s file=%s language=%s tag=%s for_pick=%d", name, file, inBlock ? languages.tag : "-",
              tag[0] ? tag : "-", f->forPick);
@@ -322,7 +322,8 @@ static int pickLettersWithoutFont(void) {
         count += !has;
     }
     missing = count, countedLetters = pickLetters.generation, countedFonts = fallbackFiles.hash;
-    writeLog("language_letters_checked", "pick=%s letters=%d without_font=%d fonts=%d", languagePick()[0] ? languagePick() : "default",
+    const char *tag = languagePassTag();
+    writeLog("language_letters_checked", "pick=%s letters=%d without_font=%d fonts=%d", tag[0] ? tag : languageBlocksRead() ? "several" : "default",
              pickLetters.count, missing, fallbackFiles.count);
     return missing;
 }

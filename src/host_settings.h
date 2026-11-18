@@ -1,15 +1,27 @@
 #pragma once
 
 #define SAVE_MSET_VERSION 1
+#define HOST_SEED_PICK    "lan_script_seed"
 
-typedef struct { char mod[MOD_NAME_MAX]; char name[SETTING_NAME_SIZE]; int value; } HostSettingPick;
+static unsigned lanScriptSeedNow(void);
+static void takeHostScriptSeed(unsigned seed);
+
+typedef struct { char mod[MOD_NAME_MAX]; char name[SETTING_NAME_SIZE]; int value, refused; } HostSettingPick;
 static HostSettingPick *hostSettingPicks;
 static int hostSettingPickCount, hostSettingPickCapacity;
 
-static int hostSettingPickOr(const char *mod, const char *name, int fallback) {
-    for (int i = 0; i < hostSettingPickCount; i++)
-        if (!strcmp(hostSettingPicks[i].mod, mod) && !strcmp(hostSettingPicks[i].name, name)) return hostSettingPicks[i].value;
-    return fallback;
+static int hostSettingValueOf(const ModSetting *s) {
+    for (int i = 0; i < hostSettingPickCount; i++) {
+        HostSettingPick *p = &hostSettingPicks[i];
+        if (strcmp(p->mod, s->mod) || strcmp(p->name, s->name)) continue;
+        int max = s->optionCount ? s->optionCount - 1 : 1;
+        if (s->isKey ? keyValueIsValid(p->value) : p->value >= 0 && p->value <= max) return p->value;
+        if (!p->refused++)
+            refuseIniLine(s->isKey ? "key" : s->optionCount ? "choice" : "onoff", s->mod, "out_of_range", "name=%s value=%d max=%d from=host", s->name, p->value,
+                          s->isKey ? -1 : max);
+        return s->defaultValue;
+    }
+    return s->defaultValue;
 }
 
 static void addHostSettingsChunk(SaveList *list) {
@@ -28,17 +40,26 @@ static void addHostSettingsChunk(SaveList *list) {
         saveBufferInt(&b, s->value);
         count++;
     }
+    saveBufferString(&b, COE5SE_MOD);
+    saveBufferString(&b, HOST_SEED_PICK);
+    saveBufferInt(&b, (int)lanScriptSeedNow());
+    count++;
     if (b.bytes) memcpy(b.bytes + countAt, (const unsigned char[4]){(unsigned char)count, (unsigned char)(count >> 8), (unsigned char)(count >> 16), (unsigned char)(count >> 24)}, 4);
     saveBufferInt(&b, (int)b.size + 8);
     saveBufferInt(&b, SAVE_TAG_MSET);
     saveListAdd(list, SAVE_TAG_MSET, &b);
 }
 
+static int hostSettingPicksMax(int size) {
+    int fit = (size - 16) / 6;
+    return fit < settingCount + 1 ? fit : settingCount + 1;
+}
+
 static const char *useHostSettingsPayload(const unsigned char *payload, int size) {
     if (size < 16) return "bad";
     SaveCursor c = {payload, payload + size - 8, 0};
     int version = saveCursorInt(&c), count = saveCursorInt(&c);
-    if (c.failed || version != SAVE_MSET_VERSION || count < 0 || count > size) return "bad";
+    if (c.failed || version != SAVE_MSET_VERSION || count < 0 || count > hostSettingPicksMax(size)) return "bad";
     HostSettingPick *picks = count ? calloc((size_t)count, sizeof *picks) : NULL;
     if (count && !picks) return "bad";
     for (int i = 0; i < count; i++) {
@@ -53,6 +74,8 @@ static const char *useHostSettingsPayload(const unsigned char *payload, int size
     free(hostSettingPicks);
     hostSettingPicks = picks;
     hostSettingPickCount = hostSettingPickCapacity = count;
+    for (int i = 0; i < count; i++)
+        if (!strcmp(picks[i].mod, COE5SE_MOD) && !strcmp(picks[i].name, HOST_SEED_PICK)) takeHostScriptSeed((unsigned)picks[i].value);
     return "found";
 }
 

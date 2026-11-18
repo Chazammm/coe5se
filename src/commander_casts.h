@@ -20,22 +20,59 @@ static int ritualCasterMaxCast(int ritual) {
     return ritualCasterMaxCasts[ritual];
 }
 
+static int commanderCastOrder(int unitA, int ritualA, int unitB, int ritualB) {
+    return unitA != unitB ? (unitA > unitB) - (unitA < unitB) : (ritualA > ritualB) - (ritualA < ritualB);
+}
+
+static int findCommanderCast(int unit, int ritual, int *at) {
+    int low = 0, high = commanderCastCount;
+    while (low < high) {
+        int mid = low + (high - low) / 2;
+        if (commanderCastOrder(commanderCasts[mid].unit, commanderCasts[mid].ritual, unit, ritual) < 0) low = mid + 1;
+        else high = mid;
+    }
+    *at = low;
+    return low < commanderCastCount && commanderCasts[low].unit == unit && commanderCasts[low].ritual == ritual;
+}
+
 static int unitRitualCasts(int unit, int ritual) {
-    for (int i = 0; i < commanderCastCount; i++)
-        if (commanderCasts[i].unit == unit && commanderCasts[i].ritual == ritual) return commanderCasts[i].count;
-    return 0;
+    int at;
+    return findCommanderCast(unit, ritual, &at) ? commanderCasts[at].count : 0;
 }
 
 static int setUnitRitualCasts(int unit, int ritual, int count) {
-    for (int i = 0; i < commanderCastCount; i++) {
-        if (commanderCasts[i].unit != unit || commanderCasts[i].ritual != ritual) continue;
-        if (count > 0) commanderCasts[i].count = count;
-        else commanderCasts[i] = commanderCasts[--commanderCastCount];
+    int at;
+    if (findCommanderCast(unit, ritual, &at)) {
+        if (count > 0) commanderCasts[at].count = count;
+        else memmove(&commanderCasts[at], &commanderCasts[at + 1], (size_t)(--commanderCastCount - at) * sizeof commanderCasts[0]);
         return 1;
     }
     if (count <= 0) return 1;
     if (!growList((void **)&commanderCasts, &commanderCastCapacity, commanderCastCount + 1, sizeof commanderCasts[0])) return 0;
-    commanderCasts[commanderCastCount++] = (CommanderCast){unit, ritual, count};
+    memmove(&commanderCasts[at + 1], &commanderCasts[at], (size_t)(commanderCastCount - at) * sizeof commanderCasts[0]);
+    commanderCasts[at] = (CommanderCast){unit, ritual, count};
+    commanderCastCount++;
+    return 1;
+}
+
+typedef struct { CommanderCast cast; int at; } CommanderCastRead;
+static int compareCommanderCastReads(const void *x, const void *y) {
+    const CommanderCastRead *a = x, *b = y;
+    int order = commanderCastOrder(a->cast.unit, a->cast.ritual, b->cast.unit, b->cast.ritual);
+    return order ? order : (a->at > b->at) - (a->at < b->at);
+}
+
+static int mergeCommanderCastReads(CommanderCastRead *reads, int n) {
+    int total = commanderCastCount + n;
+    for (int i = 0; i < commanderCastCount; i++) reads[n + i] = (CommanderCastRead){commanderCasts[i], -1};
+    qsort(reads, (size_t)total, sizeof reads[0], compareCommanderCastReads);
+    if (!growList((void **)&commanderCasts, &commanderCastCapacity, total, sizeof commanderCasts[0])) return 0;
+    int kept = 0;
+    for (int i = 0; i < total; i++) {
+        if (i + 1 < total && reads[i + 1].cast.unit == reads[i].cast.unit && reads[i + 1].cast.ritual == reads[i].cast.ritual) continue;
+        commanderCasts[kept++] = reads[i].cast;
+    }
+    commanderCastCount = kept;
     return 1;
 }
 
@@ -250,6 +287,11 @@ static void useCommanderCastsChunk(const SaveChunk *chunk, SaveFile kind) {
         return;
     }
     if (turn) dropCommanderCasts(keepOtherPlayersUnit, player);
+    CommanderCastRead *reads = malloc(((size_t)entries + (size_t)commanderCastCount) * sizeof *reads + 1);
+    if (!reads) {
+        writeLogError("commander_casts_read", "file=%s reason=out_of_memory entries=%d", SAVE_FILE_NAMES[kind], entries);
+        return;
+    }
     int read = 0, skipped = 0;
     for (int i = 0; i < entries; i++) {
         int unit = saveCursorInt(&c), ritual = saveCursorInt(&c), count = saveCursorInt(&c);
@@ -259,9 +301,11 @@ static void useCommanderCastsChunk(const SaveChunk *chunk, SaveFile kind) {
             skipped++;
             continue;
         }
-        if (setUnitRitualCasts(unit, ritual, count)) read++;
-        else skipped++;
+        reads[read] = (CommanderCastRead){{unit, ritual, count}, i};
+        read++;
     }
+    if (!mergeCommanderCastReads(reads, read)) skipped += read, read = 0;
+    free(reads);
     if (c.failed) writeLogWarning("commander_casts_read", "file=%s reason=bad_chunk read=%d", SAVE_FILE_NAMES[kind], read);
     else if (skipped) writeLogWarning("commander_casts_read", "file=%s reason=bad_entries read=%d skipped=%d player=%d", SAVE_FILE_NAMES[kind], read, skipped, player);
     else writeLog("commander_casts_read", "file=%s read=%d player=%d", SAVE_FILE_NAMES[kind], read, player);

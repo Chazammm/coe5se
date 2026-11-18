@@ -44,6 +44,8 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     if (!line) return;
     line = offsetNameLineHook(line, len, mod, level);
     if (!line) return;
+    if (featureOn(FEATURE_GROWTH)) line = growthLineHook(line, len, mod, level);
+    if (!line) return;
     if (featureOn(FEATURE_NAME_LISTS)) line = nameListLineHook(line, len, mod, level);
     if (!line) return;
     line = classNameLineHook(line, len, mod, level);

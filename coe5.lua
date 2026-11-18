@@ -103,6 +103,9 @@
 --   Draw a mod terrain like a game one  coe5.setTerrainLooks{terrain = "Dungeon Wall", ground = "Cave Wall", picture = "./wall.tga"}   (at load)
 --   A battle map for a terrain     coe5.addBattleMap{file = "./maps/moria_halls.coem", terrains = {"Moria Deeps"}, weight = 20}   (at load)
 --   A terrain's battle plants      coe5.setBattleScatter{terrain = "Moria Deeps", objects = {{"Mithril Vein", 20}}}   (at load)
+--   A vehicle with a deck          coe5.addTransport{monster = "War Wagon", battlemap = "./maps/wagon.coem", heart = "Wagon Driver Seat"}   (at load)
+--   A vehicle that carries a site  coe5.addTransport{monster = "Sky Galleon", terrain = "Port"}   (at load)
+--   A carrier on land and in air   coe5.addTransport{monster = "Sky Galleon", land = true, air = true}   (at load)
 --   Add an independent faction     coe5.addFaction{name = "Ash Court", like = "Inferno", home = "Ash Plane", color = {0.8, 0.3, 0}}   (at load; coe5.factionSlot("Ash Court") in the game)
 --   Add a mod command              coe5.addModCommand("mymod_gold", function(args, mod, level) ... end)   (in <ModName>_commands.lua only)
 --   Change a square as the world is built  coe5.wrap("PLAY_GAME_NEW_WORLD", function(next, mode) local r = next(mode) coe5.set("squareTerrain", x, y, t) coe5.set("squareName", x, y, "Old Tower") return r end)
@@ -1355,13 +1358,13 @@ function coe5.showMessageBox(title, text) end
 ---@return boolean|integer|nil value on/off: true or false; a choice: the picked option's number from 0; a key: its key value (coe5.key.none for none); nil when your mod declares no such setting (logged as lua_refused)
 function coe5.setting(name) end
 
----The text in the language the player picked on CoE5SE's Mod Settings page, from the mods' translation lines
----(language blocks), or the text itself when no line has it. A translation is used only when its % codes match
+---The text's translation, from the mods' translation lines the game has read (language blocks), or the text itself
+---when no line has it. A translation is used only when its % codes match
 ---the text's, in order, so string.format of the result takes the same values. Read only; each player has their
 ---own pick, so store text as written and translate it where it is shown. Text you build with string.format
 ---translates only as string.format(coe5.translate(fmt), ...): the built text matches no translation line.
 ---@param text string the text as your mod writes it
----@return string text the picked language's text, or the text itself
+---@return string text the translation, or the text itself
 function coe5.translate(text) end
 
 ---Tells other mods that your script is filling in a new game's setup itself: while it is on, mods
@@ -3949,6 +3952,36 @@ function coe5.addBattleMap(map) end
 ---@param scatter {terrain: integer|string, objects: {[1]: string, [2]: integer}[]|nil}
 ---@return boolean set false when refused (lua_refused reason=not_at_load, no_terrain, unknown_terrain, bad_terrain, bad_list, no_name, bad_chance, too_many_objects, scatter_taken, hook_not_installed, out_of_memory)
 function coe5.setBattleScatter(scatter) end
+
+---Makes `monster` a vehicle, at script load only, one entry per monster: the same mod's second call
+---replaces its first, another mod's is refused. `monster` (a number or a name) is required; each other
+---field turns on one part. `battlemap` ("./deck.coem", made in the game's battle map editor) is its deck:
+---the map's objects, placed on the battle square's own field (sea, land or Sky) where the game builds a
+---ship's deck, front toward the middle, mirrored for the defenders. The deck moves as the game's ships do
+---in the advance and gather rounds, riders along, and the vehicle's side boards it, front rank first.
+---`heart`, a monster on the deck: the vehicle stays off the field and survives the fight only if a heart
+---of its deck lives; without one it fights as a unit. Deck objects need standable to be stood on. A
+---monster with the game's `ship` can't have a deck (the game builds its own). `terrain` (a name or a
+---number): the vehicle carries a site of that terrain, and its owner recruits from it wherever the
+---vehicle stands, an owned square or not, as from an owned square of that terrain: the terrain's recruit
+---lists and the game's own tests. On a square that already is a place for its owner to recruit, the one
+---place lists both: the square's own offers and the site's. Each vehicle buys once a month wherever it
+---goes, apart from the square's own recruiting, and an auto-recruit order made for its site follows it.
+---The square under it keeps its own terrain. `land` = true and `air` = true make a monster with the
+---game's `transport` ability a carrier there (the .c5m words transportland and transportair do the
+---same; either one turns a medium on): a human's army holding it and up to `transport` 1 x 1 riders (one
+---place each) moves with its action points and its move flags. With `land` it carries on land squares,
+---its riders on the ground; with `air` it carries in the Sky and over water while it flies, and its
+---riders fly and float with it and stay in the Sky while it does. A bare `coe5.addTransport{monster}`
+---carries nowhere. The sea stays the game's: `transport`, `shipmove` and the month's drown check. An army
+---past its places moves as the game moves it, and so does every AI's; the AI doesn't recruit from
+---carried sites. When the carrier dies its riders fare as the game's rules say: they drown at sea at
+---the month's end, fall from the Sky unless they float, and nothing happens on land. The .c5m words
+---transportmap, transportheart and transportterrain give a monster `battlemap`, `heart` and `terrain`
+---without a script; a call for the same monster takes the ones it leaves out, and its own win.
+---@param transport {monster: integer|string, land: boolean|nil, air: boolean|nil, battlemap: string|nil, heart: integer|string|nil, terrain: integer|string|nil}
+---@return boolean added false when refused (lua_refused reason=not_at_load, no_monster, bad_monster, unknown_monster, bad_battlemap, bad_heart, bad_terrain, bad_land, bad_air, bad_text, monster_taken, too_many, unknown_terrain, unknown_heart, heart_without_battlemap, game_ship, bad_file, file_not_found, file_wrong_case, file_link, path_too_long, not_a_battle_map, no_deck_objects, deck_too_tall, heart_not_on_deck, hook_not_installed, out_of_memory)
+function coe5.addTransport(transport) end
 
 ---Adds a mod command, as a DLL's addModCommand does, and only from your <ModName>_commands.lua while
 ---it loads. A line whose first word is `name`, exactly, capitals included, goes to `handler` instead

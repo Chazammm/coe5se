@@ -12,12 +12,17 @@ Features
 - Optional Windows 5.43 batching for battlefields, local army views, spell particles and projectile sprites, preserving native counts, order, texture detail and fixed-function VFX sampling; restart required.
 - Batch base terrain on the world map, in battles and in garrisons with the existing graphics switches on Windows 5.43.
 - Batch unit sprites and army markers on the world map with the existing map graphics switch on Windows 5.43.
+- Vehicles: decks that move in battle, carried sites and carriers on sea, land and air
+- Languages: a one-language translation mod applies at Default once enabled
 
 Commands
 - language: your mod's text in another language
 - fallbackfont: fonts for Chinese, Japanese, Korean, Thai and emoji
 - newaffliction, descr and battleaff: custom afflictions
 - makeaff, afftarg, cureoneaff, affres and +hasaffunithere: a custom affliction by string
+- growkills, growxp and growoffs chances: growth by kills or xp into one of several monsters
+- uniquegroup: monsters that share one unique like a character's mounted forms
+- transportland, transportair, transportmap, transportheart and transportterrain: vehicle monsters
 
 Lua
 - coe5.giveAffliction, coe5.cureAffliction, coe5.afflictionEffect and 7 more: give and cure custom afflictions, and their effects
@@ -34,6 +39,7 @@ Lua
 - unitBattleStrength, squareBattleStrength and commanderBattleStrength: battle strength's new names, the old ones still work
 - unitStr: a unit's Strength
 - Mac: 138 more calls, sites and values, allowMultipleUnique and coe5.inspectTestFieldItem among them
+- coe5.addTransport: makes a monster a vehicle
 
 Bugs
 - personalmod: view mods now run for the LAN host too
@@ -43,3 +49,4 @@ Bugs
 - newcorpsetype: the game no longer hangs at a save or event
 - monsterAttackValue: wasn't reading a Web
 - coe5.battleSquareAbility: wasn't reading on Windows
+- LAN games: another machine's bad data no longer reads out of bounds, stalls a load or takes hundreds of MB

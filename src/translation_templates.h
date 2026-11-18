@@ -590,7 +590,7 @@ static int translatorFileNameOk(const char *name) {
     return 1;
 }
 
-static void writeTranslatorTemplate(FILE *f, int mod, const char *pick) {
+static void writeTranslatorTemplate(FILE *f, int mod, const char *pick, int reads) {
     const char *name = translators.mods[mod].name, *languageName = translatorLanguageName(pick);
     fprintf(f, "# CoE5SE: translation template for %s\n", name);
     fprintf(f, "# Every text CoE5SE read from the mod's files, once each. A filled line is the translation the game shows now.\n");
@@ -598,13 +598,14 @@ static void writeTranslatorTemplate(FILE *f, int mod, const char *pick) {
     fprintf(f, "# The lines go in a .c5se of a mod, under the language line. Written again at each mods pass: copy before editing.\n");
     if (pick[0] && languageName[0]) fprintf(f, "language \"%s\" \"%s\"\n", pick, languageName);
     else if (pick[0]) fprintf(f, "language \"%s\"\n", pick);
+    else if (reads) fprintf(f, "# Default on CoE5SE's page in Mod Settings: each enabled translation mod reads in its own language. The block starts with a language tag and the language's own name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
     else fprintf(f, "# No language picked on CoE5SE's page in Mod Settings. The block starts with a language tag and the language's own name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
     const char *file = NULL;
     for (int i = 0; i < translators.textCount; i++) {
         const TranslatorText *t = &translators.texts[i];
         if (t->mod != mod) continue;
         if (!file || strcmp(file, t->file)) fprintf(f, "\n# %s\n", file = t->file);
-        int final = pick[0] ? translatorFinal(t->text) : -1;
+        int final = reads ? translatorFinal(t->text) : -1;
         if (final >= 0) fprintf(f, "translation \"%s\" \"%s\"\n", t->text, translators.lines[final].to);
         else fprintf(f, "# translation \"%s\" \"\"\n", t->text);
     }
@@ -648,12 +649,13 @@ static int writeTranslatorLetters(FILE *f, const TranslatorLine *l, int (*hasLet
     return 1;
 }
 
-static void writeTranslatorReport(FILE *f, const char *pick, int (*hasLetter)(uint32_t code)) {
+static void writeTranslatorReport(FILE *f, const char *pick, int reads, int fromDefault, int (*hasLetter)(uint32_t code)) {
     const char *languageName = translatorLanguageName(pick);
     fprintf(f, "CoE5SE: translation report\n");
-    if (!pick[0]) fprintf(f, "Language: Default (none picked on CoE5SE's page in Mod Settings): nothing to count\n");
-    else if (languageName[0]) fprintf(f, "Language: %s (%s)\n", languageName, pick);
-    else fprintf(f, "Language: %s\n", pick);
+    if (!reads) fprintf(f, "Language: Default (none picked on CoE5SE's page in Mod Settings): nothing to count\n");
+    else if (!pick[0]) fprintf(f, "Language: Default on CoE5SE's page in Mod Settings, each enabled translation mod in its own language\n");
+    else if (languageName[0]) fprintf(f, "Language: %s (%s)%s\n", languageName, pick, fromDefault ? ", the enabled translation mods' language (Default on CoE5SE's page in Mod Settings)" : "");
+    else fprintf(f, "Language: %s%s\n", pick, fromDefault ? ", the enabled translation mods' language (Default on CoE5SE's page in Mod Settings)" : "");
     fprintf(f, "Mods: %d. Written at each mods pass while the game runs with --dumpstrings.\n", translators.modCount);
     fprintf(f, "Missing: no translation line. Not used: the game ignores the line, its %% codes differ from the text's.\n");
     fprintf(f, "Too long: the screen cuts the translation. Not in any enabled mod: a translation of the game's own text, or of a text a mod no longer has.\n");
@@ -663,13 +665,13 @@ static void writeTranslatorReport(FILE *f, const char *pick, int (*hasLetter)(ui
         for (int i = 0; i < translators.textCount; i++) {
             const TranslatorText *t = &translators.texts[i];
             if (t->mod != m) continue;
-            int final = pick[0] ? translatorFinal(t->text) : -1;
+            int final = reads ? translatorFinal(t->text) : -1;
             texts++;
             translated += final >= 0 && translationConversionsMatch(t->text, translators.lines[final].to);
         }
-        if (pick[0]) fprintf(f, "\n== %s: %d texts, %d translated, %d missing ==\n", translators.mods[m].name, texts, translated, texts - translated);
+        if (reads) fprintf(f, "\n== %s: %d texts, %d translated, %d missing ==\n", translators.mods[m].name, texts, translated, texts - translated);
         else fprintf(f, "\n== %s: %d texts ==\n", translators.mods[m].name, texts);
-        for (int i = 0; i < translators.textCount && pick[0]; i++) {
+        for (int i = 0; i < translators.textCount && reads; i++) {
             const TranslatorText *t = &translators.texts[i];
             if (t->mod != m) continue;
             int final = translatorFinal(t->text);
@@ -699,7 +701,7 @@ static void writeTranslatorReport(FILE *f, const char *pick, int (*hasLetter)(ui
             }
             if (lettersChecked) lettersChecked = writeTranslatorLetters(f, l, hasLetter);
         }
-        for (int i = 0; i < translators.lineCount && pick[0]; i++) {
+        for (int i = 0; i < translators.lineCount && reads; i++) {
             const TranslatorLine *l = &translators.lines[i];
             if (l->mod != m || l->rank <= 0 || translatorAnyModHas(l->from)) continue;
             int earlier = 0;
@@ -792,8 +794,8 @@ static FILE *openTranslatorFile(const char *file) {
 static void translatorsAfterPass(int level) {
     if (level != 2 || !translators.collecting) return;
     translators.collecting = 0;
-    const char *pick = languagePick();
-    int templates = 0;
+    const char *pick = languagePassTag();
+    int reads = pick[0] || languageBlocksRead(), templates = 0;
     for (int m = 0; m < translators.modCount; m++) readTranslatorScripts(m);
     for (int m = 0; m < translators.modCount; m++) {
         const char *name = translators.mods[m].name;
@@ -805,19 +807,19 @@ static void translatorsAfterPass(int level) {
         snprintf(file, sizeof file, "%s" SIDECAR_SUFFIX, name);
         FILE *f = openTranslatorFile(file);
         if (!f) continue;
-        writeTranslatorTemplate(f, m, pick);
+        writeTranslatorTemplate(f, m, pick, reads);
         if (fclose(f)) writeLogError("translation_file_not_written", "reason=write_failed file=%s", file);
         else templates++;
     }
     FILE *f = openTranslatorFile(TRANSLATOR_REPORT_FILE);
     int report = f != NULL;
     if (f) {
-        writeTranslatorReport(f, pick, translatorFontHasLetter);
+        writeTranslatorReport(f, pick, reads, languages.defaultReads && languages.translationMods, translatorFontHasLetter);
         if (fclose(f)) {
             writeLogError("translation_file_not_written", "reason=write_failed file=%s", TRANSLATOR_REPORT_FILE);
             report = 0;
         }
     }
     writeLog("translation_files_written", "pick=%s mods=%d templates=%d texts=%d lines=%d report=%d folder=%s" USER_DIR_SEP TRANSLATOR_FOLDER,
-             pick[0] ? pick : "default", translators.modCount, templates, translators.textCount, translators.lineCount, report, userDir());
+             pick[0] ? pick : reads ? "several" : "default", translators.modCount, templates, translators.textCount, translators.lineCount, report, userDir());
 }

@@ -10,12 +10,12 @@
     X(MISSING_MODS, "missing_mods") X(SAVE_COUNT, "save_count") X(MOD_VERSIONS, "mod_versions") \
     X(SPELL_WORDS, "spell_words") X(SPELL_PATH_WORDS, "spell_path_words") X(PLANE_WORDS, "plane_words") \
     X(FACTION_WORDS, "faction_words") X(TERRAIN_LOOKS, "terrain_looks") X(BATTLE_MAPS, "battle_maps") \
-    X(MONSTER_FLAGS, "monster_flags") X(HATES, "hates") X(RITUAL_WORDS, "ritual_words") \
+    X(MONSTER_FLAGS, "monster_flags") X(HATES, "hates") X(UNIQUE_GROUPS, "unique_groups") X(RITUAL_WORDS, "ritual_words") \
     X(CORPSE_KINDS, "corpse_kinds") X(WEAPON_TRAITS, "weapon_traits") X(NO_EXPLODE, "no_explode") X(RANDOM_EVENTS, "random_events") \
     X(NAME_LISTS, "name_lists") X(AI_CLASS, "ai_class") X(MAXDATA, "maxdata") X(PERSONALMOD, "personalmod") X(LAN_SCRIPTS, "lan_scripts") X(SIDECAR, "sidecar") \
     X(PLUGIN_CHECKS, "plugin_checks") X(MOD_SETTINGS, "mod_settings") X(LOAD_ORDER, "load_order") X(ITEM_SLOTS, "item_slots") X(CUSTOM_AFFLICTIONS, "custom_afflictions") \
     X(ITEM_SLOT_STATS, "item_slot_stats") X(MAP_RENDERING, "map_rendering") X(FONT_FALLBACK, "font_fallback") \
-    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text")
+    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text") X(GROWTH, "growth")
 
 typedef enum {
 #define FEATURE_ENUM(id, name) FEATURE_##id,

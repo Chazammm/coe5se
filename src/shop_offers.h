@@ -465,11 +465,14 @@ static void shopProcessOfferHook(int player, void *record, int temples, int libr
 #endif
 }
 
+static void carriedSitesShopBuild(int player, int begin);
 static void shopBuildHook(int player) {
     int any = 0;
     for (int i = 0; i < shopRowCount && !any; i++) any = shopRowLive(shopRows[i]);
+    carriedSitesShopBuild(player, 1);
     if (!any || netShutsGameCalls() || player < 0 || player >= PLAYER_SLOTS) {
         GAME_FN(void (*)(int), RVA_SHOP_BUILD)(player);
+        carriedSitesShopBuild(player, 0);
         return;
     }
     memset(shopBuild.entryFromRecords, 0, sizeof shopBuild.entryFromRecords);
@@ -480,6 +483,13 @@ static void shopBuildHook(int player) {
     for (int i = 0; i < shopRowCount; i++)
         if (shopRowLive(shopRows[i])) rollShopRow(shopRows[i], player);
     mergeShopMessages(player);
+    carriedSitesShopBuild(player, 0);
+}
+
+static int installShopBuildCall(void) {
+    static int state;
+    if (!state) state = pointCustomPlaneCall(RVA_SHOP_BUILD_CALL, RVA_SHOP_BUILD, (void *)shopBuildHook, "shop_build") ? 1 : -1;
+    return state > 0;
 }
 
 static int installShopOfferHooks(void) {
@@ -487,7 +497,7 @@ static int installShopOfferHooks(void) {
     int ok = pointCustomPlaneCall(RVA_SHOP_CLASS_OFFER_CALL, RVA_SHOP_PROCESS_OFFER, (void *)shopProcessOfferHook, "shop_class_offer") &&
              pointCustomPlaneCall(RVA_SHOP_LOCATION_OFFER_CALL, RVA_SHOP_PROCESS_OFFER, (void *)shopProcessOfferHook,
                                   "shop_location_offer") &&
-             pointCustomPlaneCall(RVA_SHOP_BUILD_CALL, RVA_SHOP_BUILD, (void *)shopBuildHook, "shop_build");
+             installShopBuildCall();
     shopHooksInstalled = ok ? 1 : -1;
     writeResultLog(ok, "shop_offer_hooks_installed", "ok=%d", ok);
     return ok;

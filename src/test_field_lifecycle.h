@@ -107,7 +107,7 @@ static int testFieldAllowsSecondUnique(void) {
 // @platform-split test_field_unique: Windows answers newunit's own call of the unique search; Mac's newunit holds a copy of the search, whose count read a step hook answers
 static int testFieldMonsterUnitFirstHook(int monster) {
     if (testFieldAllowsSecondUnique()) return -1;
-    return GAME_FN(int (*)(int), RVA_MONSTER_UNIT_FIRST)(monster);
+    return uniqueGroupUnitFirst(monster);
 }
 static TestFieldCall testFieldUniqueCall = {RVA_NEW_UNIT_UNIQUE_CALL, RVA_MONSTER_UNIT_FIRST, (void *)testFieldMonsterUnitFirstHook, "new_unit_unique", NULL, 0};
 #else
@@ -208,7 +208,7 @@ static int turnOnTestFieldLifecycle(int multiple) {
         testFieldLife.tracking = 1;
     }
 #ifndef __APPLE__
-    if (multiple && !pointTestFieldCall(&testFieldUniqueCall)) {
+    if (multiple && !uniqueGroups.newUnitCall && !pointTestFieldCall(&testFieldUniqueCall)) {
 #else
     if (multiple && !pointTestFieldUniqueRead()) {
 #endif

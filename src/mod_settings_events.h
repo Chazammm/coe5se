@@ -5,7 +5,7 @@ static int isSettingLine(const char *line) {
     return (line[0] == '+' || line[0] == '-') && !strncmp(line + 1, "setting", 7) && (line[8] == ' ' || line[8] == '\t' || !line[8]);
 }
 
-static int hostSettingPickOr(const char *mod, const char *name, int fallback);
+static int hostSettingValueOf(const ModSetting *s);
 
 static int settingValueNow(const ModSetting *s) {
     if (s->rejected) return s->defaultValue;
@@ -14,7 +14,7 @@ static int settingValueNow(const ModSetting *s) {
     if (role == NET_ROLE_SINGLE || role == NET_ROLE_HOST) return s->value;
     if (role == NET_ROLE_OFFICIAL) return s->defaultValue;
     if (!strcmp(s->mod, COE5SE_MOD) || modClassNow(s->mod) == LUA_CLASS_PERSONAL) return s->value;
-    return hostSettingPickOr(s->mod, s->name, s->defaultValue);
+    return hostSettingValueOf(s);
 }
 
 static void noteModEventLine(const char *line, int level, const char *mod, const char *file);
