@@ -49,3 +49,11 @@ restart
 parent graphics_changes
 label "Frame Rate Limiting"
 tip "Adds high-refresh FPS choices, GPU wait and optional precise pacing. Off installs no frame-control hooks or menu choices. Takes effect next launch."
+
+newsetting scene_sprite_batching
+onoff
+default 0
+restart
+parent graphics_changes
+label "Batch battle, location and spell graphics"
+tip "Windows CoE5 5.43. Batches compatible unit sprites, spell particles and projectiles with original detail, particle counts and order. Unsupported draws stay native. Independent of map decoration batching. Takes effect next launch."
