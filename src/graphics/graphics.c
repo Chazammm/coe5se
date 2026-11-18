@@ -48,6 +48,9 @@ static long long now_ticks(void) {return 0;}
 #include "gl_batch_lab.h"
 #include "gl_texture_array_lab.h"
 #include "gl_arrays_lab.h"
+#ifdef _WIN32
+#include "terrain_batch.h"
+#endif
 #include "gl_hook_guard.h"
 #ifdef COE5SE_GRAPHICS_ORACLE
 #include "tests/image_oracle.h"
@@ -95,7 +98,7 @@ static void mod_log_fallbacks(void) {
     for(unsigned i=0;i<FPS_REASON_COUNT;i++)if(fresh&(1u<<i)) {
         char line[1400];
         snprintf(line,sizeof(line),"fps_mod original_path reason=%s rejected_textures=%lld cache_mib=%.2f note=unsupported_draws_use_original_renderer",
-            fps_fallback_name((FpsFallbackReason)i),ta_rejected,(double)ta_bytes/(1024.0*1024.0));
+            fps_fallback_name((FpsFallbackReason)i),ta_rejected,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
         if(i==FPS_SHADER_COMPILE || i==FPS_SHADER_LINK || i==FPS_ENTRY_POINT) {
             snprintf(line,sizeof(line),"fps_mod renderer_detail %.1023s",ta_status);mod_log(line);
@@ -103,6 +106,46 @@ static void mod_log_fallbacks(void) {
     }
     mod_reported_reasons|=fresh;
 }
+#ifdef _WIN32
+static unsigned terrain_reported;
+static void mod_terrain_finish(unsigned view,long long before) {
+    terrain_end_scope();
+    if((terrain_reported&view) || terrain_tiles==before)return;
+    char line[200];
+    snprintf(line,sizeof(line),"fps_mod terrain_ready view=%s tiles=%lld cache_mib=%.2f original_mips=1 original_order=1",
+        view==1?"map":view==2?"battle":"location",terrain_tiles-before,ta_terrain_cache.bytes/(1024.0*1024.0));
+    mod_log(line);terrain_reported|=view;
+}
+static void mod_terrain_plane(uintptr_t a,unsigned plane) {
+    int opened=mod_operational && (!mod_render_setting || *mod_render_setting) && terrain_begin_scope();
+    long long before=terrain_tiles;
+    ((void (*)(uintptr_t,unsigned))(detail_base+RVA_MAP_DRAW_PLANE))(a,plane);
+    if(opened)mod_terrain_finish(1,before);
+}
+static void mod_terrain_battle(void) {
+    int opened=mod_scenes_enabled && mod_scene_kind && terrain_begin_scope();
+    long long before=terrain_tiles;
+    ((void (*)(void))(detail_base+RVA_BATTLE_BACKGROUND))();
+    if(opened)mod_terrain_finish(mod_scene_kind==1?2:4,before);
+}
+
+// Batches the map's prepared unit sprites and army markers in their native order.
+// @platform-split map-units: the complete draw call is mapped on Windows.
+static void mod_map_units(int a,int b,int flags) {
+    void (*draw)(int,int,int)=(void (*)(int,int,int))(detail_base+RVA_MAP_DRAW_UNITS);
+    if(!mod_operational || (mod_render_setting && !*mod_render_setting) || in_highest || terrain_scope || mod_scene_drawing ||
+       !ta_current_context || !ta_initialize_context()){
+        draw(a,b,flags);return;
+    }
+    int samples=0;arrays_get_int(0x80a8,&samples);
+    if(samples){draw(a,b,flags);return;}
+    array_texture_begin_frame();arrays_begin_frame();
+    in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
+    draw(a,b,flags);
+    arrays_end_frame();
+    in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
+}
+#endif
 #include "scene_batch.h"
 static void mod_pointer_module(void *address,char *out,size_t size) {
     HMODULE module=NULL;char path[MAX_PATH];
@@ -145,16 +188,18 @@ static void mod_render_pass(void (*draw)(void),const char *path) {
         char line[200];snprintf(line,sizeof(line),"fps_mod map_renderer quality=%d path=%s batching_requested=1 quality_unchanged=1",quality,path);mod_log(line);mod_reported_qualities|=bit;
     }
     array_texture_begin_frame();arrays_begin_frame();
+    int previous_terrain=terrain_scope;
+    terrain_scope=0;
     in_highest=1;
 #ifdef COE5SE_GRAPHICS_ORACLE
     graphics_test_render_pass(draw);
 #else
     draw();
 #endif
-    arrays_end_frame();in_highest=0;decor_scope=0;
+    arrays_end_frame();in_highest=0;decor_scope=0;terrain_scope=previous_terrain;
     if(!mod_reported_ready && ta_context_ok && ta_uploads) {
         char line[384];mod_reported_ready=1;
-        snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=11 quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",quality,path,ta_multi_page,ta_track_state,ta_uploads,(double)ta_bytes/(1024.0*1024.0));
+        snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,path,ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
     mod_log_fallbacks();
@@ -182,7 +227,8 @@ static void mod_pass_end(void) {
     arrays_end_frame();in_highest=0;decor_scope=0;mod_pass_open=0;
     if(!mod_reported_ready && ta_context_ok && ta_uploads) {
         char line[384];mod_reported_ready=1;
-        snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=11 quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",*(int *)(detail_base+RVA_GRAPHICS_DETAIL),*(int *)(detail_base+RVA_GRAPHICS_DETAIL)>=12?"highest_ultra":"low_medium_high",ta_multi_page,ta_track_state,ta_uploads,(double)ta_bytes/(1024.0*1024.0));
+        int quality=*(int *)(detail_base+RVA_GRAPHICS_DETAIL);
+        snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,quality>=12?"highest_ultra":"low_medium_high",ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
     mod_log_fallbacks();
@@ -218,6 +264,10 @@ enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4 };
 static unsigned mod_features;
 static ModCall mod_calls[]={
     {MOD_RENDERING,RVA_FPS_HIGH_DECOR_CALL,RVA_FPS_HIGH_DECOR_DRAW,mod_highest,{0}},
+    {MOD_RENDERING,RVA_MAP_VIEW_DRAW_CALL,RVA_MAP_DRAW_PLANE,(void (*)(void))mod_terrain_plane,{0}},
+    {MOD_RENDERING,RVA_MAP_SKY_UNDERLAY_DRAW_CALL,RVA_MAP_DRAW_PLANE,(void (*)(void))mod_terrain_plane,{0}},
+    {MOD_RENDERING,RVA_MAP_DRAW_UNITS_CALL,RVA_MAP_DRAW_UNITS,(void (*)(void))mod_map_units,{0}},
+    {MOD_RENDERING,RVA_FPS_MAP_TERRAIN_RECT_CALL,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))terrain_rect,{0}},
     {MOD_RENDERING,RVA_DECOR_DRAW_CALL,RVA_DECOR_DRAW,mod_high,{0}},
     {MOD_RENDERING,RVA_FPS_HIGH_DECOR_SPRITE_CALL_A,RVA_DRAW_SPRITE_SHEARED,(void (*)(void))mod_decor,{0}},
     {MOD_RENDERING,RVA_FPS_HIGH_DECOR_SPRITE_CALL_B,RVA_DRAW_SPRITE_SHEARED,(void (*)(void))mod_decor,{0}},
@@ -225,6 +275,10 @@ static ModCall mod_calls[]={
     {MOD_SCENES,RVA_FPS_SCENE_FIELD_CALL_A,RVA_BATTLE_FIELD_DRAW,(void (*)(void))mod_scene_field,{0}},
     {MOD_SCENES,RVA_FPS_SCENE_FIELD_CALL_B,RVA_BATTLE_FIELD_DRAW,(void (*)(void))mod_scene_field,{0}},
     {MOD_SCENES,RVA_FPS_SCENE_FIELD_CALL_C,RVA_BATTLE_FIELD_DRAW,(void (*)(void))mod_scene_field,{0}},
+    {MOD_SCENES,RVA_WAIT_BATTLE_BACKGROUND_CALL_A,RVA_BATTLE_BACKGROUND,mod_terrain_battle,{0}},
+    {MOD_SCENES,RVA_WAIT_BATTLE_BACKGROUND_CALL_B,RVA_BATTLE_BACKGROUND,mod_terrain_battle,{0}},
+    {MOD_SCENES,RVA_WAIT_BATTLE_BACKGROUND_CALL_C,RVA_BATTLE_BACKGROUND,mod_terrain_battle,{0}},
+    {MOD_SCENES,RVA_FPS_SCENE_TERRAIN_RECT_CALL,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))terrain_rect,{0}},
     {MOD_SCENES,RVA_FPS_SCENE_PARTICLES_CALL_A,RVA_PARTICLES_DRAW,(void (*)(void))mod_scene_particles,{0}},
     {MOD_SCENES,RVA_FPS_SCENE_PARTICLES_CALL_B,RVA_PARTICLES_DRAW,(void (*)(void))mod_scene_particles,{0}},
     {MOD_SCENES,RVA_FPS_SCENE_PARTICLES_CALL_C,RVA_PARTICLES_DRAW,(void (*)(void))mod_scene_particles,{0}},
@@ -372,7 +426,9 @@ static unsigned mod_requested_features(const PluginApi *api) {
 int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
     if(!api || api->version!=PLUGIN_API_VERSION || !api->logLine || !api->setting)return 0;
     plugin_api=api;detail_base=(unsigned char *)FPS_GAME_MODULE();
-    mod_log("fps_mod startup version=" FPS_MOD_VERSION " required_game=5.43 api=11 diagnostics=once_per_category");
+    char line[192];
+    snprintf(line,sizeof(line),"fps_mod startup version=" FPS_MOD_VERSION " required_game=5.43 api=%d diagnostics=once_per_category",api->version);
+    mod_log(line);
     mod_features=mod_requested_features(api);
     if((mod_features&MOD_SCENES) && !api->wrap){mod_features&=~MOD_SCENES;mod_log("fps_mod scene_batching disabled reason=wrapper_api_unavailable");}
     if(mod_features&MOD_FRAME_CONTROLS){
@@ -404,24 +460,35 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         unsigned calls=0;for(size_t i=0;i<sizeof(mod_calls)/sizeof(mod_calls[0]);i++)if(mod_calls[i].group&mod_features)calls++;
         char line[200];snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d",imports,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES));mod_log(line);
     }
-    ta_scene_program=!!(mod_features&MOD_SCENES);
-    if((mod_features&(MOD_RENDERING|MOD_SCENES)) && (!install_texture_array() || !install_gl_arrays())) {
-        mod_disable();mod_log("fps_mod disabled reason=gl_hook_installation_failed module_retained=1");return 1;
-    }
-    if(!mod_install_calls()) {
-        mod_disable();mod_log("fps_mod disabled reason=call_patch_transaction_failed module_retained=1");return 1;
+#ifdef _WIN32
+    // Map markers can use GL_REPLACE even when battle batching is off.
+    ta_scene_program=!!(mod_features&(MOD_RENDERING|MOD_SCENES));
+#endif
+    FpsArrayInstall imports={0};
+    if((mod_features&(MOD_RENDERING|MOD_SCENES)) && (!install_texture_array() || !install_gl_arrays(&imports))) {
+        mod_disable();
+        if(!arrays_restore_imports(&imports,replace_gl_import))mod_log("fps_mod disabled reason=gl_hook_rollback_failed module_retained=1");
+        mod_log("fps_mod disabled reason=gl_hook_installation_failed module_retained=1");return 1;
     }
     if(mod_features&MOD_FRAME_CONTROLS){
         fps_next_graphics_section_end=(void (*)(void))(detail_base+RVA_SECTION_END);
         fps_next_preferences_wait=(int (*)(int,int))(detail_base+RVA_WAIT_FOR_CLICK);
         fps_next_frame_rate_choice=(int (*)(int,int,const char *,...))(detail_base+RVA_RADIO_OPTION);
+    }
+    if(!mod_install_calls()) {
+        mod_disable();
+        if(!arrays_restore_imports(&imports,replace_gl_import))mod_log("fps_mod disabled reason=gl_hook_rollback_failed module_retained=1");
+        mod_log("fps_mod disabled reason=call_patch_transaction_failed module_retained=1");return 1;
+    }
+    if(mod_features&MOD_FRAME_CONTROLS){
         fps_initialize_graphics_settings(userFolder);
         if(!api->wrap || !api->wrap(SITE_MAP_DRAW,(void *)fps_frame_preference_map_draw,(void **)&fps_next_map_draw))mod_log("fps_mod graphics_menu map_start_callback=unavailable preference_applies_at_menu");
         if(!api->wrap || !api->wrap(SITE_MAIN_MENU_WAIT,(void *)mod_main_menu_wait,(void **)&mod_next_main_menu_wait))mod_log("fps_mod diagnostics main_menu_callback=unavailable graphics_report=first_map");
     }
     mod_operational=!!(mod_features&MOD_RENDERING);
     if(mod_features&MOD_SCENES)mod_install_scene_waits(api);
-    mod_log("fps_mod initialized version=" FPS_MOD_VERSION " game=5.43 api=11 launch_settings_fixed=1 quality_unchanged=1 graphics_report=first_current_context");
+    snprintf(line,sizeof(line),"fps_mod initialized version=" FPS_MOD_VERSION " game=5.43 api=%d launch_settings_fixed=1 quality_unchanged=1 graphics_report=first_current_context",api->version);
+    mod_log(line);
     mod_log_graphics();return 1;
 }
 

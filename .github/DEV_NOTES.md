@@ -10,6 +10,8 @@ Features
 - Greek, Cyrillic and accented letters draw instead of boxes
 - --dumpstrings: a translation template and report for each mod
 - Optional Windows 5.43 batching for battlefields, local army views, spell particles and projectile sprites, preserving native counts, order, texture detail and fixed-function VFX sampling; restart required.
+- Batch base terrain on the world map, in battles and in garrisons with the existing graphics switches on Windows 5.43.
+- Batch unit sprites and army markers on the world map with the existing map graphics switch on Windows 5.43.
 
 Commands
 - language: your mod's text in another language

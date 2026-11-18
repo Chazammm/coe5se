@@ -1,6 +1,7 @@
 #pragma once
 #include "render_diagnostics.h"
 #define TA_CACHE_SIZE 4096
+#define TA_TERRAIN_CACHE_SIZE 8192
 #define TA_MAX_PAGES 8
 #define TA_BUDGET (128u*1024u*1024u)
 typedef struct {
@@ -10,9 +11,23 @@ typedef struct {
 typedef struct {
     unsigned texture,min_filter,mag_filter;
     int width,height,last_level,layers,used;
-    unsigned char occupied[256];
+    unsigned char occupied[1024];
 } FpsTextureArrayPage;
-typedef struct { unsigned source;int decision;FpsTextureLayer value;FpsFallbackReason reason; } FpsTextureArrayEntry;
+typedef struct {
+    unsigned source,last_pass,capacity_epoch;
+    int decision, scene_checked;
+    FpsTextureLayer value;
+    FpsFallbackReason reason;
+} FpsTextureArrayEntry;
+typedef struct {
+    FpsTextureArrayPage pages[TA_MAX_PAGES];
+    FpsTextureArrayEntry *entries;
+    unsigned size;
+    unsigned pass,capacity_epoch;
+    int page_count, layer_limit;
+    int pressure;
+    long long bytes, attempts;
+} FpsTextureArrayCache;
 static int texture_array_enabled;
 static int ta_multi_page,ta_track_state,ta_scene_program;
 #ifdef __APPLE__
@@ -25,12 +40,12 @@ static _Thread_local unsigned ta_bound_pages[TA_MAX_PAGES];
 static _Thread_local long long ta_state_checks,ta_draw_sessions;
 static _Thread_local HGLRC ta_context;
 static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_state_ok,ta_drawing;
-static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler,ta_page_count;
+static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler;
 static _Thread_local unsigned ta_program;
 static _Thread_local int ta_saved_program,ta_saved_binding,ta_saved_unit;
-static _Thread_local FpsTextureArrayPage ta_pages[TA_MAX_PAGES];
 static _Thread_local FpsTextureArrayEntry ta_entries[TA_CACHE_SIZE];
-static _Thread_local long long ta_hits,ta_uploads,ta_rejected,ta_bytes;
+static _Thread_local FpsTextureArrayCache ta_sprite_cache,ta_terrain_cache;
+static _Thread_local long long ta_hits,ta_uploads,ta_rejected;
 static _Thread_local char ta_status[1024];
 static _Thread_local FpsFallbackReason ta_reject_reason;
 static HMODULE ta_gl;
@@ -257,6 +272,13 @@ static int ta_switches_allowed(void) {
     if(ta_texture_on && !ta_forbidden && (ta_modulate || (ta_scene_replace && ta_env_mode==0x1e01)))return 1;
     return ta_refuse(FPS_FIXED_FUNCTION);
 }
+// Client pointers are valid only when neither pixel transfer uses a buffer.
+static int ta_copy_buffers_clear(void) {
+    int value=0;
+    ta_get_int(0x88ed,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);
+    ta_get_int(0x88ef,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);
+    return 1;
+}
 static int ta_allowed_state(void) {
     if(!texture_array_enabled || !ta_current_context || !ta_initialize_context())return 0;
     if(ta_state_checked)return ta_state_ok && (!ta_track_state || ta_switches_allowed());
@@ -264,7 +286,7 @@ static int ta_allowed_state(void) {
     ta_state_checked=1;ta_state_ok=0;
     int value=0;ta_get_int(0x8b8d,&value);if(value)return ta_refuse(FPS_CUSTOM_PROGRAM);
     ta_get_int(0x84e0,&value);if(value!=0x84c0)return ta_refuse(FPS_TEXTURE_UNIT);
-    ta_get_int(0x88ed,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);ta_get_int(0x88ef,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);
+    if(!ta_copy_buffers_clear())return 0;
 #ifdef __APPLE__
     ta_get_int(0x8ca6,&value);if(value)return ta_refuse(FPS_FRAMEBUFFER);if(ta_has_blit){ta_get_int(0x8caa,&value);if(value)return ta_refuse(FPS_FRAMEBUFFER);}
 #else
@@ -296,7 +318,7 @@ static int ta_allowed_state(void) {
 }
 // Returns a clamped dimension of a native mip level.
 static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
-static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag) {
+static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain) {
     int w=0,h=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
     ta_get_level(0x0de1,0,0x1000,&w);ta_get_level(0x0de1,0,0x1001,&h);
     if(ta_scene_replace){if(w<=0 || h<=0 || w>256 || h>256 || (w&(w-1)) || (h&(h-1)))return ta_refuse(FPS_TEXTURE_SIZE);}
@@ -308,7 +330,7 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
     ta_get_parameter(0x0de1,0x813c,&base);ta_get_parameter(0x0de1,0x813d,&max);
     ta_get_parameter(0x0de1,0x884c,&compare);if(base || max<0 || compare)return ta_refuse(FPS_TEXTURE_SAMPLING);
     // Preserve every level the native sampler can use, including level-zero-only icons.
-    if(ta_scene_replace){if(mi==0x2600 || mi==0x2601)*last=0;else if(max<*last)*last=max;}
+    if(ta_scene_replace || terrain){if(mi==0x2600 || mi==0x2601)*last=0;else if(max<*last)*last=max;}
     else if(max<*last)return ta_refuse(FPS_TEXTURE_SAMPLING);
     float f=0;ta_get_parameter_float(0x0de1,0x813a,&f);if(f!=-1000.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter_float(0x0de1,0x813b,&f);if(f!=1000.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
@@ -320,17 +342,27 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
         ta_get_level(0x0de1,level,0x1000,&width);ta_get_level(0x0de1,level,0x1001,&height);
         ta_get_level(0x0de1,level,0x1005,&border);ta_get_level(0x0de1,level,0x1003,&format);ta_get_level(0x0de1,level,0x86a1,&compressed);
         if(width!=ta_level_size(w,level) || height!=ta_level_size(h,level) || border)return ta_refuse(FPS_TEXTURE_LEVELS);
-        if(compressed || (format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
-        for(unsigned attr=0x805c;attr<=0x805f;attr++){int bits=0;ta_get_level(0x0de1,level,attr,&bits);if(bits!=8)return ta_refuse(FPS_TEXTURE_FORMAT);}
+        int rgb=terrain && (format==0x8051 || format==0x1907 || format==3);
+        if(compressed || (!rgb && format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
+        // RGBA readback of an RGB texture supplies the native opaque alpha.
+        for(unsigned attr=0x805c;attr<=0x805f;attr++) {
+            int bits=0;ta_get_level(0x0de1,level,attr,&bits);
+            if(bits!=((rgb && attr==0x805f)?0:8))return ta_refuse(FPS_TEXTURE_FORMAT);
+        }
     }
     *min=(unsigned)mi;*mag=(unsigned)ma;return 1;
 }
-static FpsTextureArrayPage *ta_find_page(int width,int height,int last,unsigned min,unsigned mag) {
-    for(int i=0;i<ta_page_count;i++){FpsTextureArrayPage *p=&ta_pages[i];if(p->width==width && p->height==height && p->last_level==last && p->min_filter==min && p->mag_filter==mag && p->used<p->layers)return p;}
-    if(ta_page_count==TA_MAX_PAGES){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
-    int layers=0;ta_get_int(0x88ff,&layers);if(layers>256)layers=256;
-    size_t one=0;for(int level=0;level<=last;level++)one+=(size_t)ta_level_size(width,level)*ta_level_size(height,level)*4;
-    long long remaining=(long long)TA_BUDGET-ta_bytes;if(remaining<=0){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
+static size_t ta_layer_bytes(int width,int height,int last) {
+    size_t bytes=0;
+    for(int i=0;i<=last;i++)bytes+=(size_t)ta_level_size(width,i)*ta_level_size(height,i)*4;
+    return bytes;
+}
+static FpsTextureArrayPage *ta_find_page(FpsTextureArrayCache *cache,int width,int height,int last,unsigned min,unsigned mag) {
+    for(int i=0;i<cache->page_count;i++){FpsTextureArrayPage *p=&cache->pages[i];if(p->width==width && p->height==height && p->last_level==last && p->min_filter==min && p->mag_filter==mag && p->used<p->layers)return p;}
+    if(cache->page_count==TA_MAX_PAGES){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
+    int layers=0;ta_get_int(0x88ff,&layers);if(layers>cache->layer_limit)layers=cache->layer_limit;
+    size_t one=ta_layer_bytes(width,height,last);
+    long long remaining=(long long)TA_BUDGET-cache->bytes;if(remaining<=0){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
     if((long long)layers>(remaining/(long long)one))layers=(int)(remaining/(long long)one);
     if(layers<1){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
     unsigned texture=0;ta_generate(1,&texture);if(!texture){ta_refuse(FPS_ALLOCATION);return NULL;}
@@ -342,19 +374,19 @@ static FpsTextureArrayPage *ta_find_page(int width,int height,int last,unsigned 
         int actual=0,actual_height=0;ta_get_level(0x8c1a,level,0x1000,&actual);ta_get_level(0x8c1a,level,0x1001,&actual_height);
         if(actual!=w || actual_height!=h){ta_delete(1,&texture);ta_refuse(FPS_ALLOCATION);return NULL;}
     }
-    FpsTextureArrayPage *p=&ta_pages[ta_page_count++];
+    FpsTextureArrayPage *p=&cache->pages[cache->page_count++];
     *p=(FpsTextureArrayPage){.texture=texture,.min_filter=min,.mag_filter=mag,.width=width,.height=height,.last_level=last,.layers=layers};
-    ta_bytes+=(long long)one*layers;return p;
+    cache->bytes+=(long long)one*layers;return p;
 }
 static int ta_available_layer(const FpsTextureArrayPage *page) {
     for(int i=0;i<page->layers;i++)if(!page->occupied[i])return i;
     return -1;
 }
-static void ta_release_layer(FpsTextureLayer *value) {
-    for(int i=0;i<ta_page_count;i++) {
-        FpsTextureArrayPage *page=&ta_pages[i];
+static void ta_release_layer(FpsTextureArrayCache *cache,FpsTextureLayer *value) {
+    for(int i=0;i<cache->page_count;i++) {
+        FpsTextureArrayPage *page=&cache->pages[i];
         if(page->texture==value->array_texture && value->layer>=0 && value->layer<page->layers && page->occupied[value->layer]) {
-            page->occupied[value->layer]=0;page->used--;break;
+            page->occupied[value->layer]=0;page->used--;cache->capacity_epoch++;break;
         }
     }
     memset(value,0,sizeof(*value));
@@ -365,13 +397,13 @@ static void ta_packing(void) {
     ta_pixel_store(0x0cf5,1);ta_pixel_store(0x0cf2,0);ta_pixel_store(0x0cf3,0);ta_pixel_store(0x0cf4,0);
     ta_pixel_store(0x0cf0,0);ta_pixel_store(0x0cf1,0);ta_pixel_store(0x806d,0);ta_pixel_store(0x806e,0);
 }
-static int ta_clone(unsigned source,FpsTextureLayer *out) {
+static int ta_clone(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out) {
     int before2d=0,before_array=0,width=0,height=0,last=0,ok=0;unsigned min=0,mag=0;
     ta_get_int(0x8069,&before2d);ta_get_int(0x8c1d,&before_array);ta_bind(0x0de1,source);
     unsigned char *memory=NULL;
-    if(!ta_source_parameters(&width,&height,&last,&min,&mag))goto done;
+    if(!ta_source_parameters(&width,&height,&last,&min,&mag,cache==&ta_terrain_cache))goto done;
     memory=FPS_ALLOC((size_t)width*height*4);if(!memory){ta_refuse(FPS_ALLOCATION);goto done;}
-    ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(width,height,last,min,mag);
+    ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(cache,width,height,last,min,mag);
     if(!p){ta_pop_client();goto done;}
     int layer=ta_available_layer(p);if(layer<0){ta_pop_client();ta_refuse(FPS_CACHE_LIMIT);goto done;}
     for(int level=0;level<=last;level++) {
@@ -379,58 +411,114 @@ static int ta_clone(unsigned source,FpsTextureLayer *out) {
         ta_bind(0x8c1a,p->texture);ta_subimage3d(0x8c1a,level,0,0,layer,w,h,1,0x1908,0x1401,memory);
     }
     ta_pop_client();p->occupied[layer]=1;p->used++;
-    *out=(FpsTextureLayer){source,p->texture,layer,width,height,last+1,(int)(p-ta_pages)};ta_uploads++;ok=1;
+    *out=(FpsTextureLayer){source,p->texture,layer,width,height,last+1,(int)(p-cache->pages)};
+    if(cache==&ta_sprite_cache)ta_uploads++;
+    ok=1;
 done:
     if(memory)FPS_FREE(memory);
     ta_bind(0x8c1a,(unsigned)before_array);ta_bind(0x0de1,(unsigned)before2d);return ok;
 }
-static int array_texture_prepare(unsigned source,FpsTextureLayer *out) {
-    if(!source || !out || !ta_allowed_state())return 0;
-    for(int i=0;i<ta_page_count;i++)if(ta_pages[i].texture==source)return 0;
-    unsigned index=(source*2654435761u)&(TA_CACHE_SIZE-1);
-    for(unsigned i=0;i<TA_CACHE_SIZE;i++) {
-        FpsTextureArrayEntry *e=&ta_entries[(index+i)&(TA_CACHE_SIZE-1)];if(e->source && e->source!=source)continue;
-        if(!e->source)e->source=source;
-        if(!e->decision){e->decision=ta_clone(source,&e->value)?1:-1;if(e->decision<0){e->reason=ta_reject_reason;ta_rejected++;}}
-        if(e->decision<0){fps_note_fallback(e->reason);return 0;}
+static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out,int allow_upload) {
+    if(!source || !out || !cache->entries || !ta_allowed_state())return 0;
+    for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==source)return 0;
+    unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
+    for(unsigned i=0;i<cache->size;i++) {
+        FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];if(e->source && e->source!=source)continue;
+        // A scene can use rectangular textures and shorter mip chains. Retry a
+        // rejection from the stricter map policy once under the scene policy.
+        if(cache->pass && e->source)e->last_pass=cache->pass;
+        int retry=e->decision<0 && ((ta_scene_replace && !e->scene_checked) ||
+                  (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
+        if(!e->decision || retry) {
+            if(!allow_upload || !ta_copy_buffers_clear())return 0;
+            e->source=source;
+            cache->attempts++;
+            e->scene_checked=ta_scene_replace;
+            e->capacity_epoch=cache->capacity_epoch;
+            e->decision=ta_clone(cache,source,&e->value)?1:-1;
+            if(e->decision<0){e->reason=ta_reject_reason;ta_rejected++;}
+        }
+        if(cache->pass)e->last_pass=cache->pass;
+        if(e->decision<0) {
+            if(e->reason==FPS_CACHE_LIMIT)cache->pressure=1;
+            fps_note_fallback(e->reason);return 0;
+        }
         *out=e->value;ta_hits++;return 1;
     }
+    cache->pressure=1;
     return ta_refuse(FPS_CACHE_TABLE_FULL);
 }
-static void array_texture_forget(unsigned source) {
-    unsigned index=(source*2654435761u)&(TA_CACHE_SIZE-1);
-    if(!source)return;
-    for(unsigned i=0;i<TA_CACHE_SIZE;i++) {
-        FpsTextureArrayEntry *e=&ta_entries[(index+i)&(TA_CACHE_SIZE-1)];
-        if(e->source==source){ta_release_layer(&e->value);e->decision=0;return;}
+static int array_texture_prepare(unsigned source,FpsTextureLayer *out) {
+    return ta_prepare(&ta_sprite_cache,source,out,1);
+}
+static void ta_forget(FpsTextureArrayCache *cache,unsigned source) {
+    if(!source || !cache->entries)return;
+    unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
+    for(unsigned i=0;i<cache->size;i++) {
+        FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];
+        if(e->source==source){ta_release_layer(cache,&e->value);e->decision=0;return;}
         if(!e->source)return;
     }
 }
-static void array_texture_remove(unsigned source) {
-    if(!source)return;
-    array_texture_forget(source);
-    unsigned start=(source*2654435761u)&(TA_CACHE_SIZE-1);
-    for(unsigned i=0;i<TA_CACHE_SIZE;i++) {
-        unsigned index=(start+i)&(TA_CACHE_SIZE-1);
-        if(!ta_entries[index].source)return;
-        if(ta_entries[index].source!=source)continue;
-        memset(&ta_entries[index],0,sizeof(ta_entries[index]));
-        for(unsigned next=1;next<TA_CACHE_SIZE;next++) {
-            unsigned current=(index+next)&(TA_CACHE_SIZE-1);
-            FpsTextureArrayEntry moved=ta_entries[current];if(!moved.source)break;
-            memset(&ta_entries[current],0,sizeof(ta_entries[current]));
-            unsigned home=(moved.source*2654435761u)&(TA_CACHE_SIZE-1);
-            for(unsigned probe=0;probe<TA_CACHE_SIZE;probe++) {
-                FpsTextureArrayEntry *target=&ta_entries[(home+probe)&(TA_CACHE_SIZE-1)];
+static void array_texture_forget(unsigned source) {
+    ta_forget(&ta_sprite_cache,source);
+    ta_forget(&ta_terrain_cache,source);
+}
+static void ta_remove(FpsTextureArrayCache *cache,unsigned source) {
+    if(!source || !cache->entries)return;
+    unsigned mask=cache->size-1,start=(source*2654435761u)&mask;
+    for(unsigned i=0;i<cache->size;i++) {
+        unsigned index=(start+i)&mask;
+        if(!cache->entries[index].source)return;
+        if(cache->entries[index].source!=source)continue;
+        ta_release_layer(cache,&cache->entries[index].value);
+        memset(&cache->entries[index],0,sizeof(cache->entries[index]));
+        for(unsigned next=1;next<cache->size;next++) {
+            unsigned current=(index+next)&mask;
+            FpsTextureArrayEntry moved=cache->entries[current];if(!moved.source)break;
+            memset(&cache->entries[current],0,sizeof(cache->entries[current]));
+            unsigned home=(moved.source*2654435761u)&mask;
+            for(unsigned probe=0;probe<cache->size;probe++) {
+                FpsTextureArrayEntry *target=&cache->entries[(home+probe)&mask];
                 if(!target->source){*target=moved;break;}
             }
         }
         return;
     }
 }
-static int array_texture_begin_draw(unsigned texture) {
+static void array_texture_remove(unsigned source) {
+    ta_remove(&ta_sprite_cache,source);
+    ta_remove(&ta_terrain_cache,source);
+}
+#ifdef _WIN32
+// Evict terrain that has been out of view for several passes. The queue is
+// closed here, so a freed layer cannot be referenced by an unsubmitted tile.
+static void ta_trim_terrain_cache(FpsTextureArrayCache *cache) {
+    for(unsigned i=0;i<cache->size;) {
+        FpsTextureArrayEntry *entry=&cache->entries[i];
+        if(entry->source && cache->pass-entry->last_pass>8) {
+            ta_remove(cache,entry->source);
+        } else i++;
+    }
+    for(int i=0;i<cache->page_count;) {
+        FpsTextureArrayPage *page=&cache->pages[i];
+        if(page->used){i++;continue;}
+        ta_delete(1,&page->texture);
+        cache->bytes-=(long long)ta_layer_bytes(page->width,page->height,page->last_level)*page->layers;
+        int last=--cache->page_count;
+        if(i!=last) {
+            *page=cache->pages[last];
+            for(unsigned e=0;e<cache->size;e++)
+                if(cache->entries[e].decision>0 && cache->entries[e].value.page==last)cache->entries[e].value.page=i;
+        }
+        cache->capacity_epoch++;
+    }
+    cache->pressure=0;
+}
+#endif
+static int array_texture_begin_draw(FpsTextureArrayCache *cache,unsigned texture) {
     if(!ta_allowed_state())return 0;
-    int own=0;for(int i=0;i<ta_page_count;i++)if(ta_pages[i].texture==texture)own=1;if(!own)return 0;
+    int own=0;for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==texture)own=1;if(!own)return 0;
     if(ta_multi_page) {
         if(!ta_drawing) {
             ta_get_int(0x8b8d,&ta_saved_program);ta_get_int(0x84e0,&ta_saved_unit);
@@ -444,7 +532,7 @@ static int array_texture_begin_draw(unsigned texture) {
             ta_active_texture(0x84c0);ta_use_program(ta_program);ta_drawing=1;ta_draw_sessions++;
         }
         for(int i=0;i<TA_MAX_PAGES;i++) {
-            unsigned page=i<ta_page_count?ta_pages[i].texture:0;
+            unsigned page=i<cache->page_count?cache->pages[i].texture:0;
             if(ta_bound_pages[i]!=page){ta_active_texture(0x84c1u+(unsigned)i);ta_bind(0x8c1a,page);ta_bound_pages[i]=page;}
         }
         ta_active_texture(0x84c0);return 1;
@@ -468,6 +556,7 @@ static void array_texture_end_draw(void) {
 }
 static int install_texture_array(void) {
     texture_array_enabled=1;ta_multi_page=1;ta_track_state=1;
+    ta_sprite_cache.entries=ta_entries;ta_sprite_cache.size=TA_CACHE_SIZE;ta_sprite_cache.layer_limit=256;
     ta_gl=GetModuleHandleA(FPS_GL_LIBRARY);if(!ta_gl)return 0;
 #define TA_CORE(var,name) do {*(void **)&var=(void *)GetProcAddress(ta_gl,name);if(!var)return 0;}while(0)
     TA_CORE(ta_current_context,FPS_GL_CONTEXT_FN);

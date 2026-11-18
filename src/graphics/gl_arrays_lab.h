@@ -1,6 +1,12 @@
 #pragma once
 #include <stddef.h>
 #include "render_diagnostics.h"
+#ifdef _WIN32
+static _Thread_local int terrain_scope;
+static void terrain_flush(void);
+#else
+static inline void terrain_flush(void) {}
+#endif
 #define ARR_CAPACITY 16384u
 typedef struct { float xyz[3], uv[4], rgba[4];unsigned source_texture;float source_uv[4]; } ArraysVertex;
 static int arrays_enabled;
@@ -176,11 +182,18 @@ static void arrays_begin_client_session(void) {
     arrays_client_session=1;arrays_client_setups++;
 }
 static void arrays_flush(void) {
+    terrain_flush();
     if(!arrays_count) { if(!arrays_open && !arrays_native_open) arrays_restore_current();return; }
     long long begin=now_ticks();
     int complete=(arrays_count%4)==0;
-    int shader_ok=complete && (!arrays_output_layered || array_texture_begin_draw(arrays_output_texture));
-    if(!shader_ok) arrays_replay();
+    // Native textures must never draw with a shader retained from a layered batch.
+    if(!arrays_output_layered)array_texture_end_draw();
+    int shader_ok=complete && (!arrays_output_layered || array_texture_begin_draw(&ta_sprite_cache,arrays_output_texture));
+    if(!shader_ok) {
+        array_texture_end_draw();
+        arrays_end_client_session();
+        arrays_replay();
+    }
     else {
         if(arrays_output_texture && !arrays_output_layered) real_gl_bind(0x0de1,arrays_output_texture);
         arrays_begin_client_session();
@@ -290,6 +303,11 @@ static void arrays_color_probe(float r,float g,float b,float a) {
 }
 static void arrays_color3_probe(float r,float g,float b) { arrays_color_probe(r,g,b,1); }
 static void arrays_bind_probe(unsigned target,unsigned texture) {
+#ifdef _WIN32
+    if(terrain_scope && target==0x0de1) {
+        real_gl_bind(target,texture);arrays_texture=texture;arrays_binding_dirty=0;return;
+    }
+#endif
     if(texture_array_enabled && arrays_enabled && in_highest && !arrays_native_open && target==0x0de1) {
         if(arrays_lazy_bindings && arrays_context_checked && arrays_context_ok) {
             arrays_texture=texture;arrays_binding_dirty=1;return;
@@ -333,6 +351,7 @@ static void arrays_glPushMatrix(void){arrays_real_glPushMatrix();}
 ARR_WRAP0(glFinish) ARR_WRAP0(glFlush)
 static void (*arrays_real_glMatrixMode)(unsigned);
 static void arrays_glMatrixMode(unsigned mode){
+    terrain_flush();
     arrays_real_glMatrixMode(mode);
     if(mode>=0x1700 && mode<=0x1702)arrays_matrix_mode=(int)mode;
     else {arrays_get_int(0x0ba0,&arrays_matrix_mode);ARR_INVALIDATE();}
@@ -373,7 +392,18 @@ static void arrays_glTexEnvi(unsigned target,unsigned name,int value) {
     ARR_AFTER_STATE();
 }
 static void (*arrays_real_glTexParameteri)(unsigned,unsigned,int);
-static void arrays_glTexParameteri(unsigned a,unsigned b,int c) { arrays_end_frame();array_texture_forget(arrays_texture);arrays_real_glTexParameteri(a,b,c);ARR_AFTER_STATE(); }
+static void arrays_forget_bound_texture(unsigned target) {
+    if(target!=0x0de1)return;
+    int binding=0;
+    arrays_get_int(0x8069,&binding);
+    array_texture_forget((unsigned)binding);
+}
+static void arrays_glTexParameteri(unsigned target,unsigned name,int value) {
+    arrays_end_frame();
+    arrays_forget_bound_texture(target);
+    arrays_real_glTexParameteri(target,name,value);
+    ARR_AFTER_STATE();
+}
 ARR_WRAP3(glMaterialfv,unsigned,unsigned,const float *) ARR_WRAP3(glLightfv,unsigned,unsigned,const float *)
 static void (*arrays_real_glRotatef)(float,float,float,float);
 static void arrays_glRotatef(float a,float b,float c,float d){arrays_matrix_boundary();arrays_real_glRotatef(a,b,c,d);arrays_matrix_changed();}
@@ -408,14 +438,16 @@ static void arrays_glDrawArrays(unsigned mode,int first,int count) {arrays_end_f
 static void (*arrays_real_glOrtho)(double,double,double,double,double,double);
 static void arrays_glOrtho(double a,double b,double c,double d,double e,double f){arrays_matrix_boundary();arrays_real_glOrtho(a,b,c,d,e,f);arrays_matrix_changed();}
 static void (*arrays_real_glTexImage2D)(unsigned,int,int,int,int,int,unsigned,unsigned,const void *);
-static void arrays_glTexImage2D(unsigned a,int b,int c,int d,int e,int f,unsigned g,unsigned h,const void *i){arrays_end_frame();array_texture_forget(arrays_texture);arrays_real_glTexImage2D(a,b,c,d,e,f,g,h,i);ARR_AFTER_STATE();}
+static void arrays_glTexImage2D(unsigned target,int level,int internal,int width,int height,int border,unsigned format,unsigned type,const void *pixels) {
+    arrays_end_frame();
+    arrays_forget_bound_texture(target);
+    arrays_real_glTexImage2D(target,level,internal,width,height,border,format,type,pixels);
+    ARR_AFTER_STATE();
+}
 static int (WINAPI *arrays_real_gluBuild2DMipmaps)(unsigned,int,int,int,unsigned,unsigned,const void *);
 static int WINAPI arrays_gluBuild2DMipmaps(unsigned target,int components,int width,int height,unsigned format,unsigned type,const void *pixels) {
     arrays_end_frame();
-    if(target==0x0de1) {
-        int binding=0;arrays_get_int(0x8069,&binding);
-        array_texture_forget((unsigned)binding);
-    }
+    arrays_forget_bound_texture(target);
     int result=arrays_real_gluBuild2DMipmaps(target,components,width,height,format,type,pixels);
     ARR_AFTER_STATE();return result;
 }
@@ -453,7 +485,38 @@ static FpsGlImport arrays_imports[]={
 #undef ARR_HOOK
     };
 
-static int install_gl_arrays(void) {
+enum { ARRAY_IMPORT_COUNT=sizeof(arrays_imports)/sizeof(arrays_imports[0]) };
+typedef struct {void *original[ARRAY_IMPORT_COUNT+1];size_t count;} FpsArrayInstall;
+typedef int (*FpsReplaceImport)(uintptr_t,void *,void *);
+
+// Retain the native pointers until both imports and draw calls are installed.
+static int arrays_install_imports(FpsArrayInstall *install,FpsReplaceImport replace) {
+    for(;install->count<ARRAY_IMPORT_COUNT;install->count++) {
+        size_t i=install->count;
+        if(!replace(arrays_imports[i].rva,arrays_imports[i].hook,&install->original[i]))return 0;
+    }
+    if(!replace(FPS_GLU_SLOT,(void *)arrays_gluBuild2DMipmaps,&install->original[install->count]))return 0;
+    install->count++;
+    return 1;
+}
+
+// Restore only redirects that still belong to this renderer.
+static int arrays_restore_imports(FpsArrayInstall *install,FpsReplaceImport replace) {
+    int restored=1;
+    while(install->count) {
+        size_t i=--install->count;
+        uintptr_t rva=i==ARRAY_IMPORT_COUNT?FPS_GLU_SLOT:arrays_imports[i].rva;
+        void *hook=i==ARRAY_IMPORT_COUNT?(void *)arrays_gluBuild2DMipmaps:arrays_imports[i].hook;
+        void **slot=gl_import_slot(rva);
+        void *current=NULL,*ignored=NULL;
+        if(!slot){restored=0;continue;}
+        memcpy(&current,slot,sizeof(current));
+        if(current==hook && !replace(rva,install->original[i],&ignored))restored=0;
+    }
+    return restored;
+}
+
+static int install_gl_arrays(FpsArrayInstall *install) {
     arrays_enabled=1;arrays_lazy_bindings=1;arrays_client_sessions=1;
     HMODULE gl=GetModuleHandleA(FPS_GL_LIBRARY);if(!gl) return 0;
 #ifdef __APPLE__
@@ -481,9 +544,5 @@ static int install_gl_arrays(void) {
     *(void **)&arrays_real_gluBuild2DMipmaps=(void *)GetProcAddress(gl,"gluBuild2DMipmaps");
 #endif
     if(!arrays_real_gluBuild2DMipmaps)return 0;
-    for(size_t i=0;i<sizeof(arrays_imports)/sizeof(arrays_imports[0]);i++) {
-        void *ignored=NULL;if(!replace_gl_import(arrays_imports[i].rva,arrays_imports[i].hook,&ignored))return 0;
-    }
-    void *ignored=NULL;
-    return replace_gl_import(FPS_GLU_SLOT,(void *)arrays_gluBuild2DMipmaps,&ignored);
+    return arrays_install_imports(install,replace_gl_import);
 }
