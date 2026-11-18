@@ -33,6 +33,15 @@
 
 // ---- Built-in map rendering and frame controls (5.43, both builds) ------------------------------------
 #define RVA_FPS_HIGH_DECOR_DRAW                ADDR(        0x1ab380,          MAC_INLINED)
+#define RVA_FPS_SCENE_FIELD_CALL_A             ADDR(        0x23fd20,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_FIELD_CALL_B             ADDR(        0x23fe18,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_FIELD_CALL_C             ADDR(        0x23feb2,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PARTICLES_CALL_A         ADDR(        0x23fd0f,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PARTICLES_CALL_B         ADDR(        0x23fe00,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PARTICLES_CALL_C         ADDR(        0x23fe9d,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PARTICLES_CALL_D         ADDR(        0x23ff01,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PROJECTILES_CALL         ADDR(        0x23fd25,          MAC_NOT_LOOKED_UP)
+#define RVA_FPS_SCENE_PROJECTILES_DRAW         ADDR(        0x100ca0,          MAC_NOT_LOOKED_UP)
 #define RVA_FPS_HIGH_DECOR_CALL                ADDR(        0x19d621,          MAC_NO_CALL)
 #define RVA_FPS_HIGH_DECOR_SPRITE_CALL_A       ADDR(        0x1ab7c1,          0x10049e75c)
 #define RVA_FPS_HIGH_DECOR_SPRITE_CALL_B       ADDR(        0x1ab9f1,          0x10049e7f4)

@@ -9,6 +9,7 @@ Features
 - Languages: a mod's text in several languages, picked in Mod Settings
 - Greek, Cyrillic and accented letters draw instead of boxes
 - --dumpstrings: a translation template and report for each mod
+- Optional Windows 5.43 batching for battlefields, local army views, spell particles and projectile sprites, preserving native counts, order, texture detail and fixed-function VFX sampling; restart required.
 
 Commands
 - language: your mod's text in another language

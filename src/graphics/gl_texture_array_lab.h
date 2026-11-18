@@ -9,16 +9,16 @@ typedef struct {
 } FpsTextureLayer;
 typedef struct {
     unsigned texture,min_filter,mag_filter;
-    int size,last_level,layers,used;
+    int width,height,last_level,layers,used;
     unsigned char occupied[256];
 } FpsTextureArrayPage;
 typedef struct { unsigned source;int decision;FpsTextureLayer value;FpsFallbackReason reason; } FpsTextureArrayEntry;
 static int texture_array_enabled;
-static int ta_multi_page,ta_track_state;
+static int ta_multi_page,ta_track_state,ta_scene_program;
 #ifdef __APPLE__
 static _Thread_local int ta_glsl120,ta_has_blit;
 #endif
-static _Thread_local int ta_texture_on,ta_modulate;
+static _Thread_local int ta_texture_on,ta_modulate,ta_scene_replace,ta_env_mode;
 static _Thread_local unsigned ta_forbidden;
 static _Thread_local int ta_saved_arrays[TA_MAX_PAGES],ta_saved_samplers[TA_MAX_PAGES];
 static _Thread_local unsigned ta_bound_pages[TA_MAX_PAGES];
@@ -93,11 +93,16 @@ static unsigned ta_shader(unsigned kind,const char *source) {
     return shader;
 }
 static int ta_build_program(void) {
+#define TA_VERTEX_POSITION "bool projected=gl_MultiTexCoord0.z<0.0;" \
+        "if(projected)gl_Position=mat4(gl_MultiTexCoord1,gl_MultiTexCoord2,gl_MultiTexCoord3,gl_MultiTexCoord4)*gl_Vertex;" \
+        "else gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;" \
+        "sampleLayer=int((projected?-1.0-gl_MultiTexCoord0.z:gl_MultiTexCoord0.z)+0.5);"
+#define TA_SCENE_COLOR "sampleColor=gl_MultiTexCoord0.w<0.0?vec4(1.0):clamp(gl_Color,0.0,1.0);"
+#define TA_SCENE_PAGE "samplePage=int((gl_MultiTexCoord0.w<0.0?-1.0-gl_MultiTexCoord0.w:gl_MultiTexCoord0.w)+0.5);"
     static const char vertex[]=
         "#version 130\n"
         "out vec2 sampleUV;out vec4 sampleColor;flat out int sampleLayer;\n"
-        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;"
-        "sampleLayer=int(gl_MultiTexCoord0.z+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+        "invariant gl_Position;void main(){" TA_VERTEX_POSITION TA_SCENE_COLOR "}\n";
     static const char fragment[]=
         "#version 130\n"
         "uniform sampler2DArray sourceImages;in vec2 sampleUV;in vec4 sampleColor;flat in int sampleLayer;\n"
@@ -105,8 +110,8 @@ static int ta_build_program(void) {
     const char *vertex_source=vertex,*fragment_source=fragment;
     static const char multi_vertex[]=
         "#version 130\nout vec2 sampleUV;out vec4 sampleColor;flat out int sampleLayer;flat out int samplePage;\n"
-        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;sampleLayer=int(gl_MultiTexCoord0.z+0.5);"
-        "samplePage=int(gl_MultiTexCoord0.w+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+        "invariant gl_Position;void main(){" TA_VERTEX_POSITION
+        TA_SCENE_PAGE TA_SCENE_COLOR "}\n";
     static const char multi_fragment[]=
         "#version 130\nuniform sampler2DArray page0,page1,page2,page3,page4,page5,page6,page7;\n"
         "in vec2 sampleUV;in vec4 sampleColor;flat in int sampleLayer;flat in int samplePage;\n"
@@ -116,12 +121,20 @@ static int ta_build_program(void) {
         "else if(samplePage==4)t=texture(page4,c);else if(samplePage==5)t=texture(page5,c);"
         "else if(samplePage==6)t=texture(page6,c);else t=texture(page7,c);gl_FragColor=t*sampleColor;}\n";
     if(ta_multi_page){vertex_source=multi_vertex;fragment_source=multi_fragment;}
+    static const char basic_vertex[]=
+        "#version 130\nout vec2 sampleUV;out vec4 sampleColor;flat out int sampleLayer;\n"
+        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;"
+        "sampleLayer=int(gl_MultiTexCoord0.z+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+    static const char basic_multi_vertex[]=
+        "#version 130\nout vec2 sampleUV;out vec4 sampleColor;flat out int sampleLayer;flat out int samplePage;\n"
+        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;sampleLayer=int(gl_MultiTexCoord0.z+0.5);"
+        "samplePage=int(gl_MultiTexCoord0.w+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+    if(!ta_scene_program)vertex_source=ta_multi_page?basic_multi_vertex:basic_vertex;
 #ifdef __APPLE__
     static const char vertex120[]=
         "#version 120\n#extension GL_EXT_gpu_shader4 : require\n"
         "varying vec2 sampleUV;varying vec4 sampleColor;flat varying int sampleLayer;\n"
-        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;"
-        "sampleLayer=int(gl_MultiTexCoord0.z+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+        "invariant gl_Position;void main(){" TA_VERTEX_POSITION TA_SCENE_COLOR "}\n";
     static const char fragment120[]=
         "#version 120\n#extension GL_EXT_gpu_shader4 : require\n#extension GL_EXT_texture_array : require\n"
         "uniform sampler2DArray sourceImages;varying vec2 sampleUV;varying vec4 sampleColor;flat varying int sampleLayer;\n"
@@ -129,8 +142,8 @@ static int ta_build_program(void) {
     static const char multi_vertex120[]=
         "#version 120\n#extension GL_EXT_gpu_shader4 : require\n"
         "varying vec2 sampleUV;varying vec4 sampleColor;flat varying int sampleLayer;flat varying int samplePage;\n"
-        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;sampleLayer=int(gl_MultiTexCoord0.z+0.5);"
-        "samplePage=int(gl_MultiTexCoord0.w+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+        "invariant gl_Position;void main(){" TA_VERTEX_POSITION
+        TA_SCENE_PAGE TA_SCENE_COLOR "}\n";
     static const char multi_fragment120[]=
         "#version 120\n#extension GL_EXT_gpu_shader4 : require\n#extension GL_EXT_texture_array : require\n"
         "uniform sampler2DArray page0,page1,page2,page3,page4,page5,page6,page7;\n"
@@ -144,7 +157,21 @@ static int ta_build_program(void) {
         vertex_source=ta_multi_page?multi_vertex120:vertex120;
         fragment_source=ta_multi_page?multi_fragment120:fragment120;
     }
+    static const char basic_vertex120[]=
+        "#version 120\n#extension GL_EXT_gpu_shader4 : require\n"
+        "varying vec2 sampleUV;varying vec4 sampleColor;flat varying int sampleLayer;\n"
+        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;"
+        "sampleLayer=int(gl_MultiTexCoord0.z+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+    static const char basic_multi_vertex120[]=
+        "#version 120\n#extension GL_EXT_gpu_shader4 : require\n"
+        "varying vec2 sampleUV;varying vec4 sampleColor;flat varying int sampleLayer;flat varying int samplePage;\n"
+        "void main(){gl_Position=ftransform();sampleUV=gl_MultiTexCoord0.xy;sampleLayer=int(gl_MultiTexCoord0.z+0.5);"
+        "samplePage=int(gl_MultiTexCoord0.w+0.5);sampleColor=clamp(gl_Color,0.0,1.0);}\n";
+    if(ta_glsl120 && !ta_scene_program)vertex_source=ta_multi_page?basic_multi_vertex120:basic_vertex120;
 #endif
+#undef TA_VERTEX_POSITION
+#undef TA_SCENE_COLOR
+#undef TA_SCENE_PAGE
     unsigned vs=ta_shader(0x8b31,vertex_source);if(!vs)return 0;
     unsigned fs=ta_shader(0x8b30,fragment_source);if(!fs){ta_delete_shader(vs);return 0;}
     unsigned program=ta_create_program();
@@ -224,10 +251,10 @@ static void ta_read_switches(void) {
     ta_forbidden=0;ta_texture_on=ta_is_enabled(0x0de1)!=0;
     const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458,0x3000,0x3001,0x3002,0x3003,0x3004,0x3005,0x0c60,0x0c61,0x0c62,0x0c63};
     for(size_t i=0;i<sizeof(caps)/sizeof(caps[0]);i++)if(ta_is_enabled(caps[i]))ta_note_cap(caps[i],1);
-    int mode=0;ta_get_env(0x2300,0x2200,&mode);ta_modulate=mode==0x2100;
+    ta_get_env(0x2300,0x2200,&ta_env_mode);ta_modulate=ta_env_mode==0x2100;
 }
 static int ta_switches_allowed(void) {
-    if(ta_texture_on && !ta_forbidden && ta_modulate)return 1;
+    if(ta_texture_on && !ta_forbidden && (ta_modulate || (ta_scene_replace && ta_env_mode==0x1e01)))return 1;
     return ta_refuse(FPS_FIXED_FUNCTION);
 }
 static int ta_allowed_state(void) {
@@ -267,15 +294,22 @@ static int ta_allowed_state(void) {
     }
     ta_state_ok=1;return !ta_track_state || ta_switches_allowed();
 }
-static int ta_source_parameters(int *size,int *last,unsigned *min,unsigned *mag) {
-    int w=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
-    ta_get_level(0x0de1,0,0x1000,&w);if(w!=64 && w!=128)return ta_refuse(FPS_TEXTURE_SIZE);
-    *size=w;*last=w==64?6:7;
+// Returns a clamped dimension of a native mip level.
+static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
+static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag) {
+    int w=0,h=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
+    ta_get_level(0x0de1,0,0x1000,&w);ta_get_level(0x0de1,0,0x1001,&h);
+    if(ta_scene_replace){if(w<=0 || h<=0 || w>256 || h>256 || (w&(w-1)) || (h&(h-1)))return ta_refuse(FPS_TEXTURE_SIZE);}
+    else if((w!=64 && w!=128) || h!=w)return ta_refuse(FPS_TEXTURE_SIZE);
+    *source_width=w;*source_height=h;*last=0;for(int n=w>h?w:h;n>1;n>>=1)(*last)++;
     ta_get_parameter(0x0de1,0x2801,&mi);ta_get_parameter(0x0de1,0x2800,&ma);
     if((mi!=0x2600 && mi!=0x2601 && (mi<0x2700 || mi>0x2703)) || (ma!=0x2600 && ma!=0x2601))return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter(0x0de1,0x2802,&s);ta_get_parameter(0x0de1,0x2803,&t);if(s!=0x812f || t!=0x812f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter(0x0de1,0x813c,&base);ta_get_parameter(0x0de1,0x813d,&max);
-    ta_get_parameter(0x0de1,0x884c,&compare);if(base || max<*last || compare)return ta_refuse(FPS_TEXTURE_SAMPLING);
+    ta_get_parameter(0x0de1,0x884c,&compare);if(base || max<0 || compare)return ta_refuse(FPS_TEXTURE_SAMPLING);
+    // Preserve every level the native sampler can use, including level-zero-only icons.
+    if(ta_scene_replace){if(mi==0x2600 || mi==0x2601)*last=0;else if(max<*last)*last=max;}
+    else if(max<*last)return ta_refuse(FPS_TEXTURE_SAMPLING);
     float f=0;ta_get_parameter_float(0x0de1,0x813a,&f);if(f!=-1000.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter_float(0x0de1,0x813b,&f);if(f!=1000.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     ta_get_parameter_float(0x0de1,0x8501,&f);if(f!=0.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
@@ -285,17 +319,17 @@ static int ta_source_parameters(int *size,int *last,unsigned *min,unsigned *mag)
         int width=0,height=0,border=0,format=0,compressed=0;
         ta_get_level(0x0de1,level,0x1000,&width);ta_get_level(0x0de1,level,0x1001,&height);
         ta_get_level(0x0de1,level,0x1005,&border);ta_get_level(0x0de1,level,0x1003,&format);ta_get_level(0x0de1,level,0x86a1,&compressed);
-        if(width!=(w>>level) || height!=width || border)return ta_refuse(FPS_TEXTURE_LEVELS);
+        if(width!=ta_level_size(w,level) || height!=ta_level_size(h,level) || border)return ta_refuse(FPS_TEXTURE_LEVELS);
         if(compressed || (format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
         for(unsigned attr=0x805c;attr<=0x805f;attr++){int bits=0;ta_get_level(0x0de1,level,attr,&bits);if(bits!=8)return ta_refuse(FPS_TEXTURE_FORMAT);}
     }
     *min=(unsigned)mi;*mag=(unsigned)ma;return 1;
 }
-static FpsTextureArrayPage *ta_find_page(int size,int last,unsigned min,unsigned mag) {
-    for(int i=0;i<ta_page_count;i++){FpsTextureArrayPage *p=&ta_pages[i];if(p->size==size && p->last_level==last && p->min_filter==min && p->mag_filter==mag && p->used<p->layers)return p;}
+static FpsTextureArrayPage *ta_find_page(int width,int height,int last,unsigned min,unsigned mag) {
+    for(int i=0;i<ta_page_count;i++){FpsTextureArrayPage *p=&ta_pages[i];if(p->width==width && p->height==height && p->last_level==last && p->min_filter==min && p->mag_filter==mag && p->used<p->layers)return p;}
     if(ta_page_count==TA_MAX_PAGES){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
     int layers=0;ta_get_int(0x88ff,&layers);if(layers>256)layers=256;
-    size_t one=0;for(int level=0;level<=last;level++)one+=(size_t)(size>>level)*(size>>level)*4;
+    size_t one=0;for(int level=0;level<=last;level++)one+=(size_t)ta_level_size(width,level)*ta_level_size(height,level)*4;
     long long remaining=(long long)TA_BUDGET-ta_bytes;if(remaining<=0){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
     if((long long)layers>(remaining/(long long)one))layers=(int)(remaining/(long long)one);
     if(layers<1){ta_refuse(FPS_CACHE_LIMIT);return NULL;}
@@ -304,11 +338,12 @@ static FpsTextureArrayPage *ta_find_page(int size,int last,unsigned min,unsigned
     ta_parameter(0x8c1a,0x2802,0x812f);ta_parameter(0x8c1a,0x2803,0x812f);
     ta_parameter(0x8c1a,0x813c,0);ta_parameter(0x8c1a,0x813d,last);
     for(int level=0;level<=last;level++) {
-        int w=size>>level;ta_image3d(0x8c1a,level,0x8058,w,w,layers,0,0x1908,0x1401,NULL);
-        int actual=0;ta_get_level(0x8c1a,level,0x1000,&actual);if(actual!=w){ta_delete(1,&texture);ta_refuse(FPS_ALLOCATION);return NULL;}
+        int w=ta_level_size(width,level),h=ta_level_size(height,level);ta_image3d(0x8c1a,level,0x8058,w,h,layers,0,0x1908,0x1401,NULL);
+        int actual=0,actual_height=0;ta_get_level(0x8c1a,level,0x1000,&actual);ta_get_level(0x8c1a,level,0x1001,&actual_height);
+        if(actual!=w || actual_height!=h){ta_delete(1,&texture);ta_refuse(FPS_ALLOCATION);return NULL;}
     }
     FpsTextureArrayPage *p=&ta_pages[ta_page_count++];
-    *p=(FpsTextureArrayPage){.texture=texture,.min_filter=min,.mag_filter=mag,.size=size,.last_level=last,.layers=layers};
+    *p=(FpsTextureArrayPage){.texture=texture,.min_filter=min,.mag_filter=mag,.width=width,.height=height,.last_level=last,.layers=layers};
     ta_bytes+=(long long)one*layers;return p;
 }
 static int ta_available_layer(const FpsTextureArrayPage *page) {
@@ -331,20 +366,20 @@ static void ta_packing(void) {
     ta_pixel_store(0x0cf0,0);ta_pixel_store(0x0cf1,0);ta_pixel_store(0x806d,0);ta_pixel_store(0x806e,0);
 }
 static int ta_clone(unsigned source,FpsTextureLayer *out) {
-    int before2d=0,before_array=0,size=0,last=0,ok=0;unsigned min=0,mag=0;
+    int before2d=0,before_array=0,width=0,height=0,last=0,ok=0;unsigned min=0,mag=0;
     ta_get_int(0x8069,&before2d);ta_get_int(0x8c1d,&before_array);ta_bind(0x0de1,source);
     unsigned char *memory=NULL;
-    if(!ta_source_parameters(&size,&last,&min,&mag))goto done;
-    memory=FPS_ALLOC((size_t)size*size*4);if(!memory){ta_refuse(FPS_ALLOCATION);goto done;}
-    ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(size,last,min,mag);
+    if(!ta_source_parameters(&width,&height,&last,&min,&mag))goto done;
+    memory=FPS_ALLOC((size_t)width*height*4);if(!memory){ta_refuse(FPS_ALLOCATION);goto done;}
+    ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(width,height,last,min,mag);
     if(!p){ta_pop_client();goto done;}
     int layer=ta_available_layer(p);if(layer<0){ta_pop_client();ta_refuse(FPS_CACHE_LIMIT);goto done;}
     for(int level=0;level<=last;level++) {
-        int w=size>>level;ta_bind(0x0de1,source);ta_get_image(0x0de1,level,0x1908,0x1401,memory);
-        ta_bind(0x8c1a,p->texture);ta_subimage3d(0x8c1a,level,0,0,layer,w,w,1,0x1908,0x1401,memory);
+        int w=ta_level_size(width,level),h=ta_level_size(height,level);ta_bind(0x0de1,source);ta_get_image(0x0de1,level,0x1908,0x1401,memory);
+        ta_bind(0x8c1a,p->texture);ta_subimage3d(0x8c1a,level,0,0,layer,w,h,1,0x1908,0x1401,memory);
     }
     ta_pop_client();p->occupied[layer]=1;p->used++;
-    *out=(FpsTextureLayer){source,p->texture,layer,size,size,last+1,(int)(p-ta_pages)};ta_uploads++;ok=1;
+    *out=(FpsTextureLayer){source,p->texture,layer,width,height,last+1,(int)(p-ta_pages)};ta_uploads++;ok=1;
 done:
     if(memory)FPS_FREE(memory);
     ta_bind(0x8c1a,(unsigned)before_array);ta_bind(0x0de1,(unsigned)before2d);return ok;
