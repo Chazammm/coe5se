@@ -129,13 +129,99 @@ static int lInspectTestFieldFinalUnit(lua_State *L) {
     return inspectTestFieldUnit(L, 1);
 }
 
-// @platform-split test_field_item_card: Windows shows the game's item card; Mac's is copied into its unit card, with no function to call, so the call refuses (windows_only)
+#ifdef __APPLE__
+// ---- The item card on Mac: the one inside the unit card --------------------------------------------
+// @platform-split test_field_item_card: Windows calls the game's item card (RVA_ITEM_INFO_SCREEN); Mac's is copied into its unit card, which CoE5SE opens with unit -1 and step hooks take into the item card and out again
+#define UNIT_CARD_FRAME_READY_WORD 0xb9020ff3u
+#define UNIT_CARD_ITEM_CARD_EXIT_WORD 0xf007d91cu
+static struct {
+    StepHook entry, start, exit, done;
+    uint32_t entryGame, entryBranch, exitGame, exitBranch;
+    int state;
+    int item;
+    uint64_t sp;
+} macItemCard = {.item = -1};
+
+static void macItemCardEntry(StepContext *ctx, const StepHook *hook) {
+    (void)hook;
+    if (macItemCard.item < 0) return;
+    uint64_t d15;
+    memcpy(&d15, GAME_PTR(RVA_MENU_FLOAT4), sizeof d15);
+    ctx->x[28] = (uint64_t)(unsigned)macItemCard.item;
+    ctx->x[13] = 1;
+    ctx->x[24] = (uint64_t)(uintptr_t)GAME_PTR(RVA_LAYOUT_ELEMENTS);
+    ctx->q[15] = d15;
+    macItemCard.sp = ctx->sp;
+    macItemCard.item = -1;
+    ctx->pc = macItemCard.start.resume;
+}
+
+static void macItemCardExit(StepContext *ctx, const StepHook *hook) {
+    (void)hook;
+    if (!macItemCard.sp || ctx->sp != macItemCard.sp) return;
+    macItemCard.sp = 0;
+    ctx->pc = macItemCard.done.resume;
+}
+
+static int putMacItemCard(void) {
+    if (macItemCard.state) return macItemCard.state > 0;
+    macItemCard.state = -1;
+    if (!gameCodeMatches) {
+        writeLogError("hook_skipped", "site=item_card_mac reason=game_code_differs");
+        return 0;
+    }
+    memcpy(&macItemCard.entryGame, gameBase + RVA_UNIT_CARD_FRAME_READY, 4);
+    memcpy(&macItemCard.exitGame, gameBase + RVA_UNIT_CARD_ITEM_CARD_EXIT, 4);
+    if (macItemCard.entryGame != UNIT_CARD_FRAME_READY_WORD || macItemCard.exitGame != UNIT_CARD_ITEM_CARD_EXIT_WORD) {
+        writeLogError("hook_skipped", "site=item_card_mac reason=not_the_expected_code");
+        return 0;
+    }
+    macItemCard.entry.handler = macItemCardEntry;
+    macItemCard.exit.handler = macItemCardExit;
+    int ok = putStepResumeMac(RVA_UNIT_CARD_ITEM_CARD_START, &macItemCard.start, "item_card_mac_start") &&
+             putStepResumeMac(RVA_UNIT_CARD_RETURN, &macItemCard.done, "item_card_mac_return") &&
+             putStepHookMac(RVA_UNIT_CARD_FRAME_READY, &macItemCard.entry, "item_card_mac_entry", 0) &&
+             putStepHookMac(RVA_UNIT_CARD_ITEM_CARD_EXIT, &macItemCard.exit, "item_card_mac_exit", 0);
+    if (ok) {
+        memcpy(&macItemCard.entryBranch, gameBase + RVA_UNIT_CARD_FRAME_READY, 4);
+        memcpy(&macItemCard.exitBranch, gameBase + RVA_UNIT_CARD_ITEM_CARD_EXIT, 4);
+        ok = writeGameCode(gameBase + RVA_UNIT_CARD_FRAME_READY, &macItemCard.entryGame, 4) &&
+             writeGameCode(gameBase + RVA_UNIT_CARD_ITEM_CARD_EXIT, &macItemCard.exitGame, 4);
+    }
+    macItemCard.state = ok ? 1 : -1;
+    writeResultLog(ok, "item_card_mac_installed", "padding_left=%ld", paddingLeft());
+    return ok;
+}
+
+static int showItemCardMac(int item) {
+    unsigned char *entry = gameBase + RVA_UNIT_CARD_FRAME_READY, *exit = gameBase + RVA_UNIT_CARD_ITEM_CARD_EXIT;
+    if (macItemCard.state <= 0 || !writeGameCode(entry, &macItemCard.entryBranch, 4) || !writeGameCode(exit, &macItemCard.exitBranch, 4)) {
+        writeGameCode(entry, &macItemCard.entryGame, 4);
+        writeLogError("item_card_mac_failed", "item=%d reason=hook", item);
+        return 0;
+    }
+    macItemCard.item = item;
+    GAME_FN(unsigned long long (*)(int, int, int, int, int), RVA_UNIT_CARD)(-1, -1, 0, 0, 0);
+    int shown = macItemCard.item < 0;
+    macItemCard.item = -1;
+    macItemCard.sp = 0;
+    writeGameCode(entry, &macItemCard.entryGame, 4);
+    writeGameCode(exit, &macItemCard.exitGame, 4);
+    if (!shown) writeLogError("item_card_mac_failed", "item=%d reason=not_reached", item);
+    return shown;
+}
+
+static long long macItemInfoScreen(long long item, long long b, long long c, long long d, long long e, long long f, long long g, long long h) {
+    (void)b, (void)c, (void)d, (void)e, (void)f, (void)g, (void)h;
+    showItemCardMac((int)item);
+    return 0;
+}
+#endif
+
+// @platform-split test_field_item_card: Windows calls the game's item card (RVA_ITEM_INFO_SCREEN); Mac's is copied into its unit card, which CoE5SE opens with unit -1 and step hooks take into the item card and out again
 static int lInspectTestFieldItem(lua_State *L) {
     const char *call = "coe5.inspectTestFieldItem";
     checkLuaMainThread(L, call);
-#ifdef __APPLE__
-    return refuseTestFieldCall(L, call, "windows_only", 0, "item=%lld", (long long)luaL_optinteger(L, 1, -1));
-#else
     LuaScript *script = checkLuaScript(L);
     lua_Integer item = -1;
     const char *reason = NULL;
@@ -150,6 +236,9 @@ static int lInspectTestFieldItem(lua_State *L) {
     else if (testFieldInspectActive) reason = "inspect_active";
     SdlKeyboardStateFn keyboard = sdlKeyboardState();
     if (!reason && !keyboard) reason = "text_input_unavailable";
+#ifdef __APPLE__
+    if (!reason && !putMacItemCard()) reason = "item_card_hook_unavailable";
+#endif
     if (reason) return refuseTestFieldCall(L, call, reason, 0, "item=%lld", (long long)item);
     unsigned long long session = testFieldLife.session;
     int randomIndex = G32(RVA_RANDOM_INDEX), randomShift = G32(RVA_RANDOM_SHIFT), randomXor = G32(RVA_RANDOM_XOR);
@@ -157,7 +246,11 @@ static int lInspectTestFieldItem(lua_State *L) {
     clearTestFieldInspectInput(keyboard);
     testFieldInspectActive = 1;
     luaCodeRunning--;
+#ifdef __APPLE__
+    int shown = showItemCardMac((int)item);
+#else
     GAME_FN(void (*)(int), RVA_ITEM_INFO_SCREEN)((int)item);
+#endif
     luaCodeRunning++;
     testFieldInspectActive = 0;
     clearTestFieldInspectInput(keyboard);
@@ -165,6 +258,9 @@ static int lInspectTestFieldItem(lua_State *L) {
     G32(RVA_RANDOM_INDEX) = randomIndex;
     G32(RVA_RANDOM_SHIFT) = randomShift;
     G32(RVA_RANDOM_XOR) = randomXor;
+#ifdef __APPLE__
+    if (!shown) return refuseTestFieldCall(L, call, "item_card_hook_unavailable", 0, "item=%lld", (long long)item);
+#endif
     if (!testField.open || session != testFieldLife.session || _stricmp(script->mod, testField.owner))
         return refuseTestFieldCall(L, call, "field_changed", 0, "item=%lld", (long long)item);
     lua_pushboolean(L, 1);
@@ -174,5 +270,4 @@ static int lInspectTestFieldItem(lua_State *L) {
     setBoolField(L, "readOnly", 1);
     setIntField(L, "item", item);
     return 2;
-#endif
 }

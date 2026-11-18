@@ -84,6 +84,7 @@ static void gateMapEditorDraw(void) {
             ((void (*)(void))game)();
             drawUiButtons();
             drawSettingsTrees();
+            drawSteamCodeCursor();
             return;
         }
         previewBeforeMapDraw();

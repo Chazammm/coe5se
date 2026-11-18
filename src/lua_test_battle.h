@@ -311,10 +311,6 @@ static const char *readTestFieldSpec(lua_State *L, TestFieldSpec *spec) {
     const char *reason = readTestFieldTerrainArg(L, 1, G32(RVA_LAST_TERRAIN), TERRAIN_TABLE_MAX, &spec->terrain, &spec->terrainSpecified);
     if (reason) return reason;
     if (!readTestFieldSwitch(L, "allowMultipleUnique", 0, &spec->allowMultipleUnique)) return "bad_allow_multiple_unique";
-    // @platform-split test_field_unique: Mac refuses allowMultipleUnique (windows_only): its newunit has no unique search call to answer
-#ifdef __APPLE__
-    if (spec->allowMultipleUnique) return "windows_only";
-#endif
     if (!readTestFieldSwitch(L, "emptyEditor", 1, &spec->emptyEditor)) return "bad_empty_editor";
     if (spec->terrainSpecified) {
         reason = testFieldTerrainProblem(L, (int)spec->terrain);

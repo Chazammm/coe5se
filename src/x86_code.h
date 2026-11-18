@@ -413,4 +413,24 @@ static UNUSED size_t buildItemNetIndexStub(unsigned char *code, const unsigned c
     return itemCardEnd(&e);
 }
 
+// ---- The aftermath's banish square (lua_battle_banish.h) --------------------------------------------------------
+static UNUSED size_t buildBanishSquareStub(unsigned char *code, const unsigned char *stub, const void *hook, const unsigned char *write) {
+    static const unsigned char ARGS[] = {0x44, 0x89, 0xf9, 0x44, 0x89, 0xf2, 0x41, 0x89, 0xe8};
+    static const unsigned char AFTER[] = {0x89, 0xc3, 0x48, 0xc1, 0xe8, 0x20, 0x89, 0xc7};
+    unsigned char *p = code;
+    memcpy(p, ARGS, sizeof ARGS);
+    p += sizeof ARGS;
+    *p++ = 0x48, *p++ = 0xb8;
+    memcpy(p, &hook, 8);
+    p += 8;
+    *p++ = 0xff, *p++ = 0xd0;
+    memcpy(p, AFTER, sizeof AFTER);
+    p += sizeof AFTER;
+    *p++ = 0xe9;
+    int rel = (int)(write - (stub + (p - code) + 4));
+    memcpy(p, &rel, 4);
+    p += 4;
+    return (size_t)(p - code);
+}
+
 #endif

@@ -209,14 +209,24 @@ static AllocUnitFn gameAllocUnit;
 static LoadUnitFn gameLoadUnit;
 static BattleLoadOthersFn gameBattleLoadOthers;
 
+static void lendAfflictionSlot(int unit);
+static void parkUnitAfflictions(int unit);
+static void returnAfflictionSlot(int unit);
+static void giveReplayUnitAfflictions(int unit);
+static void endReplayAfflictions(void);
+static void endAfflictionRound(void);
+static void clearAllCustomAfflictions(void);
+
 static int allocUnitHook(int player) {
     int unit = gameAllocUnit(player);
     lendUnitSlot(unit);
+    lendAfflictionSlot(unit);
     return unit;
 }
 
 static void saveUnitHook(int unit, void *file) {
     parkUnitItems(unit);
+    parkUnitAfflictions(unit);
     gameSaveUnit(unit, file);
 }
 
@@ -226,18 +236,20 @@ static void endReplayItems(void);
 
 static void loadUnitHook(int unit, void *file) {
     int replay = !reloadingParkedUnits && replayLoadingUnits();
-    if (!reloadingParkedUnits) lendUnitSlot(unit);
+    if (!reloadingParkedUnits) lendUnitSlot(unit), lendAfflictionSlot(unit);
     gameLoadUnit(unit, file);
-    if (reloadingParkedUnits) returnUnitSlot(unit);
-    else if (replay) giveReplayUnitItems(unit);
+    if (reloadingParkedUnits) returnUnitSlot(unit), returnAfflictionSlot(unit);
+    else if (replay) giveReplayUnitItems(unit), giveReplayUnitAfflictions(unit);
 }
 
 static void battleLoadOthersHook(void) {
     endReplayItems();
+    endReplayAfflictions();
     reloadingParkedUnits = 1;
     gameBattleLoadOthers();
     reloadingParkedUnits = 0;
     endLentRound();
+    endAfflictionRound();
 }
 
 static void itemSlotsNewUnitBefore(const CallInfo *call) {
@@ -247,6 +259,7 @@ static void itemSlotsNewUnitBefore(const CallInfo *call) {
 static void itemSlotsNewUnitAfter(const CallInfo *call) {
     int unit = (int)call->result;
     if (unit >= 0 && newUnitLent != unit) lendUnitSlot(unit);
+    if (unit >= 0) lendAfflictionSlot(unit);
     newUnitWatch = 0, newUnitLent = -1;
 }
 
@@ -254,10 +267,33 @@ static u64 (*nextItemSlotsNewWorld)(u64);
 static void clearItemSlotsForNewWorld(void) {
     clearAllExtraItems();
     endLentRound();
+    clearAllCustomAfflictions();
 }
 static u64 itemSlotsNewWorld(u64 mode) {
     clearItemSlotsForNewWorld();
     return nextItemSlotsNewWorld(mode);
+}
+
+static int unitLifeHooksState;
+
+static int installUnitLifeHooks(void) {
+    if (unitLifeHooksState) return unitLifeHooksState > 0;
+    struct { unsigned int rva; void *hook; void **game; } hooks[] = {
+        {RVA_ALLOC_UNIT, (void *)allocUnitHook, (void **)&gameAllocUnit},
+        {RVA_SAVE_UNIT, (void *)saveUnitHook, (void **)&gameSaveUnit},
+        {RVA_LOAD_UNIT, (void *)loadUnitHook, (void **)&gameLoadUnit},
+        {RVA_BATTLE_LOAD_OTHERS, (void *)battleLoadOthersHook, (void **)&gameBattleLoadOthers},
+    };
+    int count = (int)(sizeof hooks / sizeof hooks[0]), ok = 0;
+    for (int i = 0; i < count; i++) {
+        void *target = gameBase + hooks[i].rva;
+        ok += fanpatchHookCreate(target, hooks[i].hook, hooks[i].game) && fanpatchHookEnable(target, 1);
+    }
+    int sites = apiObserve(SITE_NEW_UNIT, itemSlotsNewUnitBefore, itemSlotsNewUnitAfter) +
+                wrapSite(SITE_PLAY_GAME_NEW_WORLD, (void *)itemSlotsNewWorld, (void **)&nextItemSlotsNewWorld);
+    unitLifeHooksState = ok == count && sites == 2 ? 1 : -1;
+    writeInstallLogFields("unit_life_hooks_installed", ok + sites, count + 2, "hooks=%d sites=%d", ok, sites);
+    return unitLifeHooksState > 0;
 }
 
 // ---- Dead units' items dropped on their square ---------------------------------------------------------------
@@ -394,10 +430,6 @@ static int installItemSlotHooks(void) {
         {RVA_UNIT_REMOVE_ITEM, (void *)unitRemoveItemHook, (void **)&gameUnitRemoveItem},
         {RVA_TAKE_ITEM_BY_NAME, (void *)takeItemByNameHook, (void **)&gameTakeItemByName},
         {RVA_UNIT_NTH_ITEM_OF_KIND, (void *)unitNthItemOfKindHook, (void **)&gameUnitNthItemOfKind},
-        {RVA_ALLOC_UNIT, (void *)allocUnitHook, (void **)&gameAllocUnit},
-        {RVA_SAVE_UNIT, (void *)saveUnitHook, (void **)&gameSaveUnit},
-        {RVA_LOAD_UNIT, (void *)loadUnitHook, (void **)&gameLoadUnit},
-        {RVA_BATTLE_LOAD_OTHERS, (void *)battleLoadOthersHook, (void **)&gameBattleLoadOthers},
         {RVA_DROP_UNIT_ITEMS_AT, (void *)dropUnitItemsAtHook, (void **)&gameDropUnitItemsAt},
         {RVA_DEAD_UNITS_PASS, (void *)deadUnitsPassHook, (void **)&gameDeadUnitsPass},
         {RVA_FIND_ITEM_HOLDER_AT, (void *)itemHolderAtHook, (void **)&gameItemHolderAt},
@@ -412,8 +444,7 @@ static int installItemSlotHooks(void) {
         void *target = gameBase + hooks[i].rva;
         ok += fanpatchHookCreate(target, hooks[i].hook, hooks[i].game) && fanpatchHookEnable(target, 1);
     }
-    int sites = store && apiObserve(SITE_NEW_UNIT, itemSlotsNewUnitBefore, itemSlotsNewUnitAfter) &&
-                wrapSite(SITE_PLAY_GAME_NEW_WORLD, (void *)itemSlotsNewWorld, (void **)&nextItemSlotsNewWorld);
+    int sites = store && installUnitLifeHooks();
     itemSlotHooksInstalled = ok == count && sites ? 1 : -1;
     writeInstallLogFields("item_slot_hooks_installed", ok + sites, count + 1, "hooks=%d sites=%d", ok, sites);
     return itemSlotHooksInstalled > 0;

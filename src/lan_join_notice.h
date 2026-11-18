@@ -10,7 +10,7 @@ typedef enum { SITE_ON_NONE, SITE_ON_PART, SITE_ON_ALL } SiteCoverage;
 static const struct { CallSite site; int platform; SiteCoverage coverage; } SITE_BUILD_EXCEPTIONS[] = {
     {SITE_SQUARE_LIBRARY_LEVEL, 1, SITE_ON_ALL},
     {SITE_SQUARE_OPEN_LAND, 1, SITE_ON_PART},
-    {SITE_COMMANDER_STRENGTH, 1, SITE_ON_PART},
+    {SITE_COMMANDER_BATTLE_STRENGTH, 1, SITE_ON_PART},
     {SITE_TOP_BAR_INCOME, 1, SITE_ON_NONE},
 };
 

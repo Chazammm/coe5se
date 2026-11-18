@@ -127,7 +127,24 @@ static int playerGathersSpecial(int slot, int resource) {
     default: return 1;
     }
 }
+static CallSite incomeSite(int resource) {
+    static const CallSite SITES_OF[RESOURCE_COUNT] = {
+        SITE_PLAYER_GOLD_INCOME, SITE_PLAYER_IRON_INCOME, SITE_PLAYER_HERBS_INCOME, SITE_PLAYER_FUNGUS_INCOME,
+        SITE_PLAYER_SACRIFICES_INCOME, SITE_PLAYER_HANDS_INCOME, SITE_PLAYER_WEED_INCOME, SITE_PLAYER_GEM_INCOME,
+        SITE_PLAYER_GEM_INCOME, SITE_PLAYER_GEM_INCOME, SITE_PLAYER_GEM_INCOME, SITE_PLAYER_TRADE_INCOME,
+        SITE_PLAYER_RELICS_INCOME, SITE_PLAYER_LIFEFORCE_INCOME,
+    };
+    return resource >= 0 && resource < RESOURCE_COUNT ? SITES_OF[resource] : SITE_COUNT;
+}
 static int rawIncome(int slot, int resource) {
+    CallSite site = incomeSite(resource);
+    if (site != SITE_COUNT && siteInstalled[site] && !luaSiteDepth[site]) {
+        void *head = *siteHeadSlot(site);
+        if (site == SITE_PLAYER_GOLD_INCOME) return ((int (*)(int, int *, int))head)(slot, NULL, 0);
+        if (site == SITE_PLAYER_GEM_INCOME) return ((int (*)(int, int))head)(resource - 7, slot);
+        if (site == SITE_PLAYER_LIFEFORCE_INCOME) return ((int (*)(int, int))head)(slot, 0);
+        return ((int (*)(int))head)(slot);
+    }
     switch (resource) {
     case 0: return GAME_FN(int (*)(int, int *, int), RVA_PLAYER_GOLD_INCOME)(slot, NULL, 0);
     case 1: return GAME_FN(int (*)(int), RVA_PLAYER_IRON_INCOME)(slot);
@@ -1075,10 +1092,17 @@ static int lGet(lua_State *L) {
         else lua_pushinteger(L, armor);
         break;
     }
+    case T_UNIT_STR: {
+        int str = 0;
+        if (!unitStrNow((int)lua_tointeger(L, 2), &str)) lua_pushnil(L);
+        else lua_pushinteger(L, str);
+        break;
+    }
     case T_MONSTER_ATTACK: {
-        int row = (int)lua_tointeger(L, 3), field = (int)(v->addr - (RVA_MONSTER_TABLE + MONSTER_ATTACKS)), value;
+        int row = (int)lua_tointeger(L, 3), field = (int)(v->addr - (RVA_MONSTER_TABLE + MONSTER_ATTACKS));
+        long long value;
         if (monsterAttackField(p - field - (size_t)row * MONSTER_ATTACK_SIZE, row, field, &value) < 0) lua_pushnil(L);
-        else lua_pushinteger(L, value);
+        else lua_pushinteger(L, (lua_Integer)value);
         break;
     }
     case T_SQUARE_CITADEL:
@@ -1253,7 +1277,7 @@ static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[
     {"eventTargetX", INT_MIN, MAP_COLUMNS_MAX - 1}, {"eventTargetY", INT_MIN, MAP_COLUMN_SQUARES - 1},
     {"eventSquareX", INT_MIN, MAP_COLUMNS_MAX - 1}, {"eventSquareY", INT_MIN, MAP_COLUMN_SQUARES - 1},
     {"pathLength", 0, PATH_ENTRIES}, {"pathX", 0, MAP_COLUMNS_MAX - 1}, {"pathY", 0, MAP_COLUMN_SQUARES - 1},
-    {"squareArmyOwner", -1, INT_MAX}, {"squareRememberedStrength", -1, INT_MAX},
+    {"squareArmyOwner", -1, INT_MAX}, {"squareRememberedBattleStrength", -1, INT_MAX}, {"squareRememberedStrength", -1, INT_MAX},
     {"slotRitualCasts", 0, COMMANDER_CAST_MAX}, {"unitRitualCasts", 0, COMMANDER_CAST_MAX},
     {"unitItem", -1, INT_MAX}, {"unitBattleX", 0, BATTLE_WIDTH_MAX - 1}, {"unitBattleY", 0, BATTLE_ROWS - 1}, {"uiWheel", INT_MIN, INT_MAX},
     {"monsterSprite", 0, MONSTER_SPRITE_END - 1}, {"itemSlotType", 0, ITEM_TYPE_LAST}, {"ritualTerrain", INT_MIN, TERRAIN_TABLE_MAX - 1},
@@ -1696,6 +1720,8 @@ static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int
         if (v->type == T_RITUAL_CASTER_MAX_CAST) min = 0, max = COMMANDER_CAST_MAX;
         if (v->type == T_CLASS_ABILITY || v->type == T_MONSTER_ABILITY || v->type == T_MONSTER_ATTACK) {
             if (v->type != T_MONSTER_ATTACK || v->addr != RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_WEAPON) min = INT_MIN, max = INT_MAX;
+            if (v->type == T_MONSTER_ATTACK && v->addr == RVA_MONSTER_TABLE + MONSTER_ATTACKS + MONSTER_ATTACK_VALUE)
+                min = LUA_MININTEGER, max = LUA_MAXINTEGER;
         }
         if (value < min || value > max) return refuseSetValue(L, "out_of_range", v, value, min, max);
     }
@@ -1756,10 +1782,10 @@ static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int
         int end = monsterAttackEnd(record), field = (int)(v->addr - (RVA_MONSTER_TABLE + MONSTER_ATTACKS));
         if (at2 > end) return luaL_error(L, "%s: the list ends before that index", v->name);
         long long wide = value;
-        reason = writeContent(kind, index, MONSTER_ATTACKS + at2 * MONSTER_ATTACK_SIZE + field, &wide, field == MONSTER_ATTACK_VALUE ? 8 : 4);
+        reason = writeContent(kind, index, MONSTER_ATTACKS + at2 * MONSTER_ATTACK_SIZE + field, &wide, 8);
         if (!reason && at2 == end && monsterAttackEnd(record) > end && end + 1 < MONSTER_ATTACK_MAX && monsterAttackEnd(record) > end + 1) {
-            int ended = 0;
-            reason = writeContent(kind, index, MONSTER_ATTACKS + (end + 1) * MONSTER_ATTACK_SIZE, &ended, 4);
+            long long ended = 0;
+            reason = writeContent(kind, index, MONSTER_ATTACKS + (end + 1) * MONSTER_ATTACK_SIZE, &ended, 8);
         }
         break;
     }

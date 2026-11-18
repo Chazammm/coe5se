@@ -289,7 +289,7 @@ static int isSpellBlockEnder(const char *line, size_t len) {
 }
 
 static int startsC5mBlock(const char *line, size_t len) {
-    static const char *const OTHERS[] = {NEWSPELL_WORD, "newplane", "newfaction", "newnametype", "terrainlooks", "battlemap"};
+    static const char *const OTHERS[] = {NEWSPELL_WORD, "newplane", "newfaction", "newnametype", "terrainlooks", "battlemap", "newaffliction"};
     if (isSpellBlockEnder(line, len)) return 1;
     for (size_t i = 0; i < sizeof OTHERS / sizeof OTHERS[0]; i++)
         if (spellWordIs(line, len, OTHERS[i])) return 1;

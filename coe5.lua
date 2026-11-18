@@ -67,14 +67,18 @@
 --   Show a box the player closes   coe5.showMessageBox("Sealed Gate", "The gate is sealed.")   (at once, a human's turn only)
 --   A game number by name          coe5.controller.human, coe5.gameOverMode.plain, ... (the tables at the end)
 --   Read a setting your .c5se has  coe5.setting("welcome")   (on/off: true or false; a choice: its index from 0; a key: its key value)
+--   Text in the player's language  coe5.translate("Rolled %d of %d")   (your language blocks' translation lines; the text itself without one)
 --   Add a screen to your settings page  coe5.addScreen("Open My Mod", openScreen)
 --   Change a key of the game's own coe5.rebindKey(coe5.keyAction.mapEndTurn, string.byte("k"))
 --   Hide the Read Tip button       coe5.hideMainMenuButton(coe5.mainMenu.readTip, function() return true end)
 --   Keep data in a file            coe5.writeIni("last", {Player1 = {Class = 3}}), coe5.readIni("last").Player1.Class
 --   A battle with no game          coe5.testBattle(coe5.findMonster("Old Wizard"), -1, coe5.findMonster("Spearman"), 40)
 --   Mixed groups on a test field   local ok, units = coe5.openTestField{commander = wizard, enemies = {{spearman, 5}, {wolf, 4}}}
+--   Give a mod's own affliction   coe5.giveAffliction(unit, "Chestburster Embryo")   (newaffliction "<name>" in your .c5m)
 --   An empty editor field          local ok, units = coe5.openTestField{emptyEditor = true, terrain = 2}   (Forest; coe5.testFieldState())
 --   Where a unit stands in battle  coe5.get("unitBattleX", unit), coe5.get("unitBattleY", unit)
+--   Aim an attack at a cell        coe5.wrap("BATTLE_TARGET_SQUARE", function(next, u, spell, weapon, t, v) if weapon == dart then return 1, x, y end end)
+--   A unit summoned mid-battle     coe5.battleSummon(coe5.findMonster("Wolf"), player, x, y)   (true as a fifth: it stays after)
 --   Text to the clipboard          coe5.copyText("newweapon \"Laser\"\n")
 --   Text as a new mod              coe5.saveNewMod("My Laser", "newweapon \"Laser\"\ndmg 12\n")
 --   Change a record                coe5.set("weapon", w, "dmg", 12), any mod's or the game's; saves keep it
@@ -106,7 +110,7 @@
 --   Can an AI commander get there  coe5.route(c, x, y)   (nil for no route; only inside an AI site's wrap)
 --   Reveal the map for a turn      coe5.revealMap(coe5.get("activePlayer"))   (one plane: coe5.revealMap(p, coe5.planeIndex("Inferno")))
 --   Run a mod's event, no triggers  local e = coe5.modEvents()[1]; coe5.runModEvent(1)   (a squareevent: coe5.runModEvent(i, x, y))
---   A square's army, unit by unit  for _, u in ipairs(coe5.squareUnits(x, y)) do local s = coe5.get("unitStrength", coe5.get("unitOwner", u), u) end
+--   A square's army, unit by unit  for _, u in ipairs(coe5.squareUnits(x, y)) do local s = coe5.get("unitBattleStrength", coe5.get("unitOwner", u), u) end
 --   Does a player see a unit        coe5.get("unitVisibleTo", u, p)   (stealth, invisibility, spiritsight; squareSeen for the fog)
 --   Write the AI's trace lines only  coe5.set("traceLevel", 2); coe5.keepTraceLines({"ailog", "aiship"})
 --   Keep an AI from an attack      coe5.wrap("AI_CONQUER", function(next, c, comstr) local s, x, y = next(c, comstr) if risky(x, y) then return 0 end return s, x, y end)
@@ -120,7 +124,7 @@
 --   And what its trade moves       coe5.get("slotAiIncome", p, 0) + coe5.get("slotAiTrade", p, 0)   (the gold its next turn start brings)
 --   Play an AI player's turn       coe5.observe("HUMAN_TURN", nil, function(_, p) coe5.runAiTurn(p) end)   (the game's AI moves what the player left)
 --   Which mods changed an answer   coe5.wrap("AI_CONQUER", function(next, c, comstr) local s, x, y = next(c, comstr) for _, ch in ipairs(coe5.changedBy()) do coe5.log(ch.mod) end return s, x, y end, 2000000000)
---   Move the map to a square       coe5.centerMap(x, y)   (its plane too; Windows)
+--   Move the map to a square       coe5.centerMap(x, y)   (its plane too)
 --   Build a world to look at       coe5.startPreviewWorld{plane = "Agartha", seed = 7, mapSize = coe5.mapSize.medium, society = 0, seats = {0, 0}}   (from the main menu; Windows)
 --   Show an army's battlefield view coe5.viewArmy(x, y)   (the game's right-click view; Windows)
 --   See what another player sees   coe5.showSight(seat, p) ... coe5.restoreSight(seat)   (a human seat; Windows)
@@ -143,14 +147,14 @@
 --   No random villages on a terrain  coe5.wrap("DECORATE_SQUARE", function(next, x, y) if coe5.get("squareTerrain", x, y) ~= t then next(x, y) end end)
 --   A random enemy, the AI's way   coe5.aiRandomEnemy(p)   (-1 for none)
 --   The commander a unit follows   coe5.get("unitCommander", u)   (-1 for none)
---   Tell every human player        coe5.worldNews("The Ring has been found")   (Windows only for now)
+--   Tell every human player        coe5.worldNews("The Ring has been found")
 --   The same spot on another plane coe5.planeSameSpot(2, x, y)
---   Ask the player for a square    local x, y = coe5.chooseLocation("Where shall the Ring go?", p, x0, y0, 0)   (Windows only for now)
---   Ask yes or no                  if coe5.confirm("Destroy the Ring?") then ... end   (Windows only for now)
---   Ask for a number               local n = coe5.numberBox("Tribute", "How much gold?")   (Windows only for now)
---   Open one of the game's screens coe5.openIncomeDetail(p, 0), coe5.openPlaneInfo(4), coe5.openRitualScreen(unit)   (Windows only for now)
+--   Ask the player for a square    local x, y = coe5.chooseLocation("Where shall the Ring go?", p, x0, y0, 0)
+--   Ask yes or no                  if coe5.confirm("Destroy the Ring?") then ... end
+--   Ask for a number               local n = coe5.numberBox("Tribute", "How much gold?")
+--   Open one of the game's screens coe5.openPlaneInfo(4), coe5.openRitualScreen(unit)
 --   Where the AI would go next     local score, x, y = coe5.aiConquerStep(c, strength)   (Windows only for now)
---   React to Horrors coming        coe5.observe("POP_HORRORS", function(_, chance) coe5.log("chance " .. chance) end)   (Windows only for now)
+--   React to Horrors coming        coe5.observe("POP_HORRORS", function(chance) coe5.log("chance " .. chance) end)
 --   Every army a player sees now   for _, a in ipairs(coe5.armies(p)) do coe5.log(a.x .. "," .. a.y .. " " .. a.owner .. " " .. a.units) end
 --   Does a monster fly             coe5.get("monsterMoveFlags", coe5.get("unitMonster", u)) & 1 ~= 0   (unitMoveFlags adds its items)
 --   A monster's ability by its mod command  coe5.get("monsterAbility", m, "aihold"), coe5.get("unitAbility", u, "mr")
@@ -288,14 +292,18 @@ function require(name) end
 ---| "DECORATE_SQUARE"           # fn(next, x, y): one square's random special terrain by its terrain (villages, farms, mines, ports; towers, castles and ancient ruins only on Elysium): in world building, a map file's random squares, and the map editor's Create Fancy Terrain. next(x, y) places them; don't call it to keep the square as it is. Another square in next is refused (square_changed). A wrap that errors runs it.
 ---| "WEAPON_HIT"                # fn(next, attacker, target, weapon, damage, value, dmgtype): one hit's damage in a battle, after the game's MR checks and its weapon flags, before its double-damage rules. value is the spell's or monster attack's dmg (999 on the kill spells; an affliction's mask, low 32 bits); dmgtype is the weapon's damage type, and a type the game doesn't have takes its plain damage. Return the damage the hit does: 0 makes the hit and its effect do nothing. next returns CoE5SE's answer (killres, polymorphres, petrifyres, doesntaffect and the rest). Runs on every hit: keep it quick.
 ---| "BATTLE_TARGET_CHECK"       # fn(next, unit, type, weapon, value, target): whether a target is worth a spell or a mind weapon to the battle AI. next returns the game's and CoE5SE's answer, coe5.target.useful or below; return coe5.target.notAffected to make casters pass the target over. A target the game picks itself, at random, isn't asked.
+---| "BATTLE_TARGET_SQUARE"      # fn(next, unit, spell, weapon, type, value): the battle cell an attack or spell aims at, for every unit of every side: each weapon attack (up to 5 tries), each spell (up to 50 spell picks), each later shot of a weapon or spell, and a strike sent to cell 999, 999. spell is -1 for a weapon's attack and weapon -1 for a spell's; type and value are the attack's (value its low 32 bits). next(unit, spell, weapon, type, value) returns the game's pick, useful, x, y: its trgrank, range and area, then a blind caster's miss and scatter, with x, y -1, -1 for no cell. Return useful, x, y to aim there: useful above 0 (coe5.target.useful) and the attack goes to the cell; 0 or below and the attack looks again, then gives up ("unable to attack", "casts no spell"). useful alone keeps next's cell. Return nothing for next's. A cell off the field, useful above 0 with no cell, or another value is refused (lua_refused reason=off_field, no_square, out_of_range, not_a_number, not_a_square) and next's kept. Another unit, spell, weapon, type or value in next is refused (unit_changed and the rest). Draw no random numbers of your own: a LAN client fights the battle again and must pick the same cells. A wrap that errors gives the game's.
 ---| "BATTLE_SPELL_PICK"         # fn(next, unit, path): the spell a caster's spell attack casts in a battle, picked at random among its memorized spells of that path; the attack asks again, up to 50 times, until the spell has a target. Return another spell (any spell the table holds, known or not) or -1 for none; nothing for next's. Another number is refused (not_a_spell, not_a_number) and next's kept; another unit or path in next is refused (unit_changed, path_changed). A wrap that errors gives the game's.
 ---| "CEREMONY_PERFORM"          # fn(next, ceremony, commander, target): one of the Voice of El's ceremonies, a player's (the Ceremonies screen, a map order) or the AI's. ceremony is the game's number for it: match it by coe5.get("ceremonyName", ceremony), never by the number. target is the player a Start Crusade goes against, -1 for every other ceremony. next(ceremony, commander, target) is the game's own: it checks the rank, limits and cost (and does nothing when one fails), charges the cost and action points, and does the ceremony. Skip next and none of it happens: no cost, no action points, no effect, and no message. Code after next adds effects of your own. Another ceremony, commander or target in next is refused (ceremony_changed, commander_changed, target_changed) and the game's kept. A wrap that errors runs it.
 ---| "CEREMONY_COSTS"            # fn(next, commander): the game works out every ceremony's cost for a priest of El: at the top of the Ceremonies screen, before a map order's ceremony, and before the AI's. After next(commander), coe5.get("ceremonyCost", ceremony) holds each one and coe5.set("ceremonyCost", ceremony, value) changes it: the screen shows that cost, the ceremony checks and charges it, and the AI weighs it, until the next time the game works them out. The game multiplies some: Break Seal's by the seal's number (1 for the first), Bolster Devotion's by one more than the player's earlier Bolster Devotions, Increase Divine Favor's by the level it raises the favor to, Convert Settlement's by a fifth of the square's gold income (its action points too). Each is gold, or relics for Break Seal, Bolster Devotion and Increase Divine Favor. Another commander in next is refused (commander_changed).
 ---| "SEAL_BREAK"                # fn(next, slot, seal): one of the Seven Seals breaking, by a player's Break Seal ceremony or an item, slot that player; seal is the seal it breaks, 1 to 7. Inside the wrap the seals broken are still seal - 1; next(slot, seal) breaks it, as the game does. Skip next and the seal stays unbroken, so none of what follows from it happens (its event, SEAL_EVENT; El's minions for the Voice of El players get no stronger), and the next Break Seal ceremony breaks the same seal again. The ceremony's cost and action points are spent either way. To break the seal but replace its event, wrap SEAL_EVENT instead. The seals the game breaks on its own at a month's end ("Cardinal Intervenes", "Heavenly Surge of Power") don't come here. Another slot or seal in next is refused (slot_changed, seal_changed). A wrap that errors breaks it.
 ---| "SEAL_EVENT"                # fn(next, slot, seal): a broken seal's event, at a month's end: the month after it broke, one seal a month in order when several broke, whoever broke it (a ceremony, an item, or the game at a month's end), once per seal. seal is 1 to 7; the game's events: none for the first two, an Apocalyptic Rider for the third to the sixth ("The apocalypse is coming closer"), the Apocalypse for the seventh. slot is always -1: the game keeps no record of who broke a seal. next(slot, seal) lets the game run its event, which it does once every wrap has returned (so code after next runs before the event); next returns nothing. Skip next to replace the event with your own: the seal stays broken, its event counts as done and never comes back, and the next seal can be broken as before. What the wrap returns isn't read. Another slot or seal in next is refused (slot_changed, seal_changed). A wrap that errors runs it.
----| "UNIT_STRENGTH"            # fn(next, unit, monster, hp): the strength of one unit as the game sums it, 0 to 1000: unit -1 counts the bare monster (no armor, items or afflictions), monster -1 the unit's own. Every unit, square and commander strength adds it up, the AI's too. next returns the game's own; return another whole number for the game to use. A unit or monster outside the tables is refused (lua_refused reason=out_of_range) and the game's kept. The reads squareStrength and commanderStrength show a wrap's numbers, unitStrength (CoE5SE's own sum) doesn't; a call of the site from the wrap's own code goes to the game unwrapped.
----| "SQUARE_STRENGTH"          # fn(next, team, x, y): the strength of the units on a square as player team counts them (-1: every unit), raised by the fort when over a tenth of them are ranged: what the AI's conquest, routes and strength memory ask. next returns the game's own; return another whole number for the game to use. A team, x or y outside the game's tables is refused (lua_refused reason=out_of_range) and the game's kept. The sums of unit strength inside it take UNIT_STRENGTH's answers. The AI's strength memory (squareRememberedStrength) stores a wrap's number; the squareStrength read is the game's own and doesn't show it. A call from the wrap's own code goes to the game unwrapped.
----| "COMMANDER_STRENGTH"       # fn(next, commander, flags): the commander's unit's strength plus each unit following it, as the game asks it for the AI's plans, ritual and army checks: every call but the move loop's route, which AI_MOVE_COMSTR keeps. flags is the game's second argument on Windows (0 counts every follower, else only those whose move flags hold every bit); Mac's copy takes the commander alone. next returns the game's own; return another whole number for the game to use. A call from the wrap's own code goes to the game unwrapped.
+---| "UNIT_BATTLE_STRENGTH"     # fn(next, unit, monster, hp): the battle strength of one unit as the game sums it, 0 to 1000: unit -1 counts the bare monster (no armor, items or afflictions), monster -1 the unit's own. Every unit's, square's and commander's battle strength adds it up, the AI's too. next returns the game's own; return another whole number for the game to use. A unit or monster outside the tables is refused (lua_refused reason=out_of_range) and the game's kept. The reads squareBattleStrength and commanderBattleStrength show a wrap's numbers, unitBattleStrength (CoE5SE's own sum) doesn't; a call of the site from the wrap's own code goes to the game unwrapped.
+---| "SQUARE_BATTLE_STRENGTH"   # fn(next, team, x, y): the battle strength of the units on a square as player team counts them (-1: every unit), raised by the fort when over a tenth of them are ranged: what the AI's conquest, routes and strength memory ask. next returns the game's own; return another whole number for the game to use. A team, x or y outside the game's tables is refused (lua_refused reason=out_of_range) and the game's kept. The sums of unit battle strength inside it take UNIT_BATTLE_STRENGTH's answers. The AI's strength memory (squareRememberedBattleStrength) stores a wrap's number; the squareBattleStrength read is the game's own and doesn't show it. A call from the wrap's own code goes to the game unwrapped.
+---| "COMMANDER_BATTLE_STRENGTH" # fn(next, commander, flags): the battle strength of the commander's unit plus each unit following it, as the game asks it for the AI's plans, ritual and army checks: every call but the move loop's route, which AI_MOVE_COMSTR keeps. flags is the game's second argument on Windows (0 counts every follower, else only those whose move flags hold every bit); Mac's copy takes the commander alone. next returns the game's own; return another whole number for the game to use. A call from the wrap's own code goes to the game unwrapped.
+---| "UNIT_STRENGTH"            # the first name of UNIT_BATTLE_STRENGTH, which still works.
+---| "SQUARE_STRENGTH"          # the first name of SQUARE_BATTLE_STRENGTH, which still works.
+---| "COMMANDER_STRENGTH"       # the first name of COMMANDER_BATTLE_STRENGTH, which still works.
 ---| "PLAYER_ABILITY"           # fn(next, player, ability, sum): a player's value of an ability as the game reckons it (the value slotAbility and slotAbilitySum read): its class's first value, then the largest (sum 0) or the total (sum 1) over its living units. The income functions, the AI, the shops and the recruit screen ask it. next returns the game's own; return another whole number for the game to use. A player outside the slots is refused (lua_refused reason=out_of_range) and the game's kept.
 ---| "UNIT_STATE_FLAGS"         # fn(next, unit): the unit's state bits with its items' (the value unitStateFlags reads: afflictions, insane 2^13, Fatigued 2^37, a guard 2^39), as the game tests them for armor, moves, battles and the AI. next returns the game's own; return another whole number for the game to use. A unit outside the table is refused (lua_refused reason=out_of_range) and the game's kept.
 ---| "ARMY_MOVE_FLAGS"          # fn(next, commander): the move flags of a commander's army as the AI's explore, conquest and routes test them (the value commanderMoveFlags reads). next returns the game's own; return another whole number for the game to use. A commander outside the table is refused (lua_refused reason=out_of_range) and the game's kept.
@@ -308,11 +316,33 @@ function require(name) end
 ---| "RITUAL_LOCATION_CHECK"    # fn(next, commander, slot, x, y): every location check of a ritual (its terrain, the units and enchantments its rules count, its trade and guild rules): the ritual screen's, the AI's, a repeated ritual's, the castable-anywhere test's. x and y are the square asked about, -999 and -999 for the caster's own. next returns the game's answer: 1, or a reason at 0 or below. Return 1 to let the ritual be cast there, 0 or below to hold it back. The ritual screen tests the ritual's terrain itself (ritualTerrainAt), so a row it greys for the terrain is opened at RITUAL_SCREEN_ROW. A square that is neither -999, -999 nor on the map in next is refused (out_of_range).
 ---| "CEREMONY_SCREEN_ROW"       # fn(next, id, a, b, name, costType1, cost1, costType2, cost2, costType3, cost3, costType4, cost4, hover, apCost, castable, mirrorMonster, mirrorText): one row of the Voice of El's Ceremonies screen, with RITUAL_SCREEN_ROW's arguments (the game draws both screens' rows alike). id is the ceremony + coe5.ceremony.rowUsable when the priest may perform it (the number CEREMONY_PERFORM gets, which ceremonyName names), or + coe5.ceremony.rowGreyed when greyed out (the game gives a greyed row no id; CoE5SE numbers it while a script wraps here, so coe5.get("hoveredId") tells the rows apart). hover is a greyed row's reason, the game's own words, and "" on most rows the priest may perform; each cost is gold (costType 0) or relics (12), as the game charges it; pass a and b on unchanged. On Windows the game draws five of the rows with its own copy of the row code, over which CoE5SE writes the call, so a wrap sees every row on both builds. In next, a mirrorMonster past the last monster or a costType above 50 is refused (lua_refused reason=out_of_range) and the game's own value kept. next returns nothing the game uses (nil).
 ---| "CEREMONY_SCREEN_WAIT"      # fn(next, block, mode): the Voice of El's Ceremonies screen waiting for a click. The game passes block 1: the screen keeps showing its rows as they were laid out until a click, so CEREMONY_SCREEN_ROW runs only then. next(0, mode) returns 0 at the end of each frame with no click, and the screen lays its rows out again for the next frame, as the ritual screen does every frame. next returns the clicked id, which the screen then acts on.
+---| "UNIT_DAMAGE_BONUS"         # fn(next, unit): what the unit's items, afflictions and benefits add to its monster's str, added to each hit's damage unless the weapon has nostr; its stats screen shows the two together as Strength (unitStr). Diseased, Weakened, Chest wound, Exhausted, Numbness, Debilitating wound and Death wish change it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit stays the game's (unit_changed).
+---| "UNIT_MORALE"               # fn(next, unit): the unit's morale, as each hit, the battle's fear check and the battle AI read it. Battle fright and Feebleminded change it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit stays the game's (unit_changed).
+---| "UNIT_MR"                   # fn(next, unit): the unit's magic resistance, as each spell hit, confusion's recovery and lifeforce drain read it. Feebleminded changes it inside the game's function. next returns the game's own; return another whole number for the game to use. On Mac the primal animal test sums its own copy, which keeps the game's answer. The unit stays the game's (unit_changed).
+---| "UNIT_BATTLE_RANK"          # fn(next, unit): the unit's rank in battle, 1 front, 0 middle, -1 back, as the battle's setup and its target picks read it. Death wish and Battle fright change it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit stays the game's (unit_changed).
+---| "UNIT_MAX_HP"               # fn(next, unit): the unit's most hit points, as hits, healing, the turn's upkeep, the AI and the battle token read it. Chest wound and Never healing wound change it inside the game's function. next returns the game's own; return another whole number for the game to use. Windows and Mac hook the function itself when it is first wrapped, so a wrap runs for every call of it. The unit stays the game's (unit_changed).
+---| "UNIT_PATH_BONUS"           # fn(next, unit, path): what the unit's magic boosts add to its level in a path, for a spell attack in battle and the library. Feebleminded changes it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit and path stay the game's (unit_changed, path_changed).
+---| "UNIT_BLINDNESS"            # fn(next, unit): 0 when the unit sees, 1 with one eye left, 2 blind, as each hit, each target pick and sight read it. Lost an eye and Blind change it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit stays the game's (unit_changed).
+---| "UNIT_INCAPACITATED"        # fn(next, unit): whether the unit can't move, attack or weapon-attack this round (asleep, paralyzed, stunned, held, tree form, turned to gold, petrified, shackled), as each round and the battle token ask it. next returns true or false; return true, false or a whole number (0 false). The unit stays the game's (unit_changed).
+---| "UNIT_FIRE_RESISTANCE"      # fn(next, unit): the unit's fire resistance, as fire hits, burning and the AI's routes read it (the value coe5.unitFireResistance reads). Tree form changes it inside the game's function. next returns the game's own; return another whole number for the game to use. The unit stays the game's (unit_changed).
+---| "DOATTACK"                  # fn(next, unit, slot, spell): one unit's attack in a battle round: an attack slot with spell -1, or slot -1 with the spell an item casts. A wrap that doesn't call next skips the attack, as a Confused or Slimed unit's is skipped. The unit, slot and spell stay the game's (unit_changed, slot_changed, spell_changed). coe5.observe still watches every call.
+---| "UNIT_BANISHABLE"           # fn(next, unit, weapon, attacker): what a banish hit (dmgtype 23) does to the unit, as the hit, the battle AI's target picks and the unit's Banishable line ask it. weapon and attacker are the hit's, or a target pick's weapon and caster; -1 for the unit stats screen. next returns the game's: 1 for an undead or demon off its home plane with banishsurv, 2 without, 0 for any other. Return coe5.banish.noEffect, .banished or .damage; anything else is refused (out_of_range) and the game's kept. The unit, weapon and attacker stay the game's.
+---| "BANISH_DESTINATION"        # fn(next, unit, weapon, attacker): where a unit banished in a battle lands after it, by dmgtype 23 or coe5.battleBanishUnit. weapon and attacker are the hit's that banished it, -1 for none. next returns the game's plane, x and y: the plane coe5.battleBanishUnit named, else the unit's own, and its square, else a random fitting one. Return a plane, 0 to the last, and a square of it, or a plane alone for a random fitting square; a square off the map or on another plane is refused (off_map, wrong_plane) and the game's kept. Runs on the host in a LAN game.
+---| "IMMORTAL_REFORM"           # fn(next, unit, plane, applied): where, as what and for whom a dead immortal reforms. applied is true at the turn's reform, false when the AI asks where its returning units would reform as it plans its moves; give both the same answer. plane is the plane of the unit's square (at the reform, the square it died on), -1 for none. next returns the game's x, y, monster and owner: x and y -1 when it stays dead, monster and owner -1 when it keeps its own. Return x and y, then a monster and an owner, each -1 or left out to keep the unit's own; -1, -1 keeps it dead. A square off the map or on no plane, a monster the game makes no units of, or an owner that isn't a player slot is refused (off_map, no_plane, bad_monster, bad_player) and next's answer kept. The unit, plane and applied stay the game's. Runs on the host in a LAN game.
+---| "UNIT_HEAL_RATE"            # fn(next, unit): how the unit heals between turns, as its player's turn start asks it of each unit that doesn't regenerate and isn't on Hades' no-heal path. next returns the game's rate: coe5.healRate.never for noheal without falselife, .fast for fastheal or an army heal spell (heallivingarmy, healhumanarmy, heal<trait>army), else .usual. Return coe5.healRate.never, .usual or .fast; anything else is refused (out_of_range) and the game's kept. The game works out the hit points from the rate; the unit stats screen and regeneration keep the game's own. The unit stays the game's (unit_changed). Runs on the host in a LAN game.
+---| "BATTLE_ADVANCE_UNIT"       # fn(next, unit, ambush): one unit's move in a battle round. A wrap that doesn't call next keeps the unit where it stands this time. The unit and ambush stay the game's (unit_changed, ambush_changed). coe5.observe still watches every call.
 
----The game calls a script can watch with coe5.observe but not change: each decides or applies game
----content. before(...) gets a copy of the arguments before the call, and after(result, ...) the
----call's result and the arguments after it (result nil where the call has none). What they return
----doesn't reach the game.
+---The game calls a script can watch with coe5.observe, and change with coe5.wrap. With coe5.observe,
+---before(...) gets a copy of the arguments before the call, and after(result, ...) the call's result
+---and the arguments after it (result nil where the call has none); what they return doesn't reach
+---the game. With coe5.wrap, fn(next, ...) gets the same arguments: next may take other units,
+---commanders, players, squares, monsters, items, rituals, planes, weapons and spells, each inside its
+---table as it stands now (else lua_refused reason=out_of_range and the game's own goes on), and other
+---amounts and switches; a file path, a text the game may keep, and an argument whose meaning isn't
+---known stay the game's (reason=argument_kept). The wrap's result reaches the game where the line
+---says what the result is; NEW_UNIT and RITUAL_FAR_SUMMON_UNITS take a unit or -1, FIGHT_THE_FIGHT a
+---player, -1 or -2, and a result the line doesn't explain stays the game's (reason=result_kept). A
+---wrap that skips next keeps the call from running, and its observers don't see it.
 ---@alias coe5.ObservedSite
 ---| "RITUAL_SCREEN_LOCATION_CHECK"  # (commander, slot, a, b): the ritual screen's location check for one row, right before the row is drawn; a and b are -999. A result of 0 or below is a reason code.
 ---| "RITUAL_SCREEN_CAN_CAST"    # (commander, slot): the ritual screen's cast check for one row. A result of 0 or below is a reason (coe5.ritual.reasonMirror, ...).
@@ -334,7 +364,7 @@ function require(name) end
 ---| "FIGHT_THE_FIGHT"           # (x, y): one battle on the square, its rounds to a winner; the field is built and both sides deployed before it. The result is the winner's player, -1 for none, -2 when no side is left.
 ---| "BATTLE_ROUND"              # (): a battle round starts (battleRound holds it), before starvation, movement and attacks; a replay's rounds too (battleReplay). No result.
 ---| "DAMAGE_UNIT"               # (unit, damage): damage comes off a unit's hp (below 0 heals); its death runs inside when the hp falls to 0 or below. In battle and out of it; a replay's too (battleReplay); not a meteor's kills. The result is nil.
----| "DOATTACK"                  # (unit, slot, spell): one unit's attack in a battle round: an attack slot with spell -1, or slot -1 with the spell an item casts. Damage it deals reaches DAMAGE_UNIT inside it. The result is nil.
+---| "DOATTACK"                  # (unit, slot, spell): one unit's attack in a battle round: an attack slot with spell -1, or slot -1 with the spell an item casts. Damage it deals reaches DAMAGE_UNIT inside it. The result is nil. A wrap may also skip it (coe5.Site); the observers see every call.
 ---| "EXECUTE_RITUAL"            # (unit, ritual, x, y, percent, pay): a ritual is cast: the Rituals screen (x -999: the caster picks the target), the AI, repeated rituals, a cast by name, world building on Elysium. The result is -1 when the cast was refused.
 ---| "NEW_UNIT"                  # (x, y, player, commander, monster): a unit is made on square (x, y) for the player, under the commander (-1 none): recruits, summons, every populate's units, battle summons and splits. The result is the new unit, -1 when the unit table is full.
 ---| "REMOVE_UNIT"               # (unit): a unit leaves the game without dying: the event killunit at 9999 and above, killsquare, a mirror image's end, units the game clears. A death by damage is DAMAGE_UNIT's. The result is nil.
@@ -346,7 +376,7 @@ function require(name) end
 ---| "BATTLE_SETUP"              # (x, y, mode): a battlefield is built for square (x, y): each battle and replay (mode 0), and the backdrop of the army screens, rituals, summons and the battle map editor. The result is nil.
 ---| "BATTLE_SETUP_SIDE"         # (player, x, y, side, filter): one side's units are placed on the battlefield, the defender's (side 1) first. The result is nil.
 ---| "BATTLE_SETUP_AMBUSH"       # (player, x, y, side, filter): one side's units are placed for an ambush. The result is nil.
----| "BATTLE_ADVANCE_UNIT"       # (unit, ambush): one unit's move in a battle round: fleeing, confused, burrowed, flying, holding by rank, or a step toward the enemy; a fast unit moves twice. The result is nil.
+---| "BATTLE_ADVANCE_UNIT"       # (unit, ambush): one unit's move in a battle round: fleeing, confused, burrowed, flying, holding by rank, or a step toward the enemy; a fast unit moves twice. The result is nil. A wrap may also skip it (coe5.Site); the observers see every call.
 ---| "BATTLE_TURN_EFFECTS"       # (unit, aftermath): a battle round's effects on a unit: regeneration, decay, damage over time; `aftermath` is 0 in the rounds and nonzero after the fight. The result is nil.
 ---| "BATTLE_TRANSFORM"          # (unit, monster, attacker): a hit turns `unit` into `monster` on the attacker's side: mutate, replicate, ghoulify. The result is nil.
 ---| "FOUND_ITEM"                # (x, y, item): a commander on square (x, y) finds `item`: a battle's loot, a conquered square's, a dead unit's. The result is nil.
@@ -356,42 +386,42 @@ function require(name) end
 ---| "ANIMAL_SUMMONING"          # (commander, value): a commander's animal summoning, the animals by its square's terrain; `value` is the ritual effect's. The result is nil.
 ---| "ORDER_SLAVE_HUNT"          # (commander): a commander's slave hunt on its square: the map's order, the AI's, and the repeated rituals'. The result is nil.
 ---| "ORDER_EAT_VILLAGE"         # (commander): a commander eats the village on its square: the map's order and the AI's. The result is nil.
----| "UPDATE_VOID"                # (): The month's redraw of the Void: each of its squares goes unseen by every player and gets its terrain drawn again. Windows only for now. The result is nil.
----| "VOID_SHUFFLE"               # (): The month's shuffle of the Void: fifteen swaps of two random squares. Windows only for now. The result is nil.
+---| "UPDATE_VOID"                # (): The month's redraw of the Void: each of its squares goes unseen by every player and gets its terrain drawn again. The result is nil.
+---| "VOID_SHUFFLE"               # (): The month's shuffle of the Void: fifteen swaps of two random squares. The result is nil.
 ---| "PLANESHIFT_UNIT"            # (unit, plane, noSight): A unit moves to the same spot on another plane. Windows only for now. The result is nil.
 ---| "NEW_PORTAL_PAIR"            # (x1, y1, x2, y2, twoWay): Two squares are linked with a new portal number: startplane's home portal, the Strange Portals, and the rituals that open a portal. Windows only for now. The result is nil.
----| "PLANE_DISCOVERED_PASS"      # (): The month's check of which vanilla planes a human player has seen enough of, which sets planeFlags bit 0. Windows only for now. The result is nil.
----| "MOVE_INFERNO_PLAYER"        # (): The Inferno's move each month, slot 28's armies included. Windows only for now. The result is nil.
----| "MOVE_HADES_PLAYER"          # (): Hades' move each month, slot 27's armies included. Windows only for now. The result is nil.
----| "MOVE_CELESTIAL_PLAYER"      # (): The Celestial Plane's move each month, slot 29's armies included. Windows only for now. The result is nil.
----| "POPULATE_CELESTIAL"         # (): World generation places the Celestial Plane's independents. Windows only for now. The result is nil.
+---| "PLANE_DISCOVERED_PASS"      # (): The month's check of which vanilla planes a human player has seen enough of, which sets planeFlags bit 0. The result is nil.
+---| "MOVE_INFERNO_PLAYER"        # (): The Inferno's move each month, slot 28's armies included. The result is nil.
+---| "MOVE_HADES_PLAYER"          # (): Hades' move each month, slot 27's armies included. The result is nil.
+---| "MOVE_CELESTIAL_PLAYER"      # (): The Celestial Plane's move each month, slot 29's armies included. The result is nil.
+---| "POPULATE_CELESTIAL"         # (): World generation places the Celestial Plane's independents. The result is nil.
 ---| "POPULATE_SKY"               # (): World generation places the Sky's independents. The result is nil.
----| "POPULATE_AGARTHA"           # (): World generation places Agartha's independents. Windows only for now. The result is nil.
+---| "POPULATE_AGARTHA"           # (): World generation places Agartha's independents. The result is nil.
 ---| "POPULATE_INFERNO"           # (): World generation places the Inferno's independents. The result is nil.
 ---| "POPULATE_HADES"             # (): World generation places Hades' independents. The result is nil.
 ---| "POPULATE_AZTLAN"            # (): World generation places Aztlan's independents. The result is nil.
 ---| "POPULATE_PRIMAL"            # (): World generation places the Primal Plane's independents. The result is nil.
 ---| "POPULATE_ELEMENTAL"         # (): World generation places the Elemental Planes' independents. The result is nil.
----| "PLANE_RISE_TO_ELYSIUM"         # (plane, percent, n, monster): A plane sends units of a monster up to Elysium, as Hades sends its Dispossessed Spirits. Windows only for now. The result is nil.
----| "ENLARGE_PLANE"              # (plane, w, h, dx, dy, terrain): World generation grows the last plane by 4 squares each way, the new frame of the terrain. Windows only for now. The result is nil.
+---| "PLANE_RISE_TO_ELYSIUM"         # (plane, percent, n, monster): A plane sends units of a monster up to Elysium, as Hades sends its Dispossessed Spirits. On Mac a wrap's plane stays the game's. The result is nil.
+---| "ENLARGE_PLANE"              # (plane, w, h, dx, dy, terrain): World generation grows the last plane by 4 squares each way, the new frame of the terrain. The result is nil.
 ---| "GEN_FLOOD_PLANE"            # (plane): World generation floods a plane from its wet squares, Agartha's among them; the result is how many squares it flooded.
 ---| "ADDPLANE"                   # (name, w, h): A plane is placed beside the map, from world generation or a map file; the result is its number.
 ---| "LOAD_MAP_PLANE"             # (path, name, plane): A plane's lines are read from a map file; the result is 0 when the file can't be opened.
 ---| "UNIT_ADD_XP"                # (unit, xp): A unit gains experience. Windows only for now. The result is nil.
 ---| "USE_SPECIAL_SITE"           # (x, y, commander): A commander uses the special site on a square. The result is nil.
----| "LONER_STEP"                 # (unit): One random step of a loner by the terrain it prefers. Windows only for now. The result is nil.
----| "REMOVE_TEMP_MEN"            # (): The units a battle made temporary are removed. Windows only for now. The result is nil.
----| "MOVE_WANDERING_MONSTERS"    # (): The active player's wandering monsters move. Windows only for now. The result is nil.
----| "MOVE_PLAYER_STUPIDS"        # (): The active player's units that have no sense of their own move. Windows only for now. The result is nil.
+---| "LONER_STEP"                 # (unit): One random step of a loner by the terrain it prefers. The result is nil.
+---| "REMOVE_TEMP_MEN"            # (): The units a battle made temporary are removed. The result is nil.
+---| "MOVE_WANDERING_MONSTERS"    # (): The active player's wandering monsters move. The result is nil.
+---| "MOVE_PLAYER_STUPIDS"        # (): The active player's units that have no sense of their own move. The result is nil.
 ---| "OVERRUN_CHECK"              # (player, x, y): The check for an overrun on a contested square.
----| "KILL_UNIT_999"              # (unit): A unit dies of 999 damage in an overrun or an elimination. Windows only for now. The result is nil.
+---| "KILL_UNIT_999"              # (unit): A unit dies of 999 damage in an overrun or an elimination. The result is nil.
 ---| "DAMAGE_UNIT_PLAIN"          # (unit, damage): A unit loses Hit Points with none of a hit's checks: the damage DAMAGE_UNIT doesn't see, a meteor's kills among it. Windows only for now. The result is nil.
 ---| "CONTINUE_MOVE_ORDERS"       # (player, commander): A player's stored move orders carry on, or one commander's; the result is how many moved.
 ---| "HUMAN_MULTI_MOVE"           # (commander, x, y, mode): A human player's commander walks a route.
 ---| "GROUP_MOVE"                 # (group, x, y): The selected group of commanders moves a step.
 ---| "MOVE_ORDER_ROUTE"           # (commander, x, y): A human player's move order to a square.
 ---| "UNIT_REMOVE_ITEM"           # (unit, item): An item leaves a unit's hands as the AI hands items on; the result is -1 when the unit didn't hold it. Windows only for now.
----| "MEMORIZE_SPELL"             # (unit, spell): A unit memorizes a spell. Windows only for now. The result is nil.
+---| "MEMORIZE_SPELL"             # (unit, spell): A unit memorizes a spell. The result is nil.
 ---| "LEARN_RANDOM_SPELL"         # (unit, path, level): A unit learns a random spell: from a library, a ritual or a summoning.
 ---| "GET_START_RITUALS"          # (commander): A commander learns the rituals its schools start it with: a new commander or a promotion. The result is nil.
 ---| "COMMANDER_LEARN_RITUAL"     # (commander, ritual): A commander learns a ritual. Windows only for now. The result is nil.
@@ -400,110 +430,110 @@ function require(name) end
 ---| "REMOVE_ENCHANT"             # (caster, type, x, y): An active ritual effect ends.
 ---| "RITUAL_PAY_COSTS"           # (player, commander, ritual, percent, show): A ritual's costs are paid. The result is nil.
 ---| "RITUAL_FAR_SUMMON_UNITS"    # (caster, monster, count, player, x, y): A ritual summons units on a far square; the result is the first unit.
----| "PRIEST_FREESPAWN"           # (player): A Voice of El player's chance of free units by the seals broken. Windows only for now. The result is nil.
----| "EVENT_KILL_SQUARE"          # (x, y): The event word killsquare runs. Windows only for now. The result is nil.
+---| "PRIEST_FREESPAWN"           # (player): A Voice of El player's chance of free units by the seals broken. The result is nil.
+---| "EVENT_KILL_SQUARE"          # (x, y): The event word killsquare runs. The result is nil.
 ---| "GIVE_ITEM_BY_NAME"          # (unit, item): An item is given by string: the event word newitem and rituals. The result is nil.
 ---| "TAKE_ITEM_BY_NAME"          # (unit, item): The event word removeitem runs. The result is nil.
 ---| "GIVE_RANDOM_ITEM"           # (unit, kind, percent, level): A random item is given at a percent chance: the event words randitem and randmisc and more. Windows only for now. The result is nil.
 ---| "SQUAREEVENT_START"          # (): A squareevent starts: every square is marked and the event's player set. Windows only for now. The result is nil.
----| "TERRAIN_PRESENT_RESCAN"     # (): The game rescans which terrains are present after a terrain change. Windows only for now. The result is nil.
+---| "TERRAIN_PRESENT_RESCAN"     # (): The game rescans which terrains are present after a terrain change. The result is nil.
 ---| "SHOP_OFFER_MESSAGE"         # (player): A player gets the message for the newest shop entry: a Recruitment Offer or a Magic Item for Sale. The result is nil.
----| "WORLD_FIRE_UPDATE"          # (): The month's update of burning squares. Windows only for now. The result is nil.
----| "EVENT_VAR_CHANGED"          # (variable): A ritual effect wrote an event variable. Windows only for now. The result is nil.
----| "CONSCRIPTION"               # (player): The Baron's conscription, the first month of Summer. Windows only for now. The result is nil.
+---| "WORLD_FIRE_UPDATE"          # (): The month's update of burning squares. The result is nil.
+---| "EVENT_VAR_CHANGED"          # (variable): A ritual effect wrote an event variable. The result is nil.
+---| "CONSCRIPTION"               # (player): The Baron's conscription, the first month of Summer. The result is nil.
 ---| "GAME_STATISTICS"            # (): Each player's row of the score graphs is written for the turn. The result is nil.
----| "ALTER_TERRAIN"              # (player, x, y, from, from2, to): A square's terrain changes: every way a square changes through the game's alterterrain. Windows only for now.
+---| "ALTER_TERRAIN"              # (player, x, y, from, from2, to): A square's terrain changes: every way a square changes through the game's alterterrain.
 ---| "RUIN_SQUARE"                # (player, x, y): A square's terrain becomes its ruined form. The result is nil.
 ---| "DESTROY_GATEWAY"            # (player, x, y, flag): A Gateway is destroyed. Windows only for now.
----| "DIG_TUNNEL_SQUARE"          # (player, x, y): A Cave Wall is dug out; the result is 1 when it was. Windows only for now.
----| "MONTH_SQUARE_RESET"         # (): The month's reset of every square's recruited mark. Windows only for now. The result is nil.
----| "ROLL_CLASS"                 # (slot, unique): A random class is rolled for a slot. Windows only for now. The result is nil.
----| "RESET_INCOME_CACHES"        # (): Every player's income is marked to be counted again. Windows only for now. The result is nil.
----| "TEAM_START_LOCATIONS"       # (): World generation picks the teams' start squares ("Creating World"). Windows only for now. The result is nil.
----| "TRIM_TEAM_LOCATIONS"        # (): World generation trims the map around the start squares ("Trimming World"). Windows only for now. The result is nil.
----| "SWAP_TEAM_LOCATIONS"        # (): World generation swaps start squares for a better score. Windows only for now. The result is nil.
+---| "DIG_TUNNEL_SQUARE"          # (player, x, y): A Cave Wall is dug out; the result is 1 when it was. On Mac the result is nil.
+---| "MONTH_SQUARE_RESET"         # (): The month's reset of every square's recruited mark. The result is nil.
+---| "ROLL_CLASS"                 # (slot, unique): A random class is rolled for a slot. The result is nil.
+---| "RESET_INCOME_CACHES"        # (): Every player's income is marked to be counted again. The result is nil.
+---| "TEAM_START_LOCATIONS"       # (): World generation picks the teams' start squares ("Creating World"). The result is nil.
+---| "TRIM_TEAM_LOCATIONS"        # (): World generation trims the map around the start squares ("Trimming World"). The result is nil.
+---| "SWAP_TEAM_LOCATIONS"        # (): World generation swaps start squares for a better score. The result is nil.
 ---| "CREATE_CITADELS_STEP"       # (): World generation places the citadels ("Creating Citadels"). Windows only for now. The result is nil.
----| "FIX_PORTALS"                # (): Each portal is marked active or not. Windows only for now.
----| "VOID_FLUCTUATIONS"          # (): The Void's terrain fluctuates. Windows only for now. The result is nil.
+---| "FIX_PORTALS"                # (): Each portal is marked active or not. On Mac the result is nil.
+---| "VOID_FLUCTUATIONS"          # (): The Void's terrain fluctuates. The result is nil.
 ---| "PLANESHIFT_COMMANDER"       # (commander, plane): A commander's army planeshifts; the units that can't go are removed. Windows only for now. The result is nil.
----| "MIST_SPREAD"                # (): The month's spread of mist. Windows only for now.
+---| "MIST_SPREAD"                # (): The month's spread of mist. On Mac the result is nil.
 ---| "TEMPERATURE_CHANGE"         # (): Squares change terrain by their temperature. On Mac the result is nil.
----| "SPECIAL_SITE_POPULATE"              # (): Each special site's monsters come out. Windows only for now. The result is nil.
+---| "SPECIAL_SITE_POPULATE"              # (): Each special site's monsters come out. The result is nil.
 ---| "UNIT_SWALLOW"               # (swallower, victim): A unit swallows another. The result is nil.
 ---| "UNIT_UNSWALLOW"             # (swallower): Swallowed units come out, the swallower's or, with -1, everyone's. The result is nil.
 ---| "LIFEFORCE_DRAIN_UNIT"       # (attacker, unit, amount): A unit is drained of lifeforce; the result is what it gave.
 ---| "UNIT_CATCH_FIRE"            # (a, b): A unit catches fire from nearby flames.
 ---| "UNIT_CRUSH"                 # (unit): A unit crushes another in battle. The result is nil.
----| "REMOVE_BAD_FOLLOWERS"       # (): Followers whose commander can't lead them go free. Windows only for now. The result is nil.
----| "OVERPOP_CULL"               # (): The game counts its units against its limit, and past 97,000 kills free units to make room. Windows only for now.
+---| "REMOVE_BAD_FOLLOWERS"       # (): Followers whose commander can't lead them go free. The result is nil.
+---| "OVERPOP_CULL"               # (): The game counts its units against its limit, and past 97,000 kills free units to make room. On Mac the result is nil.
 ---| "MONKEY_CLOAK"               # (player): Mirror Cloaking disguises a player's units again. Windows only for now. The result is nil.
----| "RECYCLE_UNITS"              # (): Dead unit records are freed for reuse. Windows only for now.
+---| "RECYCLE_UNITS"              # (): Dead unit records are freed for reuse. On Mac the result is nil.
 ---| "RANDOM_TELEPORT"            # (unit, terrain, followers): A unit teleports to a random square of a terrain code. On Mac the result is nil.
 ---| "POP_HORRORS"                # (chance): Horrors come for the units marked by them. The result is nil.
----| "KILL_TERRAIN_UNITS"         # (): A battle's terrain units are removed. Windows only for now. The result is nil.
----| "KILL_SUNKEN_SHIPS"          # (x, y): A sea battle's sunken ships are removed. Windows only for now. The result is nil.
+---| "KILL_TERRAIN_UNITS"         # (): A battle's terrain units are removed. The result is nil.
+---| "KILL_SUNKEN_SHIPS"          # (x, y): A sea battle's sunken ships are removed. The result is nil.
 ---| "CREATE_BOATS"               # (): A sea battle's boats are made. Windows only for now. The result is nil.
----| "BATTLE_TRAPS"               # (): A siege's enchantment traps go off. Windows only for now. The result is nil.
+---| "BATTLE_TRAPS"               # (): A siege's enchantment traps go off. The result is nil.
 ---| "BATTLE_ENCHANT_TRAPS"       # (): A siege counts its trap enchantments. Windows only for now. The result is nil.
----| "BATTLE_SUMMON_STRING"       # (): A battle spell summons by string. Windows only for now. The result is nil.
----| "PAY_SPELL_LIFEFORCE"        # (): A battle spell pays its lifeforce. Windows only for now. The result is nil.
+---| "BATTLE_SUMMON_STRING"       # (): A battle spell summons by string. The result is the number of units summoned.
+---| "PAY_SPELL_LIFEFORCE"        # (): A battle spell pays its lifeforce. Windows only for now. The result is not 0 when the spell goes on to be cast, else 0.
 ---| "WORLD_NEWS"                 # (text): A World News line goes out to every human player. Windows only for now. The result is nil.
----| "SEASON_NEWS"                # (season): The season changes, and World News says so. Windows only for now. The result is nil.
----| "CHECK_GAME_WON"             # (): The turn's check for a winner. Windows only for now. The result is nil.
+---| "SEASON_NEWS"                # (season): The season changes, and World News says so. The result is nil.
+---| "CHECK_GAME_WON"             # (): The turn's check for a winner. The result is nil.
 ---| "SPY_CAUGHT"                 # (): A spying unit is found and killed. The result is nil.
 ---| "TOGGLE_AUTO_RECRUIT"        # (player, x, y, monster): A player's auto recruit of a monster on a square switches. Windows only for now.
----| "CHANGE_LOYALTY"             # (x, y, monster, fromOwner): Units on a square turn to slot 27, Hades. Windows only for now.
+---| "CHANGE_LOYALTY"             # (x, y, monster, fromOwner): Units on a square turn to slot 27, Hades.
 ---| "ALTER_TERRAIN_RECT"         # (x, y): A block of squares around a square changes terrain. The result is nil.
----| "RESPAWN_VOID"               # (): The Void's monsters come back. Windows only for now. The result is nil.
+---| "RESPAWN_VOID"               # (): The Void's monsters come back. The result is nil.
 ---| "BATTLE_SIEGE_UNIT"          # (unit): A unit acts against a siege's walls. The result is nil.
----| "GATHER_SHIPS"               # (): A sea battle's ships gather. Windows only for now. The result is nil.
----| "ADVANCE_SHIPS"              # (): A sea battle's ships advance. Windows only for now. The result is nil.
+---| "GATHER_SHIPS"               # (): A sea battle's ships gather. The result is nil.
+---| "ADVANCE_SHIPS"              # (): A sea battle's ships advance. The result is nil.
 ---| "MOVE_ENCHANTS"              # (x1, y1, x2, y2): Active ritual effects move from one square to another; the result is how many. Windows only for now.
 ---| "MOVE_GEMS"                  # (x1, y1, x2, y2): A square's gems move to another. Windows only for now. The result is nil.
 ---| "TAINTED_RITUAL_EFFECT"      # (commander, taint): The taint of a ritual cast under tainted magic reaches its caster. The result is nil.
 ---| "LOCATION_SWAP"              # (x1, y1, x2, y2): The units on two squares swap places. On Mac the result is nil.
 ---| "APE_POSSESSION"             # (a, b): A ritual possesses bodies from the square's corpses. On Mac the result is nil.
 ---| "RITUAL_ASK_HEMISPHERE"      # (): The screen asking where a ritual falls.
----| "GET_TITHES"                 # (): The Tithe of El is collected. Windows only for now. The result is nil.
----| "ELIMINATE_PLAYER"           # (player): A player is removed from the game. Windows only for now. The result is nil.
+---| "GET_TITHES"                 # (): The Tithe of El is collected. The result is nil.
+---| "ELIMINATE_PLAYER"           # (player): A player is removed from the game. The result is nil.
 ---| "FIND_START_SQUARE"          # (player): World generation picks a player's start square. The result is nil.
----| "TROLL_FOREST_SPAWN"         # (x, y): The troll forest spawns on a square. Windows only for now. The result is nil.
----| "AI_MAKE_DEFENDERS"          # (player): An AI player leaves guards after its moves. Windows only for now. The result is nil.
----| "AI_REDISTRIBUTE_ITEMS"      # (player, x, y): An AI player hands items around a square. Windows only for now. The result is nil.
+---| "TROLL_FOREST_SPAWN"         # (x, y): The troll forest spawns on a square. The result is nil.
+---| "AI_MAKE_DEFENDERS"          # (player): An AI player leaves guards after its moves. The result is nil.
+---| "AI_REDISTRIBUTE_ITEMS"      # (player, x, y): An AI player hands items around a square. The result is nil.
 ---| "AI_SHIPS"                   # (commander): The AI's ship handling for one commander. Windows only for now.
 ---| "AI_SHIP_DROP_CREW"          # (commander): An AI commander drops one ship's crew member. Windows only for now.
 ---| "AI_SHIP_TAKE_BOAT"          # (commander): An AI commander links a free ship. Windows only for now.
 ---| "AI_SHIP_TAKE_CREW"          # (commander): An AI commander links a free sailor. Windows only for now.
 ---| "CHECK_FOLLOWER_LINKS"       # (commander): The followers of a dead commander go free. The result is nil.
 ---| "STEP_BURN_FOREST"           # (player, x, y): A burning unit's step sets its square alight. Windows only for now. The result is nil.
----| "ORDER_BURN_FOREST"          # (unused, commander): A commander burns the forest on its square. Windows only for now. The result is nil.
----| "ORDER_CHOP_FOREST"          # (unused, commander): A commander chops the forest on its square. Windows only for now. The result is nil.
+---| "ORDER_BURN_FOREST"          # (unused, commander): A commander burns the forest on its square. The result is nil.
+---| "ORDER_CHOP_FOREST"          # (unused, commander): A commander chops the forest on its square. The result is nil.
 ---| "LIFEFORCE_DRAIN_SQUARE"     # (player, x, y, amount): A square's lifeforce is drained. The result is nil.
 ---| "SPEND_ALL_AP_AT"            # (player, x, y): A square's units spend their action points. The result is nil.
 ---| "SWAP_SQUARES"               # (x1, y1, x2, y2): Two squares trade records, as the Void's shuffle does. On Mac the result is nil.
----| "TELEPORT_UNIT"              # (unit, x, y): One unit teleports to a square. Windows only for now. The result is nil.
+---| "TELEPORT_UNIT"              # (unit, x, y): One unit teleports to a square. The result is nil.
 ---| "UNIT_CLEAR_BENEFITS"        # (unit): A unit's benefits end. The result is nil.
 ---| "GAME_MENU"                  # (): The Game Menu opens. Windows only for now. The result is nil.
 ---| "ARMY_COMMANDS_MENU"         # (commander): The army screen's menu opens. The result is nil.
 ---| "CEREMONY_SCREEN"            # (commander): The Ceremonies screen opens for a priest. Windows only for now. The result is nil.
 ---| "INCOME_DETAIL_SCREEN"       # (player, resource): The map's income popup opens for a resource. Windows only for now. The result is nil.
 ---| "BATTLE_CREATE_TREES"        # (x, y): A battle's field gets its trees, bushes and boulders by the square. Windows only for now. The result is nil.
----| "BATTLE_DEPLOY"              # (filter, x, y): Both sides deploy for a battle. Windows only for now. The result is nil.
+---| "BATTLE_DEPLOY"              # (filter, x, y): Both sides deploy for a battle. The result is nil.
 ---| "BATTLE_FIGHT_MOVE"          # (unit, x, y, mode, mark): A unit moves on the field. The result is nil.
 ---| "BATTLE_FLY_MOVE"            # (unit): A flier jumps on the field. The result is nil.
----| "BATTLE_FLEE"                # (unit): A unit flees the battlefield. Windows only for now. The result is nil.
----| "BATTLE_FEAR_CHECK"          # (unit): A unit's round's fear check. Windows only for now. The result is nil.
+---| "BATTLE_FLEE"                # (unit): A unit flees the battlefield. The result is nil.
+---| "BATTLE_FEAR_CHECK"          # (): Each round's fear check of every unit on the field. The result is nil.
 ---| "BATTLE_CLOUD_STEP"          # (unit): The clouds a unit leaves after its advance. The result is nil.
 ---| "BATTLE_ENSNARE_CHECK"       # (unit): A held unit's grip, net and vines before an attack. The result is nil.
 ---| "BATTLE_ENSNARE_RELEASE"     # (unit): The holds on a unit wear off after an attack. The result is nil.
 ---| "BATTLE_WALL_ENCHANTS"       # (): A siege's wall enchantments are placed on the wall cells. The result is nil.
 ---| "BATTLE_WALL_EFFECTS"        # (): Each round's wall and field effects: Wall of Fire, Lightning and more. The result is nil.
----| "BATTLE_START_SETUP"         # (): The start of a fight: mirror images, sleepers on snow and more. Windows only for now. The result is nil.
+---| "BATTLE_START_SETUP"         # (): The start of a fight: mirror images, sleepers on snow and more. The result is nil.
 ---| "BATTLE_TUNNEL_MOVE"         # (unit): A unit burrows with tunnelmove. The result is nil.
----| "BATTLE_BANISH"              # (unit): A unit is banished from the field. Windows only for now. The result is nil.
+---| "BATTLE_BANISH"              # (unit): A unit is banished from the field. The result is nil.
 ---| "BATTLE_DEPLOY_UNIT"         # (unit, x, y): A unit is put on the battlefield. The result is nil.
----| "BATTLE_AFTER_FIGHT_UPKEEP"  # (x, y): After a fight on a square: tagalong commanders, survivors' experience, charge refills. Windows only for now. The result is nil.
----| "BATTLE_AFTERMATH_RETURN"    # (x, y, winner): Burrowed and fled units come back on the square for the winner's team. Windows only for now. The result is nil.
+---| "BATTLE_AFTER_FIGHT_UPKEEP"  # (x, y): After a fight on a square: tagalong commanders, survivors' experience, charge refills. The result is nil.
+---| "BATTLE_AFTERMATH_RETURN"    # (x, y, winner): Burrowed and fled units come back on the square for the winner's team. The result is nil.
 ---| "BATTLE_MR_ROLL"             # (unit): A unit's magic resistance roll against a weapon. Windows only for now. The result is nil.
 ---| "BATTLE_SUMMON_WEAPON"       # (): A weapon that summons by its name runs. Windows only for now. The result is nil.
 ---| "BATTLE_GATE_SWAP"           # (): A siege's gate takes the square's monster. The result is nil.
@@ -512,38 +542,38 @@ function require(name) end
 ---| "UNIT_HP_SHAPE_CHANGE"       # (unit): A unit keeps its share of Hit Points across a shape change. The result is nil.
 ---| "BERSERK_END"                # (unit): A unit stops being berserk. Windows only for now. The result is nil.
 ---| "UNIT_RANDOM_AFFLICTION"     # (unit): A unit gets a random affliction. The result is nil.
----| "REVEAL_TERRAIN_ON_PLANE"    # (player, plane, terrain): A player sees every square of a terrain code on a plane. Windows only for now.
+---| "REVEAL_TERRAIN_ON_PLANE"    # (player, plane, terrain): A player sees every square of a terrain code on a plane.
 ---| "NEAR_TERRAIN_SQUARE"        # (plane, terrain, x, y): The game looks for a square of a terrain code near a square. The result is nil.
 ---| "PLAY_SAMPLE"                # (sample, change): The game plays a sound. Windows only for now. The result is nil.
----| "GROVE_REVERSION"            # (x, y): A grove's monthly step. Windows only for now. The result is nil.
----| "PUT_RARE_SQUARE"            # (x, y): World generation puts a rare terrain on a square. Windows only for now. The result is nil.
+---| "GROVE_REVERSION"            # (x, y): A grove's monthly step. The result is nil.
+---| "PUT_RARE_SQUARE"            # (x, y): World generation puts a rare terrain on a square. The result is nil.
 ---| "RANDOM_ITEM_PICK"           # (a, b, rarePercent, c, d): The game draws a random item. Windows only for now.
 ---| "CREATE_RANDOM_MAP"          # (): World generation builds the random map. The result is nil.
 ---| "WORLD_PART_TERRAIN"         # (): World generation's polar pass. Windows only for now. The result is nil.
----| "MAPGEN_REMOVE_SMALL_ISLANDS" # (): World generation fills in small islands of sea. Windows only for now. The result is nil.
----| "MAPGEN_RIVER_CROSSINGS"     # (): World generation places the fords and bridges. Windows only for now.
----| "MAPGEN_ANCIENT_FOREST"      # (): World generation places one Ancient Forest. Windows only for now.
----| "MAPGEN_CLEAR_AREA"          # (x, y): World generation clears the area around the Capital. Windows only for now. The result is nil.
----| "MAPGEN_ADJUST_TEMPERATURE"  # (): World generation adjusts each square's temperature by what is near it. Windows only for now. The result is nil.
+---| "MAPGEN_REMOVE_SMALL_ISLANDS" # (): World generation fills in small islands of sea. The result is nil.
+---| "MAPGEN_RIVER_CROSSINGS"     # (): World generation places the fords and bridges. On Mac the result is nil.
+---| "MAPGEN_ANCIENT_FOREST"      # (): World generation places one Ancient Forest. On Mac the result is nil.
+---| "MAPGEN_CLEAR_AREA"          # (x, y): World generation clears the area around the Capital. On Mac a call with x or y below 0, which clears nothing, isn't seen. The result is nil.
+---| "MAPGEN_ADJUST_TEMPERATURE"  # (): World generation adjusts each square's temperature by what is near it. The result is nil.
 ---| "MARK_RIVER"                 # (x1, y1, x2, y2, mark, mode): World generation marks a river's path.
----| "GEN_DIAGONAL_FIX"           # (plane): World generation fixes a plane's diagonal cave gaps. Windows only for now.
+---| "GEN_DIAGONAL_FIX"           # (plane): World generation fixes a plane's diagonal cave gaps. On Mac a wrap's plane stays the game's, and the result is nil.
 ---| "GEN_UPDATE_MOIST_WALLS"     # (plane): World generation updates a plane's moist cave walls. The result is nil.
 ---| "GEN_TERRAIN_BLOB"           # (terrain, x, y, n, onto, maxDistance): A blob of terrain is laid.
 ---| "CREATE_CELESTIAL_PLANE"     # (): World generation builds the Celestial Plane. The result is nil.
 ---| "CREATE_SKY_PLANE"           # (): World generation builds the Sky. The result is nil.
 ---| "CREATE_AGARTHA_PLANE"       # (): World generation builds Agartha. The result is nil.
 ---| "CREATE_INFERNO_PLANE"       # (): World generation builds the Inferno. The result is nil.
----| "CREATE_HADES_PLANE"         # (): World generation builds Hades. Windows only for now. The result is nil.
+---| "CREATE_HADES_PLANE"         # (): World generation builds Hades. The result is nil.
 ---| "CREATE_ELEMENTAL_PLANE"     # (): World generation builds the Elemental Planes. The result is nil.
----| "LOAD_AZTLAN_PLANE"          # (): World generation loads Aztlan. Windows only for now. The result is nil.
+---| "LOAD_AZTLAN_PLANE"          # (): World generation loads Aztlan. The result is nil.
 ---| "LOAD_PRIMAL_PLANE"          # (): World generation loads the Primal Plane. The result is nil.
----| "AUTO_RECRUIT"               # (player): A player's auto recruit runs. Windows only for now. The result is nil.
+---| "AUTO_RECRUIT"               # (): The auto recruit of the player whose turn it is runs. The result is nil.
 ---| "USE_LIBRARY"                # (unit), the commander's unit: A commander uses a library. The result is nil.
 ---| "ADD_GROUND_ITEMS"           # (x, y): Items are added to a square's ground. Windows only for now. The result is nil.
 ---| "VOID_INSANITY"              # (unit, x, y): The Crystal Globe's insanity on the Void. The result is nil.
 ---| "WANDERER_PICK_TARGET"       # (commander, objective): A wandering commander picks a target by its objective. The result is nil.
 ---| "WANDERER_PICK_UP"           # (commander): Free units on a wanderer's square join it. Windows only for now.
----| "SET_HOLDIT"                 # (player, x, y): Units on a square are told to hold. Windows only for now.
+---| "SET_HOLDIT"                 # (player, x, y): Units on a square are told to hold. On Mac the result is nil.
 ---| "LIBRARY_SCREEN"             # (unit), the commander's unit: The library screen opens. Windows only for now. The result is nil.
 ---| "CHOP_BURN_SCREEN"           # (): The Chop & Burn window opens. The result is nil.
 ---| "SLAVE_HUNT_SCREEN"          # (): The Hunt for Slaves screen opens. The result is nil.
@@ -555,10 +585,10 @@ function require(name) end
 ---| "COMMANDER_SET_DONE"         # (): The selected commander is marked done for this turn. Windows only for now. The result is nil.
 ---| "SELECT_NEXT_COMMANDER"      # (): The map selects the next commander. The result is nil.
 ---| "SELECT_PREV_COMMANDER"      # (): The map selects the previous commander. Windows only for now. The result is nil.
----| "RUN_HATREDS"                # (): The month's hatreds run. Windows only for now. The result is nil.
----| "SANDSTORM_CLOUD_UPDATE"     # (): The month's desert clouds. Windows only for now. The result is nil.
----| "TAINTED_MAGIC_PASS"         # (a, b): The month's pass while magic is tainted. Windows only for now. The result is nil.
----| "HERO_ARRIVAL"               # (player): A class's hero may arrive for a player. Windows only for now. The result is nil.
+---| "RUN_HATREDS"                # (): The month's hatreds run. The result is nil.
+---| "SANDSTORM_CLOUD_UPDATE"     # (): The month's desert clouds. The result is nil.
+---| "TAINTED_MAGIC_PASS"         # (a, b): The month's pass while magic is tainted. The result is nil.
+---| "HERO_ARRIVAL"               # (player): A class's hero may arrive for a player. The result is nil.
 ---| "CLEAN_SQUARE"               # (x, y): A square is cleared. The result is nil.
 ---| "ADJUST_FOR_SNOW"            # (x, y, w, h): Ground turns to snow by the temperature. The result is nil.
 ---| "START_TUNE"                 # (tune, force): The game starts a music tune. Windows only for now. The result is nil.
@@ -573,6 +603,19 @@ function require(name) end
 ---| "WILD_SPAWN"                 # (x, y): A square may spawn its wild animals. Windows only for now. The result is nil.
 ---| "REVELS_SPAWN"               # (x, y): A square may spawn its revelers. Windows only for now. The result is nil.
 ---| "HORROR_LORD_PICK"           # (x, y): A greater Horror is drawn. Windows only for now. The result is nil.
+---| "PLAYER_GOLD_INCOME"            # (player): the gold (resource 0) a player gets at its next turn start. Every call of the game's income function: the turn start's payment, the top bar, the AI's plans, the game's statistics, and slotIncome, which reads through a wrap. The result is the income before the AI difficulty's percent (aiLevelBonus), which the turn start then applies; a wrap's result is the income the game uses.
+---| "PLAYER_IRON_INCOME"            # (player): the iron (1) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_HERBS_INCOME"           # (player): the herbs (2) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_FUNGUS_INCOME"          # (player): the fungus (3) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_SACRIFICES_INCOME"      # (player): the sacrifices (4) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_HANDS_INCOME"           # (player): the hands of glory (5) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_WEED_INCOME"            # (player): the enchanted weed (6) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_TRADE_INCOME"           # (player): the trade points (11) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_RELICS_INCOME"          # (player): the relics (12) a player gets at its next turn start. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_LIFEFORCE_INCOME"       # (player, drain): the lifeforce (13) a player gets at its next turn start; with drain 1, as the turn start asks, the game also drains the squares. As PLAYER_GOLD_INCOME, for this resource.
+---| "PLAYER_GEM_INCOME"             # (kind, player): the gems of one kind a player gets at its next turn start, kind 0 to 3 for resources 7 to 10. As PLAYER_GOLD_INCOME; a wrap's kind stays 0 to 3.
+---| "TRADE_INCOME_APPLY"            # (player): the trade step of the player's turn start, after the incomes: its trade type (slotTradeType) buys a resource with gold or sells one for gold, with that turn start's trade points (slotAiTrade). A wrap that skips next trades nothing; slotResource changes the stocks. The result is nil.
+---| "RITUAL_COST_PERCENT"           # (commander, slot): the percent of its costs the ritual charges the commander, as the game works it out after its own discounts and rises (rebatelvl, rebatefx25 and rebatefx50, rebateterr20 and rebateterr50, the caster's classcost, the terrain's ritrebate, the rise with each cast): 100 charges the costs as listed, 50 half, 200 double, 0 nothing. Every call of the game's cost percent: the ritual screen's costs, the cast check before a cast and the payment, the AI's casts among them. A wrap's result is the percent all three use; the Sacrifice Level of a varcost ritual multiplies after it. A result below 0 is refused (out_of_range) and the game's own kept, 0 when the wrap skipped next. The AI's planning weighs the costs as listed, as it does the game's own discounts.
 
 ---The game values coe5.get and coe5.set reach.
 ---@alias coe5.Variable
@@ -606,9 +649,9 @@ function require(name) end
 ---| "slotColorGreen"        # per slot, number 0 to 1: the colour's green.
 ---| "slotColorBlue"         # per slot, number 0 to 1: the colour's blue.
 ---| "slotResource"          # per slot and resource, integer: how much of resource 0-13 (resourceName's order, 0 Gold) the player has. coe5.get("slotResource", slot, resource), coe5.set("slotResource", slot, resource, value).
----| "slotAiIncome"          # per slot and resource 0-13, integer: slotIncome as the game pays an AI of the player's AI level, for a human too: a human a script plays as an AI (coe5.runAiTurn) gets a human's 100% meanwhile, and this reads what its AI would get. 0 for a slot that is neither a human nor an AI. Read-only.
----| "slotAiTrade"           # per slot and resource 0-13, integer: what the trade step of the player's next turn start changes of the resource, as the game runs it after paying the incomes (slotAiIncome): the player's trade type (slotTradeType) buys a resource with gold or sells one for gold, with that turn start's trade points. Negative for what it pays (the gold of a buy, the resource of a sell, the trade points), positive for what it gets. Read with the stocks of now plus those incomes; the step's own random draw can give one unit more or less, and the more likely is taken; type 23's gem is that draw's, so no gem is listed. 0 with no trade type. Gold's gain at that turn start is slotAiIncome plus this, if nothing changes first. The trade points are that turn start's trade income alone: a Trade stock left over is overwritten, not added. The game fights a player's battles after its turn, before the next player's turn start, so a read in an AI_TURN `after` observer comes before them; the next player's PLAYER_TURN_START `before` observer comes after. Read-only.
----| "slotIncome"            # per slot and resource 0-13, integer: what the player gets of the resource at its next turn start, as the game works it out then: each special resource (all but Gold, Iron and Trade) only while the player has a commander who gathers it, then an AI's difficulty percent (a human's is 100; an AI's 100 plus its level's bonus, a quarter of a positive bonus more for the special resources, and that quarter less for Gold, Iron and Trade while the AI has any special income). Trade is the trade points. 0 for a slot that is neither a human nor an AI. Read-only.
+---| "slotAiIncome"          # per slot and resource 0-13, integer: slotIncome as the game pays an AI of the player's AI level, for a human too: a human a script plays as an AI (coe5.runAiTurn) gets a human's 100% meanwhile, and this reads what its AI would get. 0 for a slot that is neither a human nor an AI. Read-only; a wrap of PLAYER_GOLD_INCOME or another income site changes what the game pays, and this reads through them.
+---| "slotAiTrade"           # per slot and resource 0-13, integer: what the trade step of the player's next turn start changes of the resource, as the game runs it after paying the incomes (slotAiIncome): the player's trade type (slotTradeType) buys a resource with gold or sells one for gold, with that turn start's trade points. Negative for what it pays (the gold of a buy, the resource of a sell, the trade points), positive for what it gets. Read with the stocks of now plus those incomes; the step's own random draw can give one unit more or less, and the more likely is taken; type 23's gem is that draw's, so no gem is listed. 0 with no trade type. Gold's gain at that turn start is slotAiIncome plus this, if nothing changes first. The trade points are that turn start's trade income alone: a Trade stock left over is overwritten, not added. The game fights a player's battles after its turn, before the next player's turn start, so a read in an AI_TURN `after` observer comes before them; the next player's PLAYER_TURN_START `before` observer comes after. Read-only; a wrap of TRADE_INCOME_APPLY changes the step (Windows only for now), and the income sites change the trade points.
+---| "slotIncome"            # per slot and resource 0-13, integer: what the player gets of the resource at its next turn start, as the game works it out then: each special resource (all but Gold, Iron and Trade) only while the player has a commander who gathers it, then an AI's difficulty percent (a human's is 100; an AI's 100 plus its level's bonus, a quarter of a positive bonus more for the special resources, and that quarter less for Gold, Iron and Trade while the AI has any special income). Trade is the trade points. 0 for a slot that is neither a human nor an AI. Read-only; a wrap of PLAYER_GOLD_INCOME or another income site changes what the game pays, and this reads through them.
 ---| "slotTradeType"         # per slot, integer 0-24: what the player's trade points turn into at its next turn start: 0 nothing, 1-22 a resource bought (odd) or sold (even: 1-2 iron, 3-4 sacrifices, 5-6 hands, 7-8 herbs, 9-10 fungus, 11-12 weed, 13-20 the four gems, 21-22 relics), 23 a random gem bought, 24 gems sold in turn. The game's AI picks it at the end of its move. Writable with 0 to 24; any other value is refused (out_of_range).
 ---| "slotTradeMode"         # per slot, integer: 1, or 2 when the AI's pick doubles its trade (a buy with gold above 500). Writable.
 ---| "newWorldUniqueRandom"  # integer: Setup Participants' "unique random players" box, a local of the new game's setup call. Nil, and not writable, outside a wrap of a NEW_WORLD_* or PARTICIPANTS_* site, and inside PARTICIPANTS_DIFFICULTY_WAIT.
@@ -712,7 +755,7 @@ function require(name) end
 ---| "unitOwner"             # index 0-98999, integer: the unit's player (slot). Writable, -1 to 31, or 47 once a mod adds factions.
 ---| "unitHp"                # index 0-98999, integer: the unit's hit points; 0 or below is a dead unit or an empty record. Writable. A write runs no death handling; coe5.killUnit does.
 ---| "unitMonster"           # index 0-98999, integer: the unit's monster (monsterName takes it), below 0 for an empty record. Writable, -1 to the last monster slot.
----| "unitCommander"         # index 0-98999, integer: the commander the unit follows (commanderUnit takes it), -1 for none: a commander's own unit too, unless it follows another. commanderStrength adds the commander's unit and every unit following it. The AI's troop pick-up and its pick-up of lone commanders set it. Writable, -1 to 9989.
+---| "unitCommander"         # index 0-98999, integer: the commander the unit follows (commanderUnit takes it), -1 for none: a commander's own unit too, unless it follows another. commanderBattleStrength adds the commander's unit and every unit following it. The AI's troop pick-up and its pick-up of lone commanders set it. Writable, -1 to 9989.
 ---| "unitStationary"        # index 0-98999, boolean: true when the unit never moves on the world map ("Cannot move on world map", the monster word stationary or an item's or ability's), as the game's AI checks it before it plans a commander's move; false for an empty record. Read-only; wrap UNIT_FLAGS to change what the game uses.
 ---| "ritualSummons"         # index 0 to ritualLastIndex, boolean: the ritual has the summoning effect: it makes one of its ritualString results, at random. Writable: true adds the summoning effect, false takes it out.
 ---| "ritualString"          # index: a ritual, then 0-47, string: one of its addstring results, as the .c5m wrote it ("c*Mound King", "1d3*Shade", "2*Cannon Car & 1*Mortar Car", "(167)Anakite"); nil at and past the first empty one. Writable, cut to 255 bytes; a write at the list's end adds a result.
@@ -824,23 +867,28 @@ function require(name) end
 ---| "traceLevel"            # integer: the game's debug trace level, 0 in a player's game (each -d on the command line adds 1). At 1 the game writes its trace (log.txt in the game folder on Windows, standard output on Mac), at 2 and 3 more of it; above 0 the game also shows a few debug details (a unit of no one named with its number). coe5.keepTraceLines picks the lines. 0 to 3.
 ---| "bugChecksOff"          # boolean: true skips the game's bug checks, as its --nochecks switch does. At trace level 2 and 3 the game runs them at many places a turn (each over every unit), and they also fix some of what they find.
 ---| "commanderName"         # index 0-9989, string: the commander's name ("Agrippa"); the trace names it "<name> the <monster>". Writable.
----| "commanderStrength"     # index 0-9989, integer: the strength of the commander's army as the game counts it for the AI's moves (the comstr its AI sites get): the commander's unit and every unit following it. Nil for a commander with no living unit. Read-only; wrap UNIT_STRENGTH or COMMANDER_STRENGTH to change what the game uses.
----| "commanderGarrisonLeft" # index 0-9989, integer: the strength that stays on the commander's square when the commander leaves as the AI moves it: its army, the free troops the AI's gather adds to it there, less the units the gather leaves behind, by the game's own rule, measured as squareStrength measures the owner's units (the fort and ranged raise worked out on the staying units). The gather's one random drop (a follower with unit flag 8 that is a tenth to a quarter of the army, 50%) counts as leaving. Nil for a commander with no living unit on a square. Read-only; wrap AI_GATHER_TROOPS to change what the gather takes and leaves.
+---| "commanderBattleStrength" # index 0-9989, integer: the battle strength of the commander's army as the game counts it for the AI's moves (the comstr its AI sites get): the commander's unit and every unit following it. Nil for a commander with no living unit. Read-only; wrap UNIT_BATTLE_STRENGTH or COMMANDER_BATTLE_STRENGTH to change what the game uses.
+---| "commanderStrength"     # index 0-9989, integer: the first name of commanderBattleStrength, which still works. Read-only.
+---| "commanderGarrisonLeft" # index 0-9989, integer: the battle strength that stays on the commander's square when the commander leaves as the AI moves it: its army, the free troops the AI's gather adds to it there, less the units the gather leaves behind, by the game's own rule, measured as squareBattleStrength measures the owner's units (the fort and ranged raise worked out on the staying units). The gather's one random drop (a follower with unit flag 8 that is a tenth to a quarter of the army, 50%) counts as leaving. Nil for a commander with no living unit on a square. Read-only; wrap AI_GATHER_TROOPS to change what the gather takes and leaves.
 ---| "slotHomeX"             # per slot, integer: the player's home citadel's x, -1 for none. Writable, -1 to 999.
 ---| "slotHomeY"             # per slot, integer: the player's home citadel's y. Writable, -1 to 159.
 ---| "squareGems"            # index: x 0-999, then y 0-159, then a gem type 0-3, integer: the square's gem income of that type; the game lets a player with a gem gatherer own a square with any above 0. Writable.
 ---| "squareCorpses"         # index: x 0-999, then y 0-159, then a corpse kind 0-7 (coe5.corpseKind), integer: the square's corpses of that kind, what Raise Dead, Raise Animals, reanimate, the ritual corpse costs and the corpse event triggers use. Set 0 to 32767.
----| "squareStrength"        # index: a slot (or -1 for every player), then x 0-999, then y 0-159, integer: the strength of the units on the square of that player and its teammates, now, as the game measures it for the AI: each living unit's strength as that player sees it, the sum raised by (100 + 60 x the square's fort level)% when over a tenth of the units are ranged. Sees through fog. Read-only; wrap UNIT_STRENGTH or SQUARE_STRENGTH to change what the game uses.
+---| "squareBattleStrength"  # index: a slot (or -1 for every player), then x 0-999, then y 0-159, integer: the battle strength of the units on the square of that player and its teammates, now, as the game measures it for the AI: each living unit's battle strength as that player sees it, the sum raised by (100 + 60 x the square's fort level)% when over a tenth of the units are ranged. Sees through fog. Read-only; wrap UNIT_BATTLE_STRENGTH or SQUARE_BATTLE_STRENGTH to change what the game uses.
+---| "squareStrength"        # index: a slot (or -1 for every player), then x 0-999, then y 0-159, integer: the first name of squareBattleStrength, which still works. Read-only.
 ---| "squareArmyStationary"  # index: x 0-999, then y 0-159, boolean: true when the game never moves the army on the square on the world map: every living unit there is stationary ("Cannot move on world map"), as the independents' moves check it. Also true for a square with no living unit. Sees through fog. Read-only; coe5.wrap("MOVE_INDEPENDENT_ARMY") without next holds an army.
 ---| "squareArmyHolds"       # index: x 0-999, then y 0-159, boolean: true when the independents' moves hold the army on the square, by the game's two hold tests before its stationary one: the square's hold flag (the event command holdit 1, a gold mine's attackers) or the hold flag on its top unit, the unit the move finds for the army's owner. False for a square with no army. Sees through fog. Writable: true holds the army (the hold flag), false takes both hold flags off.
 ---| "squareCitadel"         # index: a slot (or -1 for any class), then x 0-999, then y 0-159, boolean: true when the square is a citadel for that player, as the game counts a player's citadels and its AI's conquest scores them: the terrain's citadel flag, or a citadel only the player's class has (its forest, wooden or mine citadels, a class's citadel terrain or enchantment there). Whoever owns it. Sees through fog. Read-only; wrap SQUARE_CITADEL to change what the game counts.
----| "squareRememberedStrength" # index: a slot, then x 0-999, then y 0-159, integer: the strength that player's AI remembers on the square, what the game's conquest and threat checks read: every unit's strength there (as squareStrength with -1) when the player's AI turn last saw it, or, once forgotten (5% a turn on a square out of view), the strength there now, which the read doesn't store; 0 off the world. Writable, -1 up; the AI's next look at the square replaces it.
----| "unitStrength"          # index: a slot (or -1 for no player), then a unit 0-98999, integer: the unit's strength as that player counts it, the per-unit strength squareStrength and commanderStrength add up: the player's own unit with its armor, items and afflictions (pass unitOwner for the strength its owner sees), any other unit, allies' too, as the bare monster it shows, without armor or items. 0 for a unit that isn't alive. Read-only; wrap UNIT_STRENGTH to change what the game uses.
+---| "squareRememberedBattleStrength" # index: a slot, then x 0-999, then y 0-159, integer: the battle strength that player's AI remembers on the square, what the game's conquest and threat checks read: every unit's battle strength there (as squareBattleStrength with -1) when the player's AI turn last saw it, or, once forgotten (5% a turn on a square out of view), the battle strength there now, which the read doesn't store; 0 off the world. Writable, -1 up; the AI's next look at the square replaces it.
+---| "squareRememberedStrength" # index: a slot, then x 0-999, then y 0-159, integer: the first name of squareRememberedBattleStrength, which still works. Writable, -1 up.
+---| "unitBattleStrength"    # index: a slot (or -1 for no player), then a unit 0-98999, integer: the unit's battle strength as that player counts it, the per-unit battle strength squareBattleStrength and commanderBattleStrength add up: the player's own unit with its armor, items and afflictions (pass unitOwner for the battle strength its owner sees), any other unit, allies' too, as the bare monster it shows, without armor or items. 0 for a unit that isn't alive. Not its Strength stat, which is unitStr. Read-only; wrap UNIT_BATTLE_STRENGTH to change what the game uses.
+---| "unitStrength"          # index: a slot (or -1 for no player), then a unit 0-98999, integer: the first name of unitBattleStrength, which still works. Read-only.
 ---| "unitArmor"             # index 0-98999, integer: the unit's armor as its unit screen shows it: its monster's or items' armor, protection, and the states that add to it. Nil for a unit that isn't alive. Read-only; coe5.wrap("UNIT_ARMOR") changes what the game uses.
+---| "unitStr"               # index 0-98999, integer: the unit's Strength as its unit screen shows it: its monster's str with what its items, afflictions and benefits add, worked out at each read. Nil for a unit that isn't alive. Read-only; coe5.wrap("UNIT_DAMAGE_BONUS") changes what the game uses, and this read with it.
 ---| "unitVisibleTo"         # index: a unit 0-98999, then a slot, boolean: whether that player sees the unit, as the game decides what the map shows: its own unit and any unit without stealth on any square (squareSeen tells the fog); a stealthy one only scried, or in view with a unit of that player next to it with spiritsight (acutesenses against plain stealth). False for a unit that isn't alive. Read-only; wrap UNIT_VISIBLE_TO to change what the game uses.
 ---| "monsterAttackType"     # index: a monster 0-5999, then a row 0-15, integer: the kind of the monster's attack in that row, by its mod command: 1 meleeweapon, 2 rangedweapon, 3 spellweapon, 4 meleeweaponbonus, 5 rangedweaponbonus, 6 spellweaponbonus, 7 rangedweapon25, 8 meleeweaponspec, 10 prebatweapon, 11 rangedweapon50, 12 assassinweapon, 13 siegeweapon, 14 spellweapon50, 15 spellweaponsingle, 17 meleeweapon50s, 18 rangedweapon50s, 19 spellweapon50s, 21 rangedweapon50x; nil at and past the list's end (the first row whose type is below 1 or weapon below 0, as the game ends it). Writable; a write at the list's end adds a row.
 ---| "monsterAttackWeapon"   # index: a monster, then a row 0-15, integer: the row's weapon (weaponDmgType takes it), or for a spell attack (types 3, 6, 14, 15, 19) its spell path; nil where monsterAttackType is. Writable, -1 to the last weapon.
----| "monsterAttackValue"    # index: a monster, then a row 0-15, integer: the row's number as the .c5m wrote it: the damage value, a special damage weapon's kind (a bitmask: 262144 Confusion), or a spell attack's level; nil where monsterAttackType is. Writable.
+---| "monsterAttackValue"    # index: a monster, then a row 0-15, integer: the row's number as the .c5m wrote it: the damage value, a special damage weapon's kind (a bitmask: 262144 Confusion, 4294967296 a Web's Stuck in Net), or a spell attack's level; nil where monsterAttackType is. Writable.
 ---| "weaponDmgType"         # index 0-4999, integer: the weapon's damage type (dmgtype): 1 slash, 2 blunt, 3 pierce, 4 fire, 5 cold, 6 shock, 7 magic, 8 fear, 9 poison, 10 acid, 11 phantasm, 12 special damage (its kind in the attack row's value), 13 special benefit, 14 charm, 15 polymorph, 16 sleep, 17 paralyze, 18 summon, 19 enslave, 20 swallow, 21 mirror image, 22 corrupt, 23 banish, 24 petrify, 25 animate, 26 heal. Writable.
 ---| "ceremonyName"          # index 0 to ceremonyLastIndex, string: the game's name for a Voice of El ceremony number, its label on the Ceremonies screen: "Convert Settlement", "Break Seal", "Bolster Devotion", "Start Crusade", "Call the Inquisition", "Ceremony of Mastery" (three numbers, one per rank it raises a priest to), "Increase Divine Favor"; nil for a number with none. Match ceremonies by it, never by their numbers. Read-only.
 ---| "ceremonyLastIndex"     # integer: the last ceremony number the game takes; ceremonyName runs 0 to it. Read-only.
@@ -1219,17 +1267,20 @@ function coe5.set(name, value) end
 ---"plugins:" before the DLLs' and "inner:" before the scripts'. Call `next` only while
 ---`fn` runs, and not from a coroutine; either is an error. A wrap that returns without calling
 ---`next` keeps the game's own call from running; the first time it does, the log names it
----(lua_wrap_no_next). An observe-only site (coe5.ObservedSite) is an error here: use coe5.observe.
----@param site coe5.Site
+---(lua_wrap_no_next). A coe5.ObservedSite takes a wrap too: what next may change there is that
+---alias's note.
+---@param site coe5.Site|coe5.ObservedSite
 ---@param fn fun(next: function, ...): ... the site's result (the AI sites: score, x, y)
 ---@param priority? integer higher runs first among the scripts' wraps; 0 when left out
 ---@return boolean wrapped false when the site isn't on this platform yet (logged as api_refused or lua_refused)
 function coe5.wrap(site, fn, priority) end
 
----Watches a game call a script may not change. `before` gets a copy of the call's arguments right
----before it, and `after` the call's result, then the arguments, right after it; either may be nil,
----not both. What they return doesn't reach the game. Every DLL's observers of the site run before
----any script's, in both `before` and `after`. A site that isn't observe-only is an error. In a LAN
+---Watches a game call. `before` gets a copy of the call's arguments right before it, and `after` the
+---call's result, then the arguments, right after it; either may be nil, not both. What they return
+---doesn't reach the game. They run inside every script's wrap of the site: they see the call as the
+---game makes it, after any wrap changed it, and the game's own result, and a call a wrap skipped not
+---at all. Every DLL's observers of the site run before any script's, in both `before` and `after`. A
+---site that isn't a coe5.ObservedSite is an error. In a LAN
 ---game a personal mod's observers run only at the observe-only sites that fire on its player's
 ---machine (not UNIT_CATCH_FIRE or APE_POSSESSION), and only for a call whose units, commanders and
 ---squares its player sees: a unit or commander as coe5.get would answer it, a square seen at least once.
@@ -1303,6 +1354,15 @@ function coe5.showMessageBox(title, text) end
 ---@param name string the setting's name, as its newsetting line gives it
 ---@return boolean|integer|nil value on/off: true or false; a choice: the picked option's number from 0; a key: its key value (coe5.key.none for none); nil when your mod declares no such setting (logged as lua_refused)
 function coe5.setting(name) end
+
+---The text in the language the player picked on CoE5SE's Mod Settings page, from the mods' translation lines
+---(language blocks), or the text itself when no line has it. A translation is used only when its % codes match
+---the text's, in order, so string.format of the result takes the same values. Read only; each player has their
+---own pick, so store text as written and translate it where it is shown. Text you build with string.format
+---translates only as string.format(coe5.translate(fmt), ...): the built text matches no translation line.
+---@param text string the text as your mod writes it
+---@return string text the picked language's text, or the text itself
+function coe5.translate(text) end
 
 ---Tells other mods that your script is filling in a new game's setup itself: while it is on, mods
 ---that change the setup screens leave them alone. Turn it on right
@@ -1459,12 +1519,12 @@ function coe5.portalExits(x, y) end
 ---@return boolean added false when refused: a game build CoE5SE wasn't made for (site_unavailable), each logged as lua_refused
 function coe5.onPortalCrossing(handler) end
 
----The living units on square (x, y), the units the game counts there (squareStrength, its square
+---The living units on square (x, y), the units the game counts there (squareBattleStrength, its square
 ---checks): hp above 0 and standing on the square, in unit order. A square's army is what stands on
----it; unitCommander tells which follow which commander. Sees through fog, as squareStrength does.
+---it; unitCommander tells which follow which commander. Sees through fog, as squareBattleStrength does.
 ---@param x integer
 ---@param y integer
----@return integer[] units unit indexes (unitHp, unitMonster, unitStrength take them); empty for no living unit there or a square outside the arrays
+---@return integer[] units unit indexes (unitHp, unitMonster, unitBattleStrength take them); empty for no living unit there or a square outside the arrays
 function coe5.squareUnits(x, y) end
 
 ---The game's Reveal Map, the Game Over screen's button: every square of every plane in the world,
@@ -1756,8 +1816,7 @@ function coe5.changedBy() end
 ---map on a commander or a message's square: the view switches plane as a plane button would, then
 ---the camera moves (a glide on the same plane). Only the view changes: nothing a game turn decides
 ---reads the camera or the view plane. Refused (lua_refused) and false: reason=no_game, off_map (x
----or y outside the world: mapW and mapH), no_plane (a square on no plane), windows_only (Mac,
----for now).
+---or y outside the world: mapW and mapH), no_plane (a square on no plane).
 ---@param x integer a world square's x (planes side by side, as mapPointerX)
 ---@param y integer
 ---@return boolean centred
@@ -2134,7 +2193,6 @@ function coe5.unitFlightKind(unit) end
 function coe5.unitHasWaterMove(unit) end
 
 ---Whether a unit is noland, its items counted.
----Windows only for now.
 ---@param unit integer a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.unitNoLand(unit) end
@@ -2170,7 +2228,6 @@ function coe5.unitIsUndead(unit) end
 function coe5.unitIsDemon(unit) end
 
 ---An ability's sum over a unit, its 8 items, blessings and temporary abilities. add is the game's own switch; it passes 0 or 1.
----Windows only for now.
 ---@param unit integer a living unit
 ---@param ability integer|string an ability's word or id
 ---@param add integer integer
@@ -2204,7 +2261,6 @@ function coe5.commanderApLeft(commander) end
 function coe5.commanderMayAct(commander) end
 
 ---The largest burnforest in a commander's army.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.armyBurnValue(commander) end
@@ -2218,7 +2274,6 @@ function coe5.armyBurnValue(commander) end
 function coe5.armyAbilityTotal(commander, ability, across, sources) end
 
 ---An item's value of an ability, 0 for none.
----Windows only for now.
 ---@param item integer an item
 ---@param ability integer|string an ability's word or id
 ---@return integer|nil result nil when refused (lua_refused)
@@ -2232,7 +2287,6 @@ function coe5.itemAbility(item, ability) end
 function coe5.itemAbilityNth(item, ability, n) end
 
 ---A player's commanders; a freeOnly other than 0 counts only those following no one.
----Windows only for now.
 ---@param player integer a player slot
 ---@param freeOnly integer integer
 ---@return integer|nil result nil when refused (lua_refused)
@@ -2245,12 +2299,16 @@ function coe5.countFreeCommanders(player, freeOnly) end
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.squareHasSeenUnit(player, x, y) end
 
----The strength of a team's living units on a square, or everyone's with -1. A fort other than 0 adds 10 per ranged unit and the square's fort bonuses.
+---The battle strength of a team's living units on a square, or everyone's with -1. A fort other than 0 adds 10 per ranged unit and the square's fort bonuses.
 ---@param player integer a player slot, -1 for any
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@param fort integer integer
 ---@return integer|nil result nil when refused (lua_refused)
+function coe5.squareSideBattleStrength(player, x, y, fort) end
+
+---The first name of coe5.squareSideBattleStrength, which still works.
+---@deprecated
 function coe5.squareSideStrength(player, x, y, fort) end
 
 ---What a square costs a commander to enter, 1000 to an action point and 99999 for refused. flag is the game's own switch; it passes 0 for a plain route.
@@ -2339,8 +2397,9 @@ function coe5.spendAllApAt(player, x, y) end
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.commanderUseItems(commander) end
 
----Kills a unit with 999 damage, twice, as an overrun does.
----Windows only for now.
+---Kills a unit with 999 damage, twice, as an overrun does, with every death effect. A unit that comes back from death
+---(coe5.get("unitReturns", unit)) reforms with its afflictions, as the game's reform keeps its own; cure yours first to
+---keep them off it. In a LAN client's turn the kill reaches the host in the turn file.
 ---@param unit integer a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.killUnit(unit) end
@@ -2366,14 +2425,12 @@ function coe5.takeItem(unit, item) end
 function coe5.giveRandomItem(unit, type, percent, level) end
 
 ---A ritual's first value of an effect, 0 for none, as the AI reads its ai words.
----Windows only for now.
 ---@param ritual integer a ritual
 ---@param ability integer|string an ability's word or id
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.ritualEffectFirst(ritual, ability) end
 
 ---A ritual's first value of an effect, or your default without one.
----Windows only for now.
 ---@param ritual integer a ritual
 ---@param ability integer|string an ability's word or id
 ---@param default integer integer
@@ -2549,7 +2606,6 @@ function coe5.unmemorizeSpell(unit, spell) end
 function coe5.chooseMemorized(unit) end
 
 ---Clears a unit's memorized spells, then picks them again.
----Windows only for now.
 ---@param unit integer a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.repickMemorized(unit) end
@@ -2630,7 +2686,6 @@ function coe5.squareShownName(player, x, y) end
 function coe5.squareIncome(player, x, y, resource) end
 
 ---A square's gold for a player, in hundredths.
----Windows only for now.
 ---@param player integer a player slot
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -2638,14 +2693,12 @@ function coe5.squareIncome(player, x, y, resource) end
 function coe5.squareGoldIncome(player, x, y) end
 
 ---The lifeforce a draining square gives.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.squareLifeforce(x, y) end
 
 ---A player's trade bonus in percent, their team's trade enchantments counted.
----Windows only for now.
 ---@param player integer a player slot
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.tradeBonusPercent(player) end
@@ -2691,13 +2744,11 @@ function coe5.alterTerrain(player, x, y, from, from2, to) end
 function coe5.destroyGateway(player, x, y, flag) end
 
 ---The Baron's conscription for a player, as the first month of Summer runs it.
----Windows only for now.
 ---@param player integer a player slot
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.conscription(player) end
 
 ---A Voice of El player's chance of free units by the seals broken.
----Windows only for now.
 ---@param player integer a player slot
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.priestFreespawn(player) end
@@ -2827,7 +2878,6 @@ function coe5.playerIncomeByType(player, resource) end
 function coe5.ironBonusPercent(player) end
 
 ---A player's goldbonus in percent.
----Windows only for now.
 ---@param player integer a player slot
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.goldBonusPercent(player) end
@@ -2849,7 +2899,6 @@ function coe5.squareTeamAbilitySum(player, x, y, ability) end
 function coe5.squareUnitsAbility(player, x, y, ability) end
 
 ---The troll forest's spawns on a square, as the game's Troll Forest does.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
@@ -2873,7 +2922,6 @@ function coe5.terrainBurnableAt(x, y) end
 function coe5.terrainRuinForm(terrain) end
 
 ---Whether a square counts as south, as south1 and south2 test it.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
@@ -2948,7 +2996,6 @@ function coe5.unitMagicResistance(unit) end
 function coe5.unitIsHuge(unit) end
 
 ---Whether a unit is Lifeless on its unit stats screen.
----Windows only for now.
 ---@param unit integer a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.unitLifeless(unit) end
@@ -2997,7 +3044,6 @@ function coe5.orderEatVillage(commander) end
 function coe5.useSpecialSite(x, y, commander) end
 
 ---Whether an army the AI fears stands within 3 squares of a square.
----Windows only for now.
 ---@param player integer a player slot
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -3014,9 +3060,13 @@ function coe5.aiThreatNear(player, x, y, strength) end
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiCountAllyTargetsNear(player, x, y, commander, range) end
 
----Refreshes what an AI player remembers of each seen square's strength.
+---Refreshes what an AI player remembers of each seen square's battle strength.
 ---@param player integer a player slot
 ---@return boolean|nil result nil when refused (lua_refused)
+function coe5.aiUpdateBattleStrengthMemory(player) end
+
+---The first name of coe5.aiUpdateBattleStrengthMemory, which still works.
+---@deprecated
 function coe5.aiUpdateStrengthMemory(player) end
 
 ---Makes n of a player's units on a square guards, which never leave it.
@@ -3028,7 +3078,6 @@ function coe5.aiUpdateStrengthMemory(player) end
 function coe5.aiMakeGuardsAt(player, x, y, n) end
 
 ---Leaves one guard on each seen square the AI player holds with an army, as its turn does after its moves.
----Windows only for now.
 ---@param player integer a player slot
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.aiMakeDefenders(player) end
@@ -3041,7 +3090,6 @@ function coe5.aiMakeDefenders(player) end
 function coe5.aiCountTroops(player, x, y) end
 
 ---Whether a unit stays put for the AI: a guard, or an aihold unit on a fort.
----Windows only for now.
 ---@param unit integer a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.aiUnitStays(unit) end
@@ -3055,50 +3103,42 @@ function coe5.aiUnitStays(unit) end
 function coe5.aiNearestTerrain(terrain, x, y, player) end
 
 ---A player's commander with the most of an ability.
----Windows only for now.
 ---@param player integer a player slot
 ---@param ability integer|string an ability's word or id
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiRitualMaster(player, ability) end
 
 ---The ship capacity a commander's army has left.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiCommanderBoatPlaces(commander) end
 
 ---Drops one follower from a commander's ship crew, true when it did.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.aiShipDropCrew(commander) end
 
 ---Links one free ship on a commander's square, true when it did.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.aiShipTakeBoat(commander) end
 
 ---Links one free sailor on a commander's square, true when it did.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.aiShipTakeCrew(commander) end
 
 ---The ship capacity of a commander and its followers.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiGroupBoatTotal(commander) end
 
 ---The ship capacity on a player's ports, then their ships.
----Windows only for now.
 ---@param player integer a player slot
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiPortsBoatTotals(player) end
 
 ---A player's ships on a square.
----Windows only for now.
 ---@param player integer a player slot
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -3106,14 +3146,12 @@ function coe5.aiPortsBoatTotals(player) end
 function coe5.aiShipsAt(player, x, y) end
 
 ---A player's commanders planning a ritual, by the ritual's name.
----Windows only for now.
 ---@param player integer a player slot
 ---@param ritual integer a ritual
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiCountPlanners(player, ritual) end
 
 ---What a square scores for a commander's planned ritual.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -3121,7 +3159,6 @@ function coe5.aiCountPlanners(player, ritual) end
 function coe5.aiPlanSquareBonus(commander, x, y) end
 
 ---Hands each item on a square to the player's unit there that values it most.
----Windows only for now.
 ---@param player integer a player slot
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -3129,7 +3166,6 @@ function coe5.aiPlanSquareBonus(commander, x, y) end
 function coe5.aiRedistributeItems(player, x, y) end
 
 ---The AI's ship handling for one commander.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.aiShips(commander) end
@@ -3176,7 +3212,7 @@ function coe5.aiFriendlyMoveStep(commander, strength) end
 function coe5.battleUnitAt(x, y) end
 
 ---The summed fear a player's unit feels on a battle cell.
----Windows only for now. Only during a battle or on an open test field.
+---Only during a battle or on an open test field.
 ---@param x integer a battle cell's x
 ---@param y integer a battle cell's y
 ---@param player integer a player slot
@@ -3184,7 +3220,7 @@ function coe5.battleUnitAt(x, y) end
 function coe5.battleFearAt(x, y, player) end
 
 ---The best localleadership of a player's unit near a battle cell.
----Windows only for now. Only during a battle or on an open test field.
+---Only during a battle or on an open test field.
 ---@param x integer a battle cell's x
 ---@param y integer a battle cell's y
 ---@param player integer a player slot
@@ -3212,7 +3248,7 @@ function coe5.battleWinner() end
 function coe5.battleLineOfSight(unit, other) end
 
 ---Whether a unit is in range of another, the line test counted.
----Windows only for now. Only during a battle or on an open test field.
+---Only during a battle or on an open test field.
 ---@param unit integer a living unit
 ---@param other integer a living unit
 ---@param range integer integer
@@ -3254,8 +3290,8 @@ function coe5.battleNearestEnemy(unit) end
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.battleEnemyExtent(player) end
 
----An ability of the battle cell under a unit: a wall or a parapet.
----Windows only for now. Only during a battle or on an open test field.
+---An ability of the battle cell under a unit, the unit's own and a wall's or parapet's there added up; 0 for a unit on no cell.
+---Only during a battle or on an open test field.
 ---@param unit integer a living unit
 ---@param ability integer|string an ability's word or id
 ---@return integer|nil result nil when refused (lua_refused)
@@ -3314,7 +3350,6 @@ function coe5.unitRandomAffliction(unit) end
 function coe5.addAffliction(unit, bit) end
 
 ---Shows a player every square of a terrain code on a plane, and returns how many.
----Windows only for now.
 ---@param player integer a player slot
 ---@param plane integer a plane 0-10, -1 for any, -2 for Elysium, the Sky and Agartha
 ---@param terrain integer integer
@@ -3331,14 +3366,12 @@ function coe5.revealTerrainOnPlane(player, plane, terrain) end
 function coe5.nearTerrainSquare(plane, terrain, x, y) end
 
 ---Puts a random rare terrain on a square, as world generation does.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.putRareSquare(x, y) end
 
 ---A grove's monthly step on a square: its spawns and its spread.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
@@ -3380,7 +3413,6 @@ function coe5.autoName(nameType) end
 function coe5.confirm(text) end
 
 ---Whether any of a square's four sides is water, as world generation places river sources.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
@@ -3415,7 +3447,6 @@ function coe5.nearestTerrainDistance(x, y, terrain1, terrain2, terrain3, terrain
 function coe5.countTerrainCode(plane, terrain) end
 
 ---Opens the game's location picker, as a ritual that asks where, and returns the square the player picked.
----Windows only for now.
 ---@param title string the picker's title
 ---@param player integer a player slot
 ---@param x integer the square's x it starts on
@@ -3447,7 +3478,6 @@ function coe5.openPlaneInfo(plane) end
 function coe5.openSquareInfo(player, x, y, mode) end
 
 ---Opens the Ceremonies screen for a commander.
----Windows only for now.
 ---@param commander integer a commander with a living unit
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.openCeremonies(commander) end
@@ -3482,7 +3512,6 @@ function coe5.openArmyMenu(commander) end
 function coe5.openWeaponInfo(weapon) end
 
 ---Opens an item's info screen.
----Windows only for now.
 ---@param item integer an item
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.openItemInfo(item) end
@@ -3556,7 +3585,6 @@ function coe5.armyAtForPlayer(player, x, y) end
 function coe5.commanderTheName(commander) end
 
 ---The flags of every ritual a player knows, OR'd together.
----Windows only for now.
 ---@param player integer a player slot
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.playerRitualFlags(player) end
@@ -3595,7 +3623,6 @@ function coe5.soullessForm(unit) end
 function coe5.addBenefit(unit, bits) end
 
 ---A player's class may send one of its heroes, as the game's turn does.
----Windows only for now.
 ---@param player integer a player slot
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.heroArrival(player) end
@@ -3620,7 +3647,6 @@ function coe5.initSquareGems(x, y) end
 function coe5.initSquareCorpses(x, y) end
 
 ---Runs the month's hatreds: each hates unit may kill a hated unit of its team.
----Windows only for now.
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.runHatreds() end
 
@@ -3657,10 +3683,36 @@ function coe5.battleObjectAt(x, y) end
 function coe5.battlePathfind(unit, x, y) end
 
 ---A free neighbouring cell touching an enemy: a result, then the step.
----Windows only for now. Only during a battle or on an open test field.
+---Only during a battle or on an open test field.
 ---@param unit integer a living unit
 ---@return integer|nil result nil when refused (lua_refused)
 function coe5.battleKillerMove(unit) end
+
+---Banishes a unit from the battle, as dmgtype 23 does a banishsurv monster: it leaves the field, and after the
+---battle it is flung to `plane`, whatever its monster and items name, on square x, y or a random fitting one, keeping its owner,
+---and fights any monsters there; a commander goes alone. With no plane, the game's own: the plane its monster or items name,
+---else Hades, or on Windows the Inferno for a demon. A BANISH_DESTINATION wrap has the last word. A unit summoned in the
+---battle is destroyed. Only during a battle. nil for a plane past the last, a square with no plane, off the map or not on the
+---plane named, or a unit off the field (a tree or a house too).
+---@param unit integer a living unit on the field
+---@param plane? integer a plane from 0 to the last, or none for the game's own
+---@param x? integer a square of that plane, or none for a random fitting one
+---@param y? integer
+---@return true|nil result nil when refused (lua_refused)
+function coe5.battleBanishUnit(unit, plane, x, y) end
+
+---Puts a new unit of `monster` on the battlefield for `player`, as a weapon named "Summon <monster>" (dmgtype 18) puts its
+---summons there: on the battle's square, at cell x, y or the nearest cell it fits. Without `stays` it is a battle summons, and
+---leaves when the battle ends; with it, it stays with the player's units after the battle, and may then have another number.
+---Only during a battle. The monster's summon count (battleSummons) is the script's to keep. nil for an unused monster, a player
+---on neither side, a cell off the field, a full unit table, or a field with no room for it.
+---@param monster integer a monster
+---@param player integer|string a player slot on one of the battle's sides, or a faction's name
+---@param x integer a battle cell's x, below battleWidth
+---@param y integer a battle cell's y, 0-19
+---@param stays? boolean true for a unit that stays after the battle
+---@return integer|nil unit nil when refused (lua_refused)
+function coe5.battleSummon(monster, player, x, y, stays) end
 
 ---Whether a plane can be reached from a square, as the game's routes ask.
 ---@param plane integer a plane 0-10
@@ -3677,28 +3729,24 @@ function coe5.planeIsReachable(plane, x, y) end
 function coe5.destroyEnchantsAt(player, x, y) end
 
 ---A square's owner, if their class allows it, gets Storm Elementals and Storm Clouds there.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.stormSpawn(x, y) end
 
 ---A square's owner, if their class allows it, has a chance of Snakes, Moose and the like there.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.wildSpawn(x, y) end
 
 ---Maenads and Satyr Revelers come to a square.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
 function coe5.revelsSpawn(x, y) end
 
 ---A square's owner, if their class allows it, has a chance of a Forest Shepherd there.
----Windows only for now.
 ---@param x integer a square's x
 ---@param y integer a square's y
 ---@return boolean|nil result nil when refused (lua_refused)
@@ -3729,7 +3777,6 @@ function coe5.findAfflictedUnitAt(player, x, y, monster, stateMask, resistanceMa
 function coe5.classAbilityNth(class, ability, n) end
 
 ---A side's units on a square, as the game sizes a battlefield.
----Windows only for now.
 ---@param player integer a player slot
 ---@param x integer a square's x
 ---@param y integer a square's y
@@ -3981,6 +4028,88 @@ function coe5.testBattle(monster, spell, enemy, count, standIn) end
 ---@return integer|false id false when refused (lua_refused): no_label, label_too_long, no_visible, bad_icon (plus findModImage's), too_many_pictures, out_of_memory
 function coe5.addTraitLine(line) end
 
+---Gives a unit an affliction your mod declared with newaffliction "<name>", as makeaff "<name>" does. The unit's
+---affres "<name>" (its monster's and items') may stop it: 100 or more always does, below that one roll of the game's
+---dice. A unit holding it already keeps it, with its first turn. In a battle replay the refight's unit holds it
+---until the replay ends, as the game's own afflictions in a refight.
+---@param unit integer a unit
+---@param name string the affliction's name, case ignored
+---@return boolean|nil holds true when the unit holds it after, false when its affres stopped it, nil when refused (lua_refused): no_unit, unknown_affliction, out_of_memory
+function coe5.giveAffliction(unit, name) end
+
+---Cures one of your mod's afflictions on a unit, as cureoneaff "<name>" does. In a battle replay the refight's unit
+---lacks it until the replay ends.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@return boolean|nil cured true when the unit held it, false when not, nil when refused (lua_refused): no_unit, unknown_affliction, out_of_memory
+function coe5.cureAffliction(unit, name) end
+
+---Whether a unit holds one of the mods' afflictions.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@return boolean|nil holds nil when refused (lua_refused): no_unit, unknown_affliction, out_of_memory
+function coe5.hasAffliction(unit, name) end
+
+---The names of the mods' afflictions a unit holds, in the order the mods declared them.
+---@param unit integer a unit
+---@return string[]|nil names nil when refused (lua_refused): no_unit
+function coe5.unitAfflictions(unit) end
+
+---The living units holding one of the mods' afflictions, lowest index first; no walk of the unit table.
+---@param name string the affliction's name
+---@return integer[]|nil units nil when refused (lua_refused): unknown_affliction, out_of_memory
+function coe5.afflictedUnits(name) end
+
+---The turn (coe5.turn()) a unit was given one of the mods' afflictions.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@return integer|nil turn nil when the unit doesn't hold it, or when refused (lua_refused): no_unit, unknown_affliction, out_of_memory
+function coe5.afflictionTurn(unit, name) end
+
+---The number a script keeps with a unit's affliction (coe5.setAfflictionValue), 0 until one is set.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@return integer|nil value nil when the unit doesn't hold it, or when refused (lua_refused): no_unit, unknown_affliction, out_of_memory
+function coe5.afflictionValue(unit, name) end
+
+---Sets the turn a unit's affliction counts as given. In a battle replay it lasts until the replay ends.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@param turn integer a turn
+---@return boolean|nil set false when the unit doesn't hold it, nil when refused (lua_refused): no_unit, unknown_affliction, bad_value, out_of_memory
+function coe5.setAfflictionTurn(unit, name, turn) end
+
+---Keeps a number with a unit's affliction, such as the player whose monster gave it. It goes with the unit into
+---saves, LAN turns and battle replays. In a battle replay it lasts until the replay ends.
+---@param unit integer a unit
+---@param name string the affliction's name
+---@param value integer any 32-bit number
+---@return boolean|nil set false when the unit doesn't hold it, nil when refused (lua_refused): no_unit, unknown_affliction, bad_value, out_of_memory
+function coe5.setAfflictionValue(unit, name, value) end
+
+---Clears the game's own afflictions by their bits in unitStateFlags, as the game's cures clear them; the afflictions
+---a unit's items give stay with the items. Any bit may be cleared, the game's own states included: clearing bit 17
+---keeps a unit summoned in a battle after the fight, and bit 42 a split copy.
+---@param unit integer a unit
+---@param bits integer a mask of bits
+---@return boolean|nil cleared true, nil when refused (lua_refused): no_unit
+function coe5.removeAffliction(unit, bits) end
+
+---What one of your mod's afflictions does to a unit holding it: fn runs at each read of the site's stat for such a
+---unit, as the game's own afflictions change a stat inside the function that works it out. fn(unit, value, ...)
+---gets the answer so far and the site's other arguments, and returns the new answer, or nil to keep it. For
+---UNIT_INCAPACITATED return true or false; for DOATTACK and BATTLE_ADVANCE_UNIT value is true, and false skips the
+---attack or the move. Sites: UNIT_DAMAGE_BONUS (Strength), UNIT_MORALE, UNIT_MR, UNIT_BATTLE_RANK, UNIT_MAX_HP,
+---UNIT_PATH_BONUS, UNIT_BLINDNESS, UNIT_INCAPACITATED, UNIT_FIRE_RESISTANCE, UNIT_ARMOR, UNIT_RESISTANCES,
+---UNIT_FLAGS, UNIT_BATTLE_STRENGTH, UNIT_STATE_FLAGS, DOATTACK, BATTLE_ADVANCE_UNIT. A unit holding none runs no Lua.
+---Effects run inside every coe5.wrap of the site, in the order the mods declared the afflictions; nothing is kept
+---between reads. A name no newaffliction declares yet waits for its mod.
+---@param name string the affliction's name, case ignored
+---@param site coe5.Site one of the sites above
+---@param fn fun(unit: integer, value: integer|boolean, ...: integer): integer|boolean|nil
+---@return boolean|nil added true, nil when refused (lua_refused): unknown_site, bad_value, too_many_afflictions, site_unavailable, out_of_memory
+function coe5.afflictionEffect(name, site, fn) end
+
 ---One record of the game's spell table, mods' spells included: its name, path, level, the weapon that is
 ---its effect, and the damage value the weapon is used with.
 ---@param spell integer
@@ -4008,15 +4137,15 @@ function coe5.loadedContentOrigin(kind, id) end
 ---calls after coe5.closeTestField edit and read. It stands on terrain, a number from coe5.testFieldTerrains() (0, Plain,
 ---when left out). With emptyEditor true it has no commander (leave commander out, and spell and standIn too), either
 ---side may be empty, and the units' commander is -1. Without allowMultipleUnique it holds one unit of a unique monster
----at most, and none while one lives anywhere (unique_count, unique_exists); on Mac allowMultipleUnique true is refused
----(windows_only) for now. An editor field's refusal gives its reason as the second value.
+---at most, and none while one lives anywhere (unique_count, unique_exists). An editor field's refusal gives its reason
+---as the second value.
 ---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
 ---@param monster integer
 ---@param spell integer|nil
 ---@param enemy integer
 ---@param count? integer
 ---@param standIn? integer a weapon your mod made
----@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies; on an editor field also game_code_differs, bad_terrain, unsupported_terrain, bad_allow_multiple_unique, bad_empty_editor, empty_editor_commander, empty_editor_primary_attack, cleanup_unverified, temporary_square_busy, bad_unit_table, unique_count, unique_exists, lifecycle_unavailable, terrain_init_failed, context_changed, windows_only
+---@return boolean opened false when refused (lua_refused): coe5.testBattle's reasons, or already_open; with a table, also bad_friend, bad_list (a side or a group that isn't a table), no_enemies; on an editor field also game_code_differs, bad_terrain, unsupported_terrain, bad_allow_multiple_unique, bad_empty_editor, empty_editor_commander, empty_editor_primary_attack, cleanup_unverified, temporary_square_busy, bad_unit_table, unique_count, unique_exists, lifecycle_unavailable, terrain_init_failed, context_changed
 ---@return {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil unitsOrReason the units made in group order; on an editor field, the reason when refused
 function coe5.openTestField(monster, spell, enemy, count, standIn) end
 
@@ -4072,7 +4201,7 @@ function coe5.closeTestField() end
 function coe5.testFieldTerrains() end
 
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
----pointerButtons, lifecycle, multipleUnique (0 on Mac), emptyEditor, configuration, cursedRemoval, schoolLevelReduction
+---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
 function coe5.testFieldEditorCapabilities() end
@@ -4162,9 +4291,9 @@ function coe5.inspectTestFieldUnit(unit, options) end
 ---@return table|string detailsOrReason
 function coe5.inspectTestFieldFinalUnit(unit, options) end
 
----The game's card for a magic item, on your open test field. Windows only for now.
+---The game's card for a magic item, on your open test field.
 ---@param item integer an item
----@return boolean shown false when refused (lua_refused): bad_item, game_code_differs, not_open, not_owner, in_fight, final_read_only, not_main_menu, inspect_active, text_input_unavailable, field_changed, windows_only
+---@return boolean shown false when refused (lua_refused): bad_item, game_code_differs, not_open, not_owner, in_fight, final_read_only, not_main_menu, inspect_active, text_input_unavailable, item_card_hook_unavailable (CoE5SE couldn't open the card), field_changed
 ---@return table|string detailsOrReason
 function coe5.inspectTestFieldItem(item) end
 
@@ -5043,6 +5172,24 @@ coe5.ceremony = {
 coe5.target = {
   useful = 1,         -- the target is worth the spell or mind weapon
   notAffected = -3,   -- the weapon wouldn't affect it: casters pass it over
+}
+
+---A banish hit's answers, for UNIT_BANISHABLE, and the ability whose total names a unit's own plane for a banish
+---(C: BANISH_NO_EFFECT, BANISH_AWAY, BANISH_DAMAGE, BANISH_PLANE_ABILITY).
+---@class coe5.banish
+coe5.banish = {
+  noEffect = 0,       -- the hit does nothing
+  banished = 1,       -- the unit leaves the field, and after the battle stands on another plane
+  damage = 2,         -- the unit takes the hit's damage instead
+  planeAbility = 94,  -- coe5.get("unitAbility", unit, coe5.banish.planeAbility): the plane its monster or items name, 0 for none
+}
+
+---How a unit heals between turns, for UNIT_HEAL_RATE (C: HEAL_RATE_NEVER, HEAL_RATE_USUAL, HEAL_RATE_FAST).
+---@class coe5.healRate
+coe5.healRate = {
+  never = 0,          -- heals nothing, as Never Heals (noheal)
+  usual = 1,          -- a tenth of its hit points, half with an army heal spell; nothing while diseased
+  fast = 2,           -- half its hit points, as Fast Heal (fastheal); a quarter and 3 while diseased
 }
 
 ---The game's file browser (Load Game's list) and the square info window (C: FILE_BROWSER_*,

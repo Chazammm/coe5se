@@ -1,6 +1,6 @@
 #pragma once
 
-// @platform-split lua_game_calls: Windows calls the game's functions; Mac calls the BOTH_BUILDS_CALL rows (a hooked function through its hook, PER_BUILD letters where the functions differ, a CoE5SE copy where Mac's takes other arguments), runs CoE5SE's copy for the MAC_COPY_CALL rows (lua_game_copies.h), and refuses the rest (windows_only)
+// @platform-split lua_game_calls: Windows calls the game's functions; Mac calls the BOTH_BUILDS_CALL rows (a hooked function through its hook, PER_BUILD letters where the functions differ, a CoE5SE copy where Mac's takes other arguments), runs CoE5SE's copy for the MAC_COPY_CALL rows (lua_game_copies.h), CoE5SE's way into the screen for a MAC_ROUTE_CALL row, and refuses the rest (windows_only)
 #ifdef __APPLE__
 #define WINDOWS_ONLY_CALL(rva) 0
 #else
@@ -12,6 +12,11 @@
 #define MAC_COPY_CALL(rva, copy) ((uintptr_t)(void *)(copy) | GAME_CALL_COPY)
 #else
 #define MAC_COPY_CALL(rva, copy) (rva)
+#endif
+#ifdef __APPLE__
+#define MAC_ROUTE_CALL(rva, route) ((uintptr_t)(void *)(route) | GAME_CALL_COPY)
+#else
+#define MAC_ROUTE_CALL(rva, route) (rva)
 #endif
 #define BOTH_COPY_CALL(rva, copy) ((uintptr_t)(void *)(copy) | GAME_CALL_COPY)
 #ifdef __APPLE__
@@ -97,6 +102,9 @@ static int runGameCall(lua_State *L, const char *call, uintptr_t rva, const char
     if (!(rva & GAME_CALL_COPY) && !gameCallStandIn && rva && macGameCallCopy(rva)) fn = macGameCallCopy(rva);
 #endif
     const char *reason = !fn ? "windows_only" : G32(RVA_ACTIVE_PLAYER) < 0 && !strchr(args, '@') ? "no_game" : NULL;
+#ifdef __APPLE__
+    if (!reason && fn == (GameCallFn)macItemInfoScreen && !putMacItemCard()) reason = "item_card_hook_unavailable";
+#endif
     lua_Integer bad = 0;
     int badArg = 0;
     int i = 0;
@@ -184,7 +192,7 @@ static int lChooseLocation(lua_State *L) {
     const char *title = luaL_checkstring(L, 1);
     lua_Integer player = luaL_checkinteger(L, 2), x = luaL_checkinteger(L, 3), y = luaL_checkinteger(L, 4), multiplane = luaL_checkinteger(L, 5);
     lua_Integer range = luaL_optinteger(L, 6, 9999);
-    uintptr_t rva = WINDOWS_ONLY_CALL(RVA_PLANE_SCREEN);
+    uintptr_t rva = BOTH_BUILDS_CALL(RVA_PLANE_SCREEN);
     const char *reason = !rva ? "windows_only" : G32(RVA_ACTIVE_PLAYER) < 0 ? "no_game" : strlen(title) >= GAME_CALL_TEXT_MAX ? "too_long"
                          : gameCallArgProblem('p', player) ? gameCallArgProblem('p', player) : gameCallArgProblem('x', x) ? gameCallArgProblem('x', x)
                          : gameCallArgProblem('y', y) ? gameCallArgProblem('y', y) : gameCallArgProblem('i', multiplane) ? gameCallArgProblem('i', multiplane)
@@ -204,8 +212,63 @@ static int lChooseLocation(lua_State *L) {
     return 2;
 }
 
+#ifdef __APPLE__
+// ---- The Ceremonies screen on Mac: the one inside the rituals screen -------------------------------
+// @platform-split ceremony_screen_mac: Windows calls the game's Ceremonies screen; Mac's is copied into its rituals screen, which a step hook on its priest test takes into the Ceremonies part
+#define RITUALS_PRIEST_TEST_WORD 0x7100041fu
+static struct {
+    StepHook test;
+    uint32_t gameWord, branchWord;
+    int state;
+    int armed;
+} macCeremonies;
+static void macCeremoniesTest(StepContext *ctx, const StepHook *hook) {
+    (void)hook;
+    if (!macCeremonies.armed) return;
+    macCeremonies.armed = 0;
+    if ((int)ctx->x[0] < 1) ctx->x[0] = 1;
+}
+static int putMacCeremonies(void) {
+    if (macCeremonies.state) return macCeremonies.state > 0;
+    macCeremonies.state = -1;
+    if (!gameCodeMatches) {
+        writeLogError("hook_skipped", "site=ceremonies_mac reason=game_code_differs");
+        return 0;
+    }
+    memcpy(&macCeremonies.gameWord, gameBase + RVA_RITUALS_PRIEST_TEST, 4);
+    if (macCeremonies.gameWord != RITUALS_PRIEST_TEST_WORD) {
+        writeLogError("hook_skipped", "site=ceremonies_mac reason=not_the_expected_code");
+        return 0;
+    }
+    macCeremonies.test.handler = macCeremoniesTest;
+    int ok = putStepHookMac(RVA_RITUALS_PRIEST_TEST, &macCeremonies.test, "ceremonies_mac_test", 0);
+    if (ok) {
+        memcpy(&macCeremonies.branchWord, gameBase + RVA_RITUALS_PRIEST_TEST, 4);
+        ok = writeGameCode(gameBase + RVA_RITUALS_PRIEST_TEST, &macCeremonies.gameWord, 4);
+    }
+    macCeremonies.state = ok ? 1 : -1;
+    writeResultLog(ok, "ceremonies_mac_installed", "padding_left=%ld", paddingLeft());
+    return ok;
+}
+static long long macCeremonyScreen(long long commander, long long b, long long c, long long d, long long e, long long f, long long g, long long h) {
+    (void)b, (void)c, (void)d, (void)e, (void)f, (void)g, (void)h;
+    unsigned char *at = gameBase + RVA_RITUALS_PRIEST_TEST;
+    if (!putMacCeremonies() || !writeGameCode(at, &macCeremonies.branchWord, 4)) {
+        writeLogError("ceremonies_mac_failed", "commander=%lld reason=hook", commander);
+        return 0;
+    }
+    macCeremonies.armed = 1;
+    GAME_FN(void (*)(int), RVA_RITUALS_OR_CEREMONIES)((int)commander);
+    if (macCeremonies.armed) writeLogError("ceremonies_mac_failed", "commander=%lld reason=not_reached", commander);
+    macCeremonies.armed = 0;
+    writeGameCode(at, &macCeremonies.gameWord, 4);
+    return 0;
+}
+#endif
+
 // ---- The rows: lua_game_call_rows.h ------------------------------------------------------------------
 #include "lua_game_copies.h"
+#include "lua_game_read_copies.h"
 #include "lua_game_call_rows.h"
 
 #define GAME_CALL_FN(name, rva, args, result) \
@@ -268,6 +331,9 @@ static int copyCheckLetterValues(char letter, long long *out) {
     case 'a': for (int a = 0; a < RITUAL_EFFECT_ID_COUNT; a++) out[n++] = a; return n;
     case 'r': for (int r = 1; r <= G32(RVA_RITUAL_COUNT) && r < ritualSlotCount(); r++) out[n++] = r; return n;
     case 'w': for (int w = 0; w < tableRecords(TABLE_WEAPON); w++) out[n++] = w; return n;
+    case 'T': for (int t = 0; t < tableRecords(TABLE_ITEM) && n < UNIT_TABLE_MAX; t++) if (!gameCallArgProblem('T', t)) out[n++] = t; return n;
+    case 'X': for (int x = 0; !gameCallArgProblem('X', x); x++) out[n++] = x; return n;
+    case 'Y': for (int y = 0; !gameCallArgProblem('Y', y); y++) out[n++] = y; return n;
     case 'i': for (int i = -2; i <= 64; i++) out[n++] = i; return n;
     case 's': {
         int k = 0;
@@ -299,6 +365,11 @@ static void selfcheckGameCopy(const char *call) {
         !strcmp(COPY_CHECK_ROWS[row].name, "coe5.destroyGateway")) return;
     copyCheckDone[row] = 1;
     const CopyCheckRow *c = &COPY_CHECK_ROWS[row];
+    CopyCheckRow cellRow;
+    if (!strcmp(c->name, "coe5.battleSquareAbility")) {
+        cellRow = *c, cellRow.args = "!XYa", cellRow.target.copy = (GameCallFn)(void *)battleSquareAbilityCopy;
+        c = &cellRow;
+    }
     int count[GAME_CALL_MAX_ARGS], stride[GAME_CALL_MAX_ARGS], slot[GAME_CALL_MAX_ARGS], letters = 0, outs = 0;
     char kind[GAME_CALL_MAX_ARGS];
     for (const char *at = c->args; *at; at++) {

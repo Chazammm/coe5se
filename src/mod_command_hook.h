@@ -63,6 +63,8 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     if (!line) return;
     if (featureOn(FEATURE_CORPSE_KINDS)) line = killWordLineHook(line, len, mod, level);
     if (!line) return;
+    if (featureOn(FEATURE_CUSTOM_AFFLICTIONS)) line = afflictionWordLineHook(line, len, mod, level);
+    if (!line) return;
     if (featureOn(FEATURE_MOD_SETTINGS) && settingLineHook(line, len, mod, level)) return;
     if (featureOn(FEATURE_MONSTER_FLAGS) && flagOffLineHook(line, len, mod, level)) return;
     if (featureOn(FEATURE_MONSTER_FLAGS) && itemWordLineHook(line, len, mod, level)) return;
@@ -128,7 +130,7 @@ static void declinedModCommandHook(const char *line, int mod, int level) {
     snprintf(word, sizeof word, "%.*s", (int)(len < sizeof word ? len : sizeof word - 1), line);
     int pathName = declinedSpellPathLine(word, mod, level);
     int planeLine = declinedPlaneLine(line, len, mod, level) | declinedTerrainLooksLine(line, len, mod, level) | declinedBattleMapLine(line, len, mod, level);
-    if (word[0] && (!isGameWord(word) || declinedSpellLine(word, mod, level) || pathName || planeLine || declinedOffsetNameLine(line, len, level) || declinedNameListLine(line, len, level) || declinedFlagOffLine(line) || declinedItemWordLine(line, len, mod, level) || declinedFactionNameLine(line, len))) {
+    if (word[0] && (!isGameWord(word) || declinedSpellLine(word, mod, level) || pathName || planeLine || declinedOffsetNameLine(line, len, level) || declinedNameListLine(line, len, level) || declinedFlagOffLine(line) || declinedItemWordLine(line, len, mod, level) || declinedAfflictionLine(line, len, mod, level) || declinedFactionNameLine(line, len))) {
         writeLog("mod_command_skipped", "word=%s mod=%d level=%d reason=plugins_declined", word, mod, level);
         return;
     }

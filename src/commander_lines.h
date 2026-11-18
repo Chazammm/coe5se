@@ -51,10 +51,10 @@ static void drawCommanderLine(const CommanderLine *line, int id, float x, float 
     }
     float *textColour = (float *)GAME_PTR(RVA_TEXT_COLOUR), saved[4] = {0};
     if (line->coloured) memcpy(saved, textColour, sizeof saved), memcpy(textColour, line->colour, sizeof saved);
-    GAME_FN(void (*)(int, float, float, float, const char *, ...), RVA_DRAW_BUTTON_PLAIN)(
-        id, iconX + COMMANDER_LABEL_INSET * scale, y, size, "%s", line->label);
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(int, float, float, float, const char *, ...), RVA_DRAW_BUTTON_PLAIN)(
+        id, iconX + COMMANDER_LABEL_INSET * scale, y, size, "%s", translatedText(line->label)));
     if (line->coloured) memcpy(textColour, saved, sizeof saved);
-    if (line->tip[0]) GAME_FN(GameTextFn, RVA_TEXT)("%s", line->tip);
+    if (line->tip[0]) CALL_WITH_TEXT_LOOKED_UP(GAME_FN(GameTextFn, RVA_TEXT)("%s", translatedText(line->tip)));
 }
 
 typedef struct {
@@ -88,8 +88,8 @@ static int shownCommanderLines(void) {
 }
 
 static void drawCommanderBoxLine(int id, const char *label, float x, float y, float scale) {
-    GAME_FN(void (*)(int, float, float, float, const char *, ...), RVA_DRAW_BUTTON_PLAIN)(
-        id, x + COMMANDER_ICON_INSET + COMMANDER_LABEL_INSET * scale, y, COMMANDER_TEXT_SIZE * scale, "%s", label);
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(int, float, float, float, const char *, ...), RVA_DRAW_BUTTON_PLAIN)(
+        id, x + COMMANDER_ICON_INSET + COMMANDER_LABEL_INSET * scale, y, COMMANDER_TEXT_SIZE * scale, "%s", translatedText(label)));
 }
 
 // @platform-split commander_panel_frame: Mac's frame helper has its path format built in

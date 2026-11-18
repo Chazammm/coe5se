@@ -316,6 +316,8 @@ static int observedValueSeen(char kind, const unsigned long long *args, int at, 
     }
 }
 
+static int readGameOverOpen(void) { return netRoleNow() == NET_ROLE_CLIENT && netClientGameOverSeen; }
+
 static const CallInfo *observedCall;
 static CallSite observedSite = SITE_COUNT;
 static int observedSeen;
@@ -323,7 +325,7 @@ static int personalObserverSees(CallSite site, const CallInfo *call, int after) 
     char resultKind = '-';
     const char *kinds = personalObserveKinds(site, &resultKind);
     if (!kinds) return 0;
-    if (netClientGameOverSeen || netReplayRunning()) return 1;
+    if (readGameOverOpen() || netReplayRunning()) return 1;
     int viewer = readViewer();
     int seen = after && call == observedCall && site == observedSite ? observedSeen : -1;
     if (seen < 0) {
@@ -339,7 +341,7 @@ static int personalObserverSees(CallSite site, const CallInfo *call, int after) 
 }
 
 static int runFilteredRead(lua_State *L, const luaL_Reg *fn, const char *name) {
-    if (netClientGameOverSeen) return fn->func(L);
+    if (readGameOverOpen()) return fn->func(L);
     int get = fn->func == lGet;
     if (get && lua_type(L, 1) != LUA_TSTRING) return fn->func(L);
     const ReadRow *row = get ? findReadRow(READ_GET_ROWS, sizeof READ_GET_ROWS / sizeof READ_GET_ROWS[0], lua_tostring(L, 1))

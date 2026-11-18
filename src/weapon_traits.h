@@ -232,10 +232,15 @@ static int targetCheckAsGame(int unit, int type, int weapon, int value, int targ
     return result;
 }
 
+static void pushBanishCause(int weapon, int attacker), popBanishCause(void);
+
 static int targetUsefulHook(int unit, unsigned long long type, int weapon, unsigned long long value, int target) {
     typedef int (*CheckFn)(int, int, int, int, int);
     targetCheckFullValue = value;
-    return ((CheckFn)siteEntry(SITE_BATTLE_TARGET_CHECK, (void *)targetCheckAsGame))(unit, (int)type, weapon, (int)value, target);
+    pushBanishCause(weapon, unit);
+    int result = ((CheckFn)siteEntry(SITE_BATTLE_TARGET_CHECK, (void *)targetCheckAsGame))(unit, (int)type, weapon, (int)value, target);
+    popBanishCause();
+    return result;
 }
 
 static void weaponTextHook(int weapon, unsigned long long dmg, int chained) {
@@ -260,9 +265,9 @@ static void weaponTextHook(int weapon, unsigned long long dmg, int chained) {
 #define UNWIND_FLAG_CHAININFO    4
 #define WEAPON_HIT_TEST_SIZE     3
 
-static size_t copyWeaponHitUnwind(unsigned char *out) {
+static size_t copyGameUnwind(const unsigned char *at, unsigned char *out) {
     DWORD64 imageBase = 0;
-    PRUNTIME_FUNCTION f = RtlLookupFunctionEntry((DWORD64)(uintptr_t)GAME_PTR(RVA_WEAPON_HIT_DAMAGE_CHECK), &imageBase, NULL);
+    PRUNTIME_FUNCTION f = RtlLookupFunctionEntry((DWORD64)(uintptr_t)at, &imageBase, NULL);
     if (!f || imageBase != (DWORD64)(uintptr_t)gameBase) return 0;
     int codes = 0;
     for (int link = 0; link < WEAPON_HIT_CHAIN_MAX; link++) {
@@ -290,7 +295,7 @@ static void emitWeaponHitRel32(unsigned char **p, unsigned char *target) {
 }
 
 static int patchWeaponHit(unsigned char *page) {
-    if (!copyWeaponHitUnwind(page + WEAPON_HIT_UNWIND)) {
+    if (!copyGameUnwind(GAME_PTR(RVA_WEAPON_HIT_DAMAGE_CHECK), page + WEAPON_HIT_UNWIND)) {
         writeLogError("weapon_hit_patched", "ok=0 reason=unwind_info");
         return 0;
     }

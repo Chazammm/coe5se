@@ -492,7 +492,8 @@ static const char *planeNameEventLine(const char *line, int level, const char *m
     const char *at = line + len;
     for (int n = 0; n < arg; n++) {
         while (*at == ' ' || *at == '\t') at++;
-        at += strcspn(at, " \t");
+        const char *close = *at == '"' ? strchr(at + 1, '"') : NULL;
+        at = close ? close + 1 : at + strcspn(at, " \t");
     }
     while (*at == ' ' || *at == '\t') at++;
     if (*at != '"') return line;

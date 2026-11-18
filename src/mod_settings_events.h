@@ -34,6 +34,7 @@ static void eventLineHook(const char *line, int level) {
     line = factionNameEventLine(line, level, mod);
     if (!line) return;
     if (eventLogicLine(line, level)) return;
+    if (featureOn(FEATURE_CUSTOM_AFFLICTIONS) && afflictionEventLine(line, level, mod[0] ? mod : "-")) return;
     if (corpseEventLine(line, level)) return;
     previewRestartDiceEvent(line, level);
     if (!isSettingLine(line)) {
@@ -90,6 +91,7 @@ static void declinedEventLineHook(const char *line, int level) {
     else if (isEventLogicWord(line)) refuseC5mLine("or", "-", "plugins_declined", "line=%s", line);
     else if (declinedPlaneEventLine(line)) refuseC5mLine("plane", "-", "plugins_declined", "line=%s", line);
     else if (declinedFactionNameLine(line, strcspn(line, " \t"))) refuseC5mLine("faction", "-", "plugins_declined", "line=%s", line);
+    else if (isNamedAfflictionEventLine(line)) refuseC5mLine("makeaff", "-", "plugins_declined", "line=%s", line);
     else nextEventLine(line, level);
 }
 

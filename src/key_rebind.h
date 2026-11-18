@@ -23,6 +23,7 @@ static const KeyActionInfo KEY_ACTION_INFO[KEY_ACTION_COUNT] = {{"NONE", 0, 0, 0
 #define KEY_UNBOUND        0x7ffffff0
 #define HOTKEY_TABLE_SIZE  150
 #define SHORTCUTS_ROWS     172
+#define TRANSLATION_PAIRS_MAX 20000
 
 typedef struct { int id, key; } HotkeyEntry;
 
@@ -37,13 +38,61 @@ static void refreshShortcutsList(void);
 static int unitListSheetOpen;
 static int unitListNeedsSheet;
 
+// ---- Texts CoE5SE builds around a mod's words -----------------------------------------------------
+static void noteTextLookedUp(const char *text, size_t size);
+
+static PRINTF_FORMAT(3, 4) const char *formatLookedUp(char *out, size_t size, const char *fmt, ...) {
+    static char translated[TRANSLATED_SIZE];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(out, size, translateText(fmt, translated, sizeof translated), ap);
+    va_end(ap);
+    endAtWholeLetter(out, size);
+    noteTextLookedUp(out, size);
+    return out;
+}
+
+static PRINTF_FORMAT(4, 5) void appendLookedUp(char *text, size_t size, size_t *n, const char *fmt, ...) {
+    static char translated[TRANSLATED_SIZE];
+    if (*n >= size - 1) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int wrote = vsnprintf(text + *n, size - *n, translateText(fmt, translated, sizeof translated), ap);
+    va_end(ap);
+    if (wrote > 0) *n = *n + (size_t)wrote < size - 1 ? *n + (size_t)wrote : size - 1;
+    endAtWholeLetter(text, size);
+}
+
 // ---- Key names for players ------------------------------------------------------------------------
+#define KEY_SHOWN_NAME_SIZE 64
+
+static void keyValueShownName(int value, char *out, size_t size) {
+    if (!size) return;
+    if (value == KEY_NONE || !keyValueIsValid(value)) {
+        if (value == KEY_NONE) translateText("(none)", out, (int)size);
+        else snprintf(out, size, "?");
+        return;
+    }
+    int base = keyBase(value), modifier = keyModifier(value);
+    const char *word = modifier == KEY_CTRL ? "ctrl" : modifier == KEY_ALT ? "alt" : modifier == KEY_CTRL_SHIFT ? "ctrl+shift" : NULL;
+    char prefix[KEY_SHOWN_NAME_SIZE] = "", named[KEY_SHOWN_NAME_SIZE];
+    if (word) translateText(word, prefix, sizeof prefix);
+    const char *name = keyNamedName(base);
+    if (name) translateText(name, named, sizeof named);
+    else snprintf(named, sizeof named, "%c", base);
+    size_t n = 0;
+    out[0] = '\0';
+    appendText(out, size, &n, "%s%s%s", prefix, word ? "+" : "", named);
+    endAtWholeLetter(out, size);
+}
+
 static void actionKeyText(int action, char *out, size_t size) {
-    char main[24] = "", extra[24] = "";
-    if (actionKeys[action]) keyValueName(actionKeys[action], main, sizeof main);
-    if (actionExtraKeys[action]) keyValueName(actionExtraKeys[action], extra, sizeof extra);
+    char main[KEY_SHOWN_NAME_SIZE] = "", extra[KEY_SHOWN_NAME_SIZE] = "";
+    if (actionKeys[action]) keyValueShownName(actionKeys[action], main, sizeof main);
+    if (actionExtraKeys[action]) keyValueShownName(actionExtraKeys[action], extra, sizeof extra);
     if (extra[0] && main[0]) snprintf(out, size, "%s/%s", extra, main);
     else snprintf(out, size, "%s", extra[0] ? extra : main);
+    endAtWholeLetter(out, size);
 }
 
 static int actionPickOff(int action) { return !keyPickCountsFor(netRoleNow(), actionFromPersonal[action]); }
@@ -136,10 +185,21 @@ static void followKeyRole(void) {
     writeLog("key_picks_followed", "role=%d personal_actions=%d", role, kept);
 }
 
+static struct { int count; const void *last; } keyNamesPairs = {-2, NULL};
+static void followKeyNamesPairs(void) {
+    int count = G32(RVA_TRANSLATION_COUNT);
+    const void *last = count >= 0 && count < TRANSLATION_PAIRS_MAX ? ((const char *const *)GAME_PTR(RVA_TRANSLATION_STRINGS))[count] : NULL;
+    if (count == keyNamesPairs.count && last == keyNamesPairs.last) return;
+    keyNamesPairs.count = count;
+    keyNamesPairs.last = last;
+    refreshShortcutsList();
+}
+
 static int runKeyScreenWait(int screen, int (**next)(int, int), int a, int b) {
     int outer = keyScreen;
     keyScreen = screen;
     followKeyRole();
+    followKeyNamesPairs();
     rewriteShortcuts(screen);
     int id = (*next)(a, b);
     keyScreen = outer;
@@ -336,7 +396,7 @@ static const KeyText KEY_TEXTS[] = {
 static void replaceKeyMark(char *text, size_t size, const char *mark, int action) {
     char *at = strstr(text, mark);
     if (!at) return;
-    char key[56], rest[TRANSLATED_SIZE];
+    char key[2 * KEY_SHOWN_NAME_SIZE], rest[TRANSLATED_SIZE];
     actionKeyText(action, key, sizeof key);
     const char *after = at + strlen(mark);
     if (!key[0] && *after == ' ') after++;
@@ -376,7 +436,9 @@ static u64 keyTextBarHook(const char *fmt, ...) {
     va_start(ap, fmt);
     const char *text = formatKeyText(SITE_KEY_TEXT_BAR, fmt, ap);
     va_end(ap);
-    return nextKeyTextBar("%s", text);
+    u64 drawn;
+    CALL_WITH_TEXT_LOOKED_UP(drawn = nextKeyTextBar("%s", text));
+    return drawn;
 }
 static u64 (*nextMenuButtonText)(const char *, ...);
 static u64 menuButtonTextHook(const char *fmt, ...) {
@@ -384,7 +446,9 @@ static u64 menuButtonTextHook(const char *fmt, ...) {
     va_start(ap, fmt);
     const char *text = formatKeyText(SITE_MAP_MENU_BUTTON_TEXT, fmt, ap);
     va_end(ap);
-    return nextMenuButtonText("%s", text);
+    u64 drawn;
+    CALL_WITH_TEXT_LOOKED_UP(drawn = nextMenuButtonText("%s", text));
+    return drawn;
 }
 static u64 (*nextKeyHelpText)(const char *, ...);
 static u64 keyHelpTextHook(const char *fmt, ...) {
@@ -392,7 +456,9 @@ static u64 keyHelpTextHook(const char *fmt, ...) {
     va_start(ap, fmt);
     const char *text = formatKeyText(SITE_KEY_HELP_TEXT, fmt, ap);
     va_end(ap);
-    return nextKeyHelpText("%s", text);
+    u64 drawn;
+    CALL_WITH_TEXT_LOOKED_UP(drawn = nextKeyHelpText("%s", text));
+    return drawn;
 }
 static u64 (*nextKeyTextButton)(int, const char *, ...);
 static u64 keyTextButtonHook(int id, const char *fmt, ...) {
@@ -400,16 +466,18 @@ static u64 keyTextButtonHook(int id, const char *fmt, ...) {
     va_start(ap, fmt);
     const char *text = formatKeyText(SITE_KEY_TEXT_BUTTON, fmt, ap);
     va_end(ap);
-    return nextKeyTextButton(id, "%s", text);
+    u64 drawn;
+    CALL_WITH_TEXT_LOOKED_UP(drawn = nextKeyTextButton(id, "%s", text));
+    return drawn;
 }
 
 // ---- The Keyboard Shortcuts list ----------------------------------------------------------------
 static const char *gameRowTexts[SHORTCUTS_ROWS];
-static char rowTexts[SHORTCUTS_ROWS][64];
+static char rowTexts[SHORTCUTS_ROWS][256];
 static int shortcutsTableReady;
 
 static void buildRowText(int row, char *out, size_t size) {
-    char names[12][56];
+    char names[12][2 * KEY_SHOWN_NAME_SIZE];
     int count = 0, allSingle = 1;
     for (int a = 1; a < KEY_ACTION_COUNT && count < 12; a++) {
         if (KEY_ACTION_INFO[a].row != row) continue;
@@ -429,6 +497,7 @@ static void buildRowText(int row, char *out, size_t size) {
     out[0] = '\0';
     for (int i = 0; i < count && n < size; i++)
         n += (size_t)snprintf(out + n, size - n, "%s%s", i ? sep : "", names[i]);
+    endAtWholeLetter(out, size);
 }
 
 static void refreshShortcutsList(void) {

@@ -174,14 +174,21 @@ static void takeIncludeLine(int mod, int level, int kind, const char *file) {
 static char *modLineReadHook(char *buf, int size, void *file) {
     char *got = nextModLineRead(buf, size, file);
     sidecar.prefixedLine = 0;
-    if (!got || !sidecar.prefixedLines || sidecar.including) return got;
+    if (!got || !sidecar.prefixedLines) return got;
     const char *text = buf;
     if (!sidecar.reading) {
         text = sidecarLineText(buf);
-        if (!text) return got;
-        memset((char *)text - (sizeof SIDECAR_LINE_PREFIX - 1), ' ', sizeof SIDECAR_LINE_PREFIX - 1);
-        sidecar.prefixedLine = 1;
+        if (text) {
+            memset((char *)text - (sizeof SIDECAR_LINE_PREFIX - 1), ' ', sizeof SIDECAR_LINE_PREFIX - 1);
+            sidecar.prefixedLine = 1;
+        }
     }
+    if (languageLineHook(text ? text : buf, text != NULL, sidecar.lineMod, sidecar.lineLevel)) {
+        sidecar.prefixedLine = 0;
+        snprintf(buf, (size_t)size, "\n");
+        return got;
+    }
+    if (!text || sidecar.including) return got;
     char include[INCLUDE_FILE_MAX + 2];
     int kind = readIncludeLine(text, include, sizeof include);
     if (!kind) return got;
@@ -263,5 +270,6 @@ static void sidecarInit(void) {
     modErrorBox = GAME_FN(void (*)(const char *, ...), RVA_MOD_ERROR);
     int lineRead = wrapSite(SITE_RUN_ONE_MOD_LINE_READ, (void *)modLineReadHook, (void **)&nextModLineRead);
     int word = apiAddModCommand("include", includeWordLine);
-    writeResultLog(ok == 2, "sidecar_hooks_installed", "ok=%d of 2 line_read=%d include_word=%d", ok, lineRead, word);
+    int language = languageInit();
+    writeResultLog(ok == 2, "sidecar_hooks_installed", "ok=%d of 2 line_read=%d include_word=%d language_word=%d", ok, lineRead, word, language);
 }

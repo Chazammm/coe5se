@@ -3,7 +3,6 @@
 #define HEAL_ARMY_WORD      "healarmy"
 #define HEAL_ARMY_BYPASS_WORD "bypassnoheal"
 #define HEAL_ARMY_DISEASED  1ULL
-#define HEAL_RATE_FAST      2
 #define RESIST_NOHEAL_BIT   (1ULL << 8)
 #define RESIST_FASTHEAL_BIT (1ULL << 9)
 #define ABILITY_FALSELIFE   0x1e9
@@ -182,6 +181,8 @@ static void healArmyInfoLines(int spell) {
     }
 }
 
+static int healRateHooksIn;
+
 // ---- The game's side -----------------------------------------------------------------------------
 static int gameHealArmyPathLevel(int unit, int path) { return GAME_FN(int (*)(int, int), RVA_UNIT_PATH_LEVEL)(unit, path); }
 static unsigned long long gameHealArmyUnitState(int unit) { return GAME_FN(unsigned long long (*)(int), RVA_UNIT_STATE_FLAGS)(unit); }
@@ -195,11 +196,29 @@ static void healArmyFlagLinesHook(int spell) {
     healArmyInfoLines(spell);
 }
 
-#ifndef __APPLE__
-static int healArmyHealRateHook(int unit) {
-    int rate = GAME_FN(int (*)(int), RVA_UNIT_HEAL_RATE)(unit);
+// ---- UNIT_HEAL_RATE: how a unit heals between turns, as a site -------------------------------------
+static struct { int unit, game, rate; } healRateAnswer = {-1, -1, 0};
+static int (*healRateOfGame)(int unit);
+
+static int unitHealRateAsGame(int unit) {
+    int rate = unit == healRateAnswer.unit && healRateAnswer.game >= 0 ? healRateAnswer.game : healRateOfGame(unit);
     return healArmyHealsFast(unit, rate) ? HEAL_RATE_FAST : rate;
 }
+
+static int unitHealRateFirst(int unit, int game) {
+    healRateAnswer.unit = unit, healRateAnswer.game = game;
+    int rate = ((int (*)(int))siteEntry(SITE_UNIT_HEAL_RATE, (void *)unitHealRateAsGame))(unit);
+    rate = rate < HEAL_RATE_NEVER ? HEAL_RATE_NEVER : rate > HEAL_RATE_FAST ? HEAL_RATE_FAST : rate;
+    healRateAnswer.rate = rate;
+    return rate;
+}
+
+#ifndef __APPLE__
+static int gameHealRate(int unit) { return GAME_FN(int (*)(int), RVA_UNIT_HEAL_RATE)(unit); }
+
+static int healRateFirstHook(int unit) { return unitHealRateFirst(unit, -1); }
+
+static int healRateSecondHook(int unit) { return unit == healRateAnswer.unit ? healRateAnswer.rate : gameHealRate(unit); }
 
 #define HEAL_ARMY_STUB_SIZE 0x20
 static int installHealArmyCalls(void) {
@@ -208,42 +227,89 @@ static int installHealArmyCalls(void) {
         void *hook;
         const char *name;
     } CALLS[] = {
-        {RVA_UPKEEP_HEAL_RATE_CALL, RVA_UNIT_HEAL_RATE, (void *)healArmyHealRateHook, "upkeep_heal_rate"},
+        {RVA_UPKEEP_HEAL_RATE_CALL, RVA_UNIT_HEAL_RATE, (void *)healRateFirstHook, "upkeep_heal_rate"},
+        {RVA_UPKEEP_HEAL_RATE_CALL_2, RVA_UNIT_HEAL_RATE, (void *)healRateSecondHook, "upkeep_heal_rate_2"},
         {RVA_SPELL_FLAG_LINES_CALL_A, RVA_SPELL_FLAG_LINES, (void *)healArmyFlagLinesHook, "spell_flag_lines_a"},
         {RVA_SPELL_FLAG_LINES_CALL_B, RVA_SPELL_FLAG_LINES, (void *)healArmyFlagLinesHook, "spell_flag_lines_b"},
         {RVA_SPELL_FLAG_LINES_CALL_C, RVA_SPELL_FLAG_LINES, (void *)healArmyFlagLinesHook, "spell_flag_lines_c"},
     };
+    healRateOfGame = gameHealRate;
     unsigned char *stubs = allocNear(gameBase + RVA_TEXT_SECTION);
     if (!stubs) {
         writeLog("hook_skipped", "site=heal_army reason=no_near_page");
         return 0;
     }
     makePagesReadExecute(stubs, 0x1000);
-    int ok = 0;
-    for (int i = 0; i < (int)(sizeof CALLS / sizeof CALLS[0]); i++)
-        ok += redirectCall(CALLS[i].callRva, CALLS[i].targetRva, stubs + HEAL_ARMY_STUB_SIZE * i, CALLS[i].hook, CALLS[i].name, NULL);
-    return ok == 4;
+    int ok = 0, rate = 0, n = (int)(sizeof CALLS / sizeof CALLS[0]);
+    for (int i = 0; i < n; i++) {
+        int in = redirectCall(CALLS[i].callRva, CALLS[i].targetRva, stubs + HEAL_ARMY_STUB_SIZE * i, CALLS[i].hook, CALLS[i].name, NULL);
+        ok += in;
+        rate += i < 2 && in;
+    }
+    healRateHooksIn = rate == 2;
+    return ok == n;
 }
 #else
-// @platform-split heal_army: Mac's upkeep inlines RVA_UNIT_HEAL_RATE, so its RVA_UNIT_RESISTANCES call answers instead
-static unsigned long long healArmyResistancesHook(int unit) {
+static int healRateOfWord(unsigned long long res, int falselife) {
+    return (res & RESIST_NOHEAL_BIT) && falselife < 1 ? HEAL_RATE_NEVER : (res & RESIST_FASTHEAL_BIT) ? HEAL_RATE_FAST : HEAL_RATE_USUAL;
+}
+
+static unsigned long long healRateFirstWord(unsigned long long res, int game, int rate) {
+    if (rate == game) return res;
+    return rate >= HEAL_RATE_FAST ? (res & ~RESIST_NOHEAL_BIT) | RESIST_FASTHEAL_BIT : res & ~RESIST_FASTHEAL_BIT;
+}
+
+static unsigned long long healRateSecondWord(unsigned long long res, int game, int rate) {
+    if (rate == game) return res;
+    return rate <= HEAL_RATE_NEVER ? res | RESIST_NOHEAL_BIT : res & ~RESIST_NOHEAL_BIT;
+}
+
+static int gameHealRate(int unit) {
     unsigned long long res = GAME_FN(unsigned long long (*)(int), RVA_UNIT_RESISTANCES)(unit);
-    int rate = (res & RESIST_NOHEAL_BIT) && healArmyFalselife(unit) < 1 ? 0 : (res & RESIST_FASTHEAL_BIT) ? HEAL_RATE_FAST : 1;
-    return healArmyHealsFast(unit, rate) ? (res & ~RESIST_NOHEAL_BIT) | RESIST_FASTHEAL_BIT : res;
+    return healRateOfWord(res, res & RESIST_NOHEAL_BIT ? healArmyFalselife(unit) : 0);
+}
+
+// @platform-split heal_army: Mac's upkeep inlines RVA_UNIT_HEAL_RATE, so its RVA_UNIT_RESISTANCES and falselife calls answer instead
+static unsigned long long healRateFirstResistHook(int unit) {
+    unsigned long long res = GAME_FN(unsigned long long (*)(int), RVA_UNIT_RESISTANCES)(unit);
+    int game = healRateOfWord(res, res & RESIST_NOHEAL_BIT ? healArmyFalselife(unit) : 0);
+    return healRateFirstWord(res, game, unitHealRateFirst(unit, game));
+}
+static unsigned long long healRateSecondResistHook(int unit) {
+    unsigned long long res = GAME_FN(unsigned long long (*)(int), RVA_UNIT_RESISTANCES)(unit);
+    return unit == healRateAnswer.unit ? healRateSecondWord(res, healRateAnswer.game, healRateAnswer.rate) : res;
+}
+static int healRateFalselifeHook(int unit, int ability, int add, char *out, int outIf, int *last) {
+    if (unit == healRateAnswer.unit && healRateAnswer.rate != healRateAnswer.game) return healRateAnswer.rate > HEAL_RATE_NEVER;
+    return GAME_FN(int (*)(int, int, int, char *, int, int *), RVA_UNIT_ABILITY_TOTAL)(unit, ability, add, out, outIf, last);
 }
 
 static int installHealArmyCalls(void) {
-    unsigned char *call = gameBase + RVA_UPKEEP_HEAL_RESIST_CALL;
-    if (blTarget(call) != gameBase + RVA_UNIT_RESISTANCES) {
-        writeLog("hook_skipped", "site=upkeep_heal_rate reason=not_the_expected_call va=0x%llx", RVA_UPKEEP_HEAL_RESIST_CALL + 0x100000000ULL);
-        return 0;
+    static const struct {
+        unsigned int callRva, targetRva;
+        void *hook;
+        const char *name;
+    } CALLS[] = {
+        {RVA_UPKEEP_HEAL_RESIST_CALL, RVA_UNIT_RESISTANCES, (void *)healRateFirstResistHook, "upkeep_heal_rate"},
+        {RVA_UPKEEP_HEAL_RESIST_CALL_2, RVA_UNIT_RESISTANCES, (void *)healRateSecondResistHook, "upkeep_heal_rate_2"},
+        {RVA_UPKEEP_HEAL_FALSELIFE_CALL, RVA_UNIT_ABILITY_TOTAL, (void *)healRateFalselifeHook, "upkeep_heal_falselife"},
+    };
+    healRateOfGame = gameHealRate;
+    int n = (int)(sizeof CALLS / sizeof CALLS[0]);
+    for (int i = 0; i < n; i++)
+        if (blTarget(gameBase + CALLS[i].callRva) != gameBase + CALLS[i].targetRva) {
+            writeLog("hook_skipped", "site=%s reason=not_the_expected_call va=0x%llx", CALLS[i].name, CALLS[i].callRva + 0x100000000ULL);
+            return 0;
+        }
+    for (int i = 0; i < n; i++) {
+        unsigned char *call = gameBase + CALLS[i].callRva, *trampoline = newTrampoline(CALLS[i].hook);
+        uint32_t word = trampoline ? blTo(call, trampoline) : 0;
+        if (!trampoline || !writeGameCode(call, &word, 4)) {
+            writeLog("hook_skipped", "site=%s reason=%s", CALLS[i].name, trampoline ? "code_unwritable" : "no_padding");
+            return 0;
+        }
     }
-    unsigned char *trampoline = newTrampoline((void *)healArmyResistancesHook);
-    uint32_t word = trampoline ? blTo(call, trampoline) : 0;
-    if (!trampoline || !writeGameCode(call, &word, 4)) {
-        writeLog("hook_skipped", "site=upkeep_heal_rate reason=%s", trampoline ? "code_unwritable" : "no_padding");
-        return 0;
-    }
+    healRateHooksIn = 1;
     return macRedirectCalls(RVA_SPELL_FLAG_LINES, (void *)healArmyFlagLinesHook, "spell_flag_lines") > 0;
 }
 #endif
