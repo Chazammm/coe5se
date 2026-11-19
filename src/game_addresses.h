@@ -3842,6 +3842,10 @@
 #define RVA_NEW_COMMANDER                      ADDR(        0x128160,          0x10046da30)
 #define RVA_ALLOC_UNIT                         ADDR(        0x10fff0,          0x10046d184)
 #define RVA_ALLOC_TEMP_UNIT                    ADDR(        0x110410,          MAC_INLINED)
+#ifndef __APPLE__
+#define RVA_NEW_UNIT_ALLOC_TEMP_CALL           0x1299c5
+#define RVA_UNIT_STATS_SHOW_SPELLS             0x58243a4
+#endif
 #define RVA_RESERVED_UNIT                      ADDR(        0x1f1ef0,          MAC_INLINED)
 #define RVA_RESERVED_COMMANDER                 ADDR(        WIN_INLINED,       MAC_INLINED)
 #define RVA_RESERVE_UNITS                      ADDR(        0x1e8630,        0x10050bfc4)

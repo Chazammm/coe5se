@@ -14,3 +14,4 @@ Lua
 - Owned Windows test fields can read and toggle the native combat-log overlay.
 - Owned Windows test-field configuration can clear all held items on one actor with verified spell and injury preservation.
 - Windows owned fields can read the wheel and control the map viewport, including Fit, pan and one-shot combat centering.
+- Windows owned editors can open the native unit card for a temporary preview of a loaded monster type.

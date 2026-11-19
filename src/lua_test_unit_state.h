@@ -253,6 +253,7 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "battleZoom", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
     setIntField(L, "battleViewport", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
     setIntField(L, "battleCenter", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
+    setIntField(L, "nativeMonsterInspectVersion", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI && testFieldTextPollReady);
     int provenance = lifecycle && testFieldProvenanceCallsValid();
     setIntField(L, "structureProvenance", provenance);
     setIntField(L, "exactDeploymentVersion", provenance);

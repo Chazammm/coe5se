@@ -37,6 +37,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"testFieldUnitName", lTestFieldUnitName}, {"setTestFieldUnitName", lSetTestFieldUnitName},
     {"testFieldActorState", lTestFieldActorState}, {"setTestFieldActorState", lSetTestFieldActorState},
     {"testFieldLogState", lTestFieldLogState}, {"setTestFieldLogVisible", lSetTestFieldLogVisible},
+    {"inspectTestFieldMonster", lInspectTestFieldMonster},
     {"testFieldPointerWheel", lTestFieldPointerWheel}, {"testFieldZoom", lTestFieldZoom}, {"setTestFieldZoom", lSetTestFieldZoom},
     {"testFieldViewport", lTestFieldViewport}, {"setTestFieldViewport", lSetTestFieldViewport},
     {"fitTestFieldViewport", lFitTestFieldViewport}, {"panTestFieldViewport", lPanTestFieldViewport},

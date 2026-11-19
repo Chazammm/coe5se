@@ -4346,7 +4346,7 @@ function coe5.setTestFieldSpells(unit, state) end
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
 ---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction.
 ---Windows-only optional capabilities include multipleUniquePolicy, battleLogVisibility and clearHeldItems.
----battleZoom, battleViewport and battleCenter advertise Windows native viewport control.
+---battleZoom, battleViewport, battleCenter and nativeMonsterInspectVersion advertise the Windows native presentation APIs.
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
 ---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
@@ -4460,6 +4460,19 @@ function coe5.testFieldPlacementPreflight(monster, x, y, unit, ignoreSelf) end
 ---@return boolean shown false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, inspect_active (a card is up), not_main_menu, text_input_hook_unavailable, not_battle_frame (the field not drawn yet), bad_options, read_only_required, text_input_unavailable, the memorization rules' reasons; after the card, identity_changed, inspect_changed_unverified, restore_failed
 ---@return table|string detailsOrReason
 function coe5.inspectTestFieldUnit(unit, options) end
+
+---Opens the real native unit card for a temporary instance of a loaded monster type.
+---Available only on Windows 5.43 with the supported Clang 23 build and an owned idle main-menu
+---editor field after its first draw. Invoke outside BATTLE_DRAW and close the native card normally.
+---Construction uses a fresh off-field slot and preserves existing actors, terrain, unique groups
+---and the game RNG. A successful return verifies cleanup, restores the slot and reports the type.
+---Starting items are omitted. Randomized preview spells can differ from a later placed instance.
+---An unverified cleanup quarantines the field. Check the returned detail before editing again.
+---@param monster integer a loaded monster type
+---@return boolean shown
+---@return table|string detailOrReason verified preview detail on success; refusal reason on failure
+---@return table|nil refusalDetail cleanup verification and quarantine status when refused
+function coe5.inspectTestFieldMonster(monster) end
 
 ---The same card for a unit that outlived the field's last fight, as it is now.
 ---@param unit integer a unit of coe5.testFieldFinalState()
