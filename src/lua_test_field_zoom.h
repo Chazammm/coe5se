@@ -257,30 +257,29 @@ static int installTestFieldZoom(void) {
     if (!TEST_FIELD_VERIFIED_WINDOWS_ABI) { testFieldZoom.unavailable = "unsupported_compiler_abi"; return 0; }
     if (!gameCodeMatches) { testFieldZoom.unavailable = "game_code_differs"; return 0; }
     /* Two complete RIP-relative loads; relocate both displacement operands. */
-    static const unsigned char PROLOG[16] = {
-        0x66,0x0f,0x6e,0x05,0xc4,0x43,0x70,0x05,0xf3,0x0f,0x10,0x1d,0xcc,0xd8,0x33,0x00
-    };
     unsigned char *entry = GAME_PTR(RVA_BATTLE_CELL_SIZE_UPDATE);
     static const int sceneCalls[]={0x0fb618,0x23fc53,0x23fd44,0x23fe32};
     for(size_t i=0;i<sizeof sceneCalls/sizeof sceneCalls[0];i++){
         unsigned char *sceneCall=gameBase+sceneCalls[i];int sceneRelative=0;memcpy(&sceneRelative,sceneCall+1,4);
         if(sceneCall[0]!=0xe8 || sceneCall+5+sceneRelative!=entry){testFieldZoom.unavailable="zoom_scene_code_differs";return 0;}
     }
-    if (memcmp(entry, PROLOG, sizeof PROLOG)) { testFieldZoom.unavailable = "zoom_code_differs"; return 0; }
+    /* gameCodeMatches stands for these bytes: copy the game's own, never a literal. */
+    unsigned char saved[16];
+    memcpy(saved, entry, sizeof saved);
     unsigned char *page = allocNear(entry);
     if (!page) { testFieldZoom.unavailable = "out_of_memory"; return 0; }
     CodeFixup fixups[2] = {{4, gameBase + 0x5804eac}, {12, gameBase + 0x43e3bc}};
-    unsigned char slot[ENTRY_HOOK_SLOT], jump[sizeof PROLOG];
-    if (!buildEntryHookSlot(slot, page, entry, PROLOG, sizeof PROLOG, fixups, 2, (void *)testFieldZoomNativeHook)) {
+    unsigned char slot[ENTRY_HOOK_SLOT], jump[sizeof saved];
+    if (!buildEntryHookSlot(slot, page, entry, saved, sizeof saved, fixups, 2, (void *)testFieldZoomNativeHook)) {
         testFieldZoom.unavailable = "zoom_trampoline_out_of_reach"; return 0;
     }
     memcpy(page, slot, sizeof slot);
     if (!makePagesReadExecute(page, 0x1000)) { testFieldZoom.unavailable = "zoom_trampoline_protection"; return 0; }
     testFieldZoomNative = (void (*)(int))(void *)page;
-    buildEntryHookJump(jump, entry, page + ENTRY_HOOK_STUB, sizeof PROLOG);
+    buildEntryHookJump(jump, entry, page + ENTRY_HOOK_STUB, sizeof saved);
     if (!writeGameCode(entry, jump, sizeof jump)) { testFieldZoom.unavailable = "zoom_code_unwritable"; return 0; }
     if (memcmp(entry, jump, sizeof jump)) {
-        int restored = writeGameCode(entry, PROLOG, sizeof PROLOG) && !memcmp(entry, PROLOG, sizeof PROLOG);
+        int restored = writeGameCode(entry, saved, sizeof saved) && !memcmp(entry, saved, sizeof saved);
         testFieldZoom.unavailable = restored ? "zoom_hook_unverified" : "zoom_hook_rollback_failed";
         if (!restored) testFieldLife.failed = testFieldLife.pending = 1;
         return 0;
@@ -331,26 +330,14 @@ static int installTestFieldViewportPan(void) {
     /* Whole native clamp block, RVA23c82b..23c8af. The original path remains
      * available through a relocated first-16-byte trampoline. Owned calls skip
      * only this block and resume before the native delta/cache translations. */
-    static const unsigned char EXPECTED[0x85]={
-        0x66,0x0f,0x6e,0x1d,0xf1,0x4f,0x1f,0x00,0xf3,0x0f,0x10,0x15,0x49,0x1a,0x20,0x00,
-        0x0f,0x5b,0xdb,0x0f,0x28,0xc2,0xf3,0x0f,0x59,0x05,0xfb,0xa4,0x1c,0x00,0x0f,0x28,0xcb,
-        0xf3,0x0f,0x5c,0xc8,0x0f,0x2f,0xe9,0x77,0x0b,0xf3,0x0f,0x11,0x0d,0x43,0x86,0x5c,0x05,
-        0x0f,0x28,0xe9,0x0f,0x2f,0xee,0x72,0x0b,0xf3,0x0f,0x11,0x35,0x33,0x86,0x5c,0x05,0x0f,
-        0x28,0xee,0x8b,0x0d,0x0e,0x18,0x20,0x00,0x8b,0xc1,0xf7,0xd8,0x66,0x0f,0x6e,0xc0,0x0f,
-        0x5b,0xc0,0xf3,0x0f,0x59,0xc2,0x0f,0x2f,0xe0,0x77,0x0b,0xf3,0x0f,0x11,0x05,0x12,0x86,
-        0x5c,0x05,0x0f,0x28,0xe0,0x66,0x0f,0x6e,0xc1,0x0f,0x5b,0xc0,0xf3,0x0f,0x59,0xc2,0x0f,
-        0x2f,0xe0,0x72,0x0b,0xf3,0x0f,0x11,0x05,0xf7,0x85,0x5c,0x05,0x0f,0x28,0xe0
-    };
-    static const unsigned char PROLOG[]={0x48,0x8b,0xc4,0x53,0x48,0x81,0xec,0x90,0,0,0};
-    static const unsigned char RESUME[]={0x0f,0x57,0xc9};
     unsigned char *entry=gameBase+0x23c82b, *resume=gameBase+0x23c8b0;
-    if (memcmp(entry,EXPECTED,sizeof EXPECTED) || memcmp(gameBase+0x23c360,PROLOG,sizeof PROLOG) ||
-        memcmp(resume,RESUME,sizeof RESUME)) { testFieldViewportPanUnavailable="viewport_pan_code_differs"; return 0; }
+    /* gameCodeMatches stands for the block's bytes: copy the game's own, never a literal. */
+    unsigned char saved[16]; memcpy(saved,entry,sizeof saved);
     unsigned char *page=allocNear(entry);
     if (!page) { testFieldViewportPanUnavailable="out_of_memory"; return 0; }
     unsigned char original[ENTRY_HOOK_SLOT], code[256], *p=code, *stub=page+0x100;
     CodeFixup fixups[2]={{4,GAME_PTR(RVA_SCREEN_H)},{12,GAME_PTR(RVA_BATTLE_CELL_PX)}};
-    if (!buildEntryHookSlot(original,page,entry,EXPECTED,16,fixups,2,(void *)testFieldViewportPanClamp)) {
+    if (!buildEntryHookSlot(original,page,entry,saved,sizeof saved,fixups,2,(void *)testFieldViewportPanClamp)) {
         testFieldViewportPanUnavailable="viewport_pan_out_of_reach"; return 0;
     }
     /* At this verified native point RSP is 16-aligned. Save R11, reserve shadow
@@ -371,8 +358,9 @@ static int installTestFieldViewportPan(void) {
     memcpy(p,CONVERT_H,sizeof CONVERT_H); p+=sizeof CONVERT_H;
     ok=ok && testFieldViewportRip(&p,code,stub,LOAD_CELL,sizeof LOAD_CELL,GAME_PTR(RVA_BATTLE_CELL_PX)) &&
         testFieldViewportRip(&p,code,stub,LOAD_W,sizeof LOAD_W,GAME_PTR(RVA_BATTLE_WIDTH));
-    static const unsigned char LIVE_OUT[]={0x8b,0xc1,0xf7,0xd8,0x66,0x0f,0x6e,0xc1,0x0f,0x5b,0xc0,0xf3,0x0f,0x59,0xc2,0x0f,0x2f,0xe0};
-    memcpy(p,LIVE_OUT,sizeof LIVE_OUT); p+=sizeof LIVE_OUT;
+    /* The block's live-out tail, from the game: mov eax,ecx; neg eax, then the width product and its compare. */
+    memcpy(p,entry+0x4b,4); p+=4;
+    memcpy(p,entry+0x6a,14); p+=14;
     ok=ok && testFieldViewportJump(&p,code,stub,resume);
     int relative=(int)(p-(branch+4)); memcpy(branch,&relative,4);
     ok=ok && testFieldViewportJump(&p,code,stub,page);
@@ -382,7 +370,7 @@ static int installTestFieldViewportPan(void) {
     unsigned char jump[16]; buildEntryHookJump(jump,entry,stub,sizeof jump);
     if (!writeGameCode(entry,jump,sizeof jump)) { testFieldViewportPanUnavailable="viewport_pan_unwritable"; return 0; }
     if (memcmp(entry,jump,sizeof jump)) {
-        int restored=writeGameCode(entry,EXPECTED,sizeof jump) && !memcmp(entry,EXPECTED,sizeof jump);
+        int restored=writeGameCode(entry,saved,sizeof jump) && !memcmp(entry,saved,sizeof jump);
         testFieldViewportPanUnavailable=restored ? "viewport_pan_unverified" : "viewport_pan_rollback_failed";
         if (!restored) testFieldLife.failed=testFieldLife.pending=1;
         return 0;
