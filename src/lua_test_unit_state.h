@@ -3,12 +3,17 @@
 _Static_assert(UNIT_KNOWN_SPELLS_MAX == 60 && UNIT_MEMORIZED_SPELLS_MAX == 30, "the unit record's two spell lists hold 60 and 30 entries");
 
 static const char *testFieldUnitEditProblem(const LuaScript *script, lua_Integer unit) {
+#ifndef __APPLE__
+    if (testFieldDeploymentBusy) return "field_transaction_active";
+#endif
+    if (testFieldLife.retiring) return "retirement_in_progress";
     if (!gameCodeMatches) return "game_code_differs";
     if (!testField.open) return "not_open";
     if (!testField.editor) return "not_editor_field";
     if (_stricmp(script->mod, testField.owner)) return "not_owner";
     if (testField.fighting) return "in_fight";
     if (testFieldFinalViewActive()) return "final_read_only";
+    if (testFieldLife.pending || testFieldLife.failed) return "cleanup_unverified";
     if (unit < 0 || unit >= UNIT_TABLE_MAX || unit > G32(RVA_UNIT_COUNT)) return "bad_unit";
     if (!isTestFieldActor((int)unit)) return "not_on_field";
     size_t at = (size_t)unit * UNIT_SIZE;
@@ -106,6 +111,14 @@ static int lRemoveTestFieldUnit(lua_State *L) {
             }
     if (!reason && tokens > 1) reason = "ambiguous_token";
     if (reason) return pushTestFieldEditResult(L, "coe5.removeTestFieldUnit", unit, reason);
+#ifndef __APPLE__
+    if (!retireTestFieldUnit((int)unit)) {
+        testFieldLife.failed = testFieldLife.pending = 1;
+        reason = "retirement_unverified";
+    }
+    (void)oldX;
+    (void)oldY;
+#else
     short *hp = (short *)GAME_PTR(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE), oldHp = *hp;
     if (tokens) *(int *)battleCell(oldX, oldY) = -1;
     *hp = 0;
@@ -114,6 +127,7 @@ static int lRemoveTestFieldUnit(lua_State *L) {
         if (tokens) *(int *)battleCell(oldX, oldY) = (int)unit;
         reason = "remove_failed";
     }
+#endif
     writeLog("test_field_unit_removed", "mod=%s unit=%lld removed=%d", script->mod, (long long)unit, reason == NULL);
     return pushTestFieldEditResult(L, "coe5.removeTestFieldUnit", unit, reason);
 }
@@ -178,6 +192,26 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "restoreHigherKnown", ready);
     setIntField(L, "equipmentPositions", ITEM_POSITION_MAX);
     setIntField(L, "maxBaseSchoolLevel", 3);
+#ifndef __APPLE__
+    setIntField(L, "unitRetirement", lifecycle);
+    setIntField(L, "clearHeldItems", lifecycle);
+    setIntField(L, "battleLogVisibility", lifecycle);
+    setIntField(L, "battleZoom", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
+    setIntField(L, "battleViewport", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
+    setIntField(L, "battleCenter", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
+    setIntField(L, "nativeMonsterInspectVersion", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI && testFieldTextPollReady);
+    int provenance = lifecycle && testFieldProvenanceCallsValid();
+    setIntField(L, "structureProvenance", provenance);
+    setIntField(L, "exactDeploymentVersion", provenance);
+    setIntField(L, "initialDeploymentVersion", provenance);
+    setIntField(L, "multipleUniquePolicy", provenance);
+    setIntField(L, "individualNameVersion", lifecycle);
+    setIntField(L, "individualNameMaxBytes", COMMANDER_NAME_SIZE - 1);
+    setIntField(L, "nativeLogLineBytes", 63);
+    setIntField(L, "minimumWidthVersion", lifecycle);
+    setIntField(L, "minimumWidthMin", TEST_FIELD_MIN_WIDTH);
+    setIntField(L, "minimumWidthMax", TEST_FIELD_MAX_WIDTH);
+#endif
     return 1;
 }
 
@@ -190,8 +224,11 @@ static void pushTestFieldMadeUnit(lua_State *L, int unit, const TestFieldMadeUni
     setIntField(L, "createdOwner", made->created.owner);
     setIntField(L, "createdWorldX", made->created.x);
     setIntField(L, "createdWorldY", made->created.y);
-    lua_pushstring(L, made->actor ? "actor" : "terrain");
+    lua_pushstring(L, testFieldUnitKind(made));
     lua_setfield(L, -2, "kind");
+    lua_pushstring(L, testFieldCreationSource(made->source));
+    lua_setfield(L, -2, "creationSource");
+    setBoolField(L, "provenanceVerified", made->source != TEST_FIELD_UNVERIFIED);
     setBoolField(L, "identityMatches", s.valid);
     setIntField(L, "hp", s.hp);
     setIntField(L, "monster", s.monster);
@@ -307,7 +344,7 @@ static int pushTestFieldState(lua_State *L, int extraUnit) {
     }
     int idCount = 0;
     for (int u = 0; u < UNIT_TABLE_MAX; u++)
-        if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0 && isTestFieldActor(u)) ids[idCount++] = u;
+        if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0 && isTestFieldBattler(u)) ids[idCount++] = u;
     if (extraUnit >= 0) ids[idCount++] = extraUnit;
     for (int x = 0; x < width; x++)
         for (int y = 0; y < BATTLE_ROWS; y++) {
@@ -333,13 +370,18 @@ static int pushTestFieldState(lua_State *L, int extraUnit) {
 
     lua_createtable(L, 0, 7);
     int state = lua_gettop(L);
+#ifndef __APPLE__
+    setIntField(L, "classificationVersion", 1);
+#endif
+    setIntField(L, "session", (lua_Integer)testFieldLife.session);
     setIntField(L, "width", width);
     setIntField(L, "height", BATTLE_ROWS);
     setBoolField(L, "emptyEditor", testField.emptyEditor);
     setBoolField(L, "allowMultipleUnique", testField.allowMultipleUnique);
     lua_newtable(L);
     int issues = lua_gettop(L), issueCount = 0;
-    int complete = 1, safeHit = 1;
+    int complete = !testFieldLife.failed && !testFieldLife.pending, safeHit = 1;
+    if (!complete) addTestFieldIssue(L, issues, &issueCount, "cleanup_unverified", -1, -1, -1);
     if (last < -1 || last >= UNIT_TABLE_MAX) {
         complete = safeHit = 0;
         addTestFieldIssue(L, issues, &issueCount, "bad_unit_table", -1, -1, -1);
@@ -352,7 +394,7 @@ static int pushTestFieldState(lua_State *L, int extraUnit) {
             addTestFieldIssue(L, issues, &issueCount, "invalid_unit", u->unit, -1, -1);
             continue;
         }
-        if (!isTestFieldActor(u->unit)) {
+        if (!isTestFieldBattler(u->unit)) {
             complete = safeHit = 0;
             addTestFieldIssue(L, issues, &issueCount, "foreign_unit", u->unit, -1, -1);
             continue;
@@ -417,6 +459,13 @@ static int pushTestFieldState(lua_State *L, int extraUnit) {
             setIntField(L, "generation", (lua_Integer)made->generation);
             setIntField(L, "createdMonster", made->created.monster);
             setIntField(L, "createdOwner", made->created.owner);
+            lua_pushstring(L, testFieldUnitKind(made));
+            lua_setfield(L, -2, "kind");
+            lua_pushstring(L, testFieldCreationSource(made->source));
+            lua_setfield(L, -2, "creationSource");
+            lua_pushliteral(L, "unit");
+            lua_setfield(L, -2, "anchorLayer");
+            setBoolField(L, "provenanceVerified", made->source != TEST_FIELD_UNVERIFIED);
         }
         setIntField(L, "width", u->width);
         setIntField(L, "height", u->height);

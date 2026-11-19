@@ -786,6 +786,7 @@ static void modsRunHook(int level) {
     battleMapsBeforePass(level);
     weaponTraitsBeforePass(level);
     uniqueGroupsBeforePass(level);
+    battleTokenSizesBeforePass(level);
     noExplodeBeforePass(level);
     beamWidthBeforePass(level);
     lookColorBeforePass(level);
@@ -824,6 +825,7 @@ static void modsRunHook(int level) {
     terrainLooksAfterPass(level);
     battleMapsAfterPass(level);
     transportsAfterPass(level);
+    battleTokenSizesAfterPass(level);
     syncLuaScriptsAfterPass(level);
     fallbackFontsAfterPass(level);
     drawnTextAroundPass(level);

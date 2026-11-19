@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 71
+#define ENTRY_HOOK_COUNT 81
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -74,6 +74,16 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"commander_ap_left", 0x3289a0, 10, 0, {{0, 0}}},
     {"commander_add_ap_used", 0x12c210, 8, 1, {{4, 0x12c31f}}},
     {"shipmove_spend_ap", 0x104fd0, 8, 1, {{4, 0x10531d}}},
+    {"unit_battle_height", 0x321a10, 6, 0, {{0, 0}}},
+    {"unit_battle_width", 0x325270, 6, 0, {{0, 0}}},
+    {"monster_battle_width", 0x31ea10, 6, 0, {{0, 0}}},
+    {"unit_battle_area", 0x326db0, 5, 0, {{0, 0}}},
+    {"battle_unit_at", 0x0edc30, 7, 0, {{0, 0}}},
+    {"battle_unit_at_2", 0x0eda80, 5, 0, {{0, 0}}},
+    {"battle_place_unit", 0x0e56e0, 5, 0, {{0, 0}}},
+    {"battle_fight_move", 0x0cb4d0, 5, 0, {{0, 0}}},
+    {"test_field_unit_name", 0x0f8520, 10, 0, {{0, 0}}},
+    {"test_field_commander_name", 0x0f8bd0, 6, 0, {{0, 0}}},
 };
 #else
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
@@ -148,5 +158,15 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"commander_ap_left", 0x56a66c, 16, 0, {{0, 0}}},
     {"commander_add_ap_used", 0x481578, 16, 0, {{0, 0}}},
     {"shipmove_spend_ap", 0x481120, 16, 0, {{0, 0}}},
+    {"unit_battle_height", 0x000000, 0, 0, {{0, 0}}},
+    {"unit_battle_width", 0x000000, 0, 0, {{0, 0}}},
+    {"monster_battle_width", 0x000000, 0, 0, {{0, 0}}},
+    {"unit_battle_area", 0x56a268, 16, 0, {{0, 0}}},
+    {"battle_unit_at", 0x3c0e3c, 16, 0, {{0, 0}}},
+    {"battle_unit_at_2", 0x3c1168, 16, 0, {{0, 0}}},
+    {"battle_place_unit", 0x3cd6d0, 16, 0, {{0, 0}}},
+    {"battle_fight_move", 0x3f43b4, 16, 0, {{0, 0}}},
+    {"test_field_unit_name", 0x000000, 0, 0, {{0, 0}}},
+    {"test_field_commander_name", 0x000000, 0, 0, {{0, 0}}},
 };
 #endif

@@ -151,6 +151,7 @@ static int spellPathWeightCopy(int path) {
 }
 static UNUSED int monsterBattleSizeCopy(int monster) {
     if (monster < 0) return 1;
+    if (battlesizeWidth(monster)) return battlesizeWidth(monster);
     unsigned long long flags = copyMonsterWord(monster, COPY_MONSTER_FLAGS);
     if (flags & (1ULL << 52)) return 1;
     if (flags & (1ULL << 53)) return 2;

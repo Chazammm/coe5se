@@ -9,6 +9,15 @@ static int lSetTestFieldConfiguration(lua_State *L);
 #define COE5SE_EXTRA_LUA_FUNCTIONS
 #endif
 
+#ifndef __APPLE__
+static int lTestFieldEnvironmentInfo(lua_State *L);
+static int lTestFieldEnvironmentState(lua_State *L);
+static int lTestFieldWaterState(lua_State *L);
+static int lSetTestFieldDeployment(lua_State *L);
+static int lTestFieldInitialDeployment(lua_State *L);
+static int lSetTestFieldMultipleUnique(lua_State *L);
+#endif
+
 static const luaL_Reg LUA_COE5[] = {
     {"testBattle", lTestBattle}, {"openTestField", lOpenTestField}, {"testFieldTerrains", lTestFieldTerrains},
     {"removeTestFieldUnit", lRemoveTestFieldUnit}, {"testFieldEditorCapabilities", lTestFieldEditorCapabilities},
@@ -21,6 +30,18 @@ static const luaL_Reg LUA_COE5[] = {
     {"battleCellToScreen", lBattleCellToScreen}, {"testFieldLoadoutState", lTestFieldLoadoutState},
     {"setTestFieldConfiguration", lSetTestFieldConfiguration}, {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
+    {"testFieldEnvironmentInfo", lTestFieldEnvironmentInfo}, {"testFieldEnvironmentState", lTestFieldEnvironmentState},
+    {"testFieldWaterState", lTestFieldWaterState},
+    {"setTestFieldDeployment", lSetTestFieldDeployment}, {"testFieldInitialDeployment", lTestFieldInitialDeployment},
+    {"setTestFieldMultipleUnique", lSetTestFieldMultipleUnique},
+    {"testFieldUnitName", lTestFieldUnitName}, {"setTestFieldUnitName", lSetTestFieldUnitName},
+    {"testFieldActorState", lTestFieldActorState}, {"setTestFieldActorState", lSetTestFieldActorState},
+    {"testFieldLogState", lTestFieldLogState}, {"setTestFieldLogVisible", lSetTestFieldLogVisible},
+    {"inspectTestFieldMonster", lInspectTestFieldMonster},
+    {"testFieldPointerWheel", lTestFieldPointerWheel}, {"testFieldZoom", lTestFieldZoom}, {"setTestFieldZoom", lSetTestFieldZoom},
+    {"testFieldViewport", lTestFieldViewport}, {"setTestFieldViewport", lSetTestFieldViewport},
+    {"fitTestFieldViewport", lFitTestFieldViewport}, {"panTestFieldViewport", lPanTestFieldViewport},
+    {"requestTestFieldBattleCenter", lRequestTestFieldBattleCenter}, {"testFieldBattleCenterState", lTestFieldBattleCenterState},
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
     {"setPreviewDocks", lSetPreviewDocks}, {"setPreviewHoverText", lSetPreviewHoverText},

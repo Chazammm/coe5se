@@ -15,7 +15,7 @@
     X(NAME_LISTS, "name_lists") X(AI_CLASS, "ai_class") X(MAXDATA, "maxdata") X(PERSONALMOD, "personalmod") X(LAN_SCRIPTS, "lan_scripts") X(SIDECAR, "sidecar") \
     X(PLUGIN_CHECKS, "plugin_checks") X(MOD_SETTINGS, "mod_settings") X(LOAD_ORDER, "load_order") X(ITEM_SLOTS, "item_slots") X(CUSTOM_AFFLICTIONS, "custom_afflictions") \
     X(ITEM_SLOT_STATS, "item_slot_stats") X(MAP_RENDERING, "map_rendering") X(FONT_FALLBACK, "font_fallback") \
-    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text") X(GROWTH, "growth")
+    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text") X(GROWTH, "growth") X(BATTLE_TOKENS, "battle_tokens")
 
 typedef enum {
 #define FEATURE_ENUM(id, name) FEATURE_##id,

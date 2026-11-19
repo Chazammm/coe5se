@@ -6,6 +6,15 @@
 #define TEST_BATTLE_ENEMY_PLAYER 24
 #define TEST_FIELD_FIRE_RANGE 30
 #define TEST_BATTLE_DELAY 400000
+#define TEST_FIELD_MIN_WIDTH 32
+#define TEST_FIELD_MAX_WIDTH 1536
+#if !defined(__APPLE__) && defined(__clang__) && __clang_major__ == 23
+#define TEST_FIELD_VERIFIED_WINDOWS_ABI 1
+#define TEST_FIELD_PRESERVE_ALL __attribute__((preserve_all, noinline))
+#else
+#define TEST_FIELD_VERIFIED_WINDOWS_ABI 0
+#define TEST_FIELD_PRESERVE_ALL __attribute__((noinline))
+#endif
 #include "test_field_terrain_arg.h"
 #include "test_field_terrain_policy.h"
 
@@ -15,6 +24,21 @@ static void resetTestFieldFinal(void);
 static void turnOffTestFieldFinal(void);
 static int testFieldFinalViewActive(void);
 static void turnOffTestFieldTraining(void);
+#ifndef __APPLE__
+static int testFieldNameClose(void);
+static int restoreTestFieldLog(void);
+static int restoreTestFieldZoom(void);
+static void testFieldBattleCenterBegin(void);
+static void testFieldBattleCenterFinish(void);
+#endif
+static int installBattleMapHooks(void);
+#ifndef __APPLE__
+static const char *testFieldEnvironmentProblem(void);
+static void testFieldInitialDeploymentReset(void);
+static void testFieldInitialDeploymentCapture(const LuaScript *script);
+static int testFieldDeploymentBusy;
+static int testFieldTemplateAvailable(const TestFieldTerrainPolicy *policy);
+#endif
 
 static void clearTestBattleSquare(int x, int y) {
     int last = G32(RVA_UNIT_COUNT);
@@ -36,7 +60,11 @@ static const char *testFieldTerrainProblem(lua_State *L, int terrain) {
     memcpy(&fortParts, record + TERRAIN_FORT_PARTS, sizeof fortParts);
     int matches = testFieldTerrainPolicyMatches(policy, lua_tostring(L, -1), flags, fortParts);
     lua_pop(L, 1);
-    return matches ? NULL : "unsupported_terrain";
+    if (!matches) return "unsupported_terrain";
+#ifndef __APPLE__
+    if (!testFieldTemplateAvailable(policy)) return "native_template_unavailable";
+#endif
+    return NULL;
 }
 
 static int lTestFieldTerrains(lua_State *L) {
@@ -71,12 +99,26 @@ static struct {
     int planeBorrowed, lastPlane;
     char owner[MOD_NAME_MAX];
     int fighting;
+    int minimumWidth, sizing;
+#ifndef __APPLE__
+    int environmentBorrowed, settingUp, setupComplete, nativeTemplateObserved, customMapReplaced;
+    int originalTower, originalSea, originalShipsA, originalShipsD;
+    char nativeTemplate[64];
+#endif
     short army, teamA, teamB;
     int mapW, mapH, activePlayer, delay, showFlag;
     unsigned char *spellWeaponRecord, spellWeaponSaved[WEAPON_SIZE];
 } testField;
 
 #include "test_field_lifecycle.h"
+
+static int applyTestFieldMinimumWidth(int width) {
+    if (!testField.open || !testField.editor || !testField.sizing || !testFieldLife.active ||
+        GetCurrentThreadId() != testFieldLife.thread || G32(RVA_BATTLE_X) != testField.x ||
+        G32(RVA_BATTLE_Y) != testField.y || width < 1 || width >= testField.minimumWidth) return width;
+    *(int *)GAME_PTR(RVA_BATTLE_WIDTH) = testField.minimumWidth;
+    return testField.minimumWidth;
+}
 
 static unsigned long long testFieldDrawSession;
 static const char *testFieldOpenFailure;
@@ -114,7 +156,25 @@ static void restoreTestFieldPlane(void) {
     *(int *)GAME_PTR(RVA_LAST_PLANE) = testField.lastPlane;
 }
 
+#ifndef __APPLE__
+static int restoreTestFieldEnvironment(void) {
+    if (!testField.environmentBorrowed) return 1;
+    G32(RVA_BATTLE_IS_TOWER) = testField.originalTower;
+    G32(RVA_BATTLE_AT_SEA) = testField.originalSea;
+    G32(RVA_BATTLE_SHIPS_A) = testField.originalShipsA;
+    G32(RVA_BATTLE_SHIPS_D) = testField.originalShipsD;
+    testField.environmentBorrowed = 0;
+    return G32(RVA_BATTLE_IS_TOWER) == testField.originalTower && G32(RVA_BATTLE_AT_SEA) == testField.originalSea &&
+           G32(RVA_BATTLE_SHIPS_A) == testField.originalShipsA && G32(RVA_BATTLE_SHIPS_D) == testField.originalShipsD;
+}
+#endif
+
 static int closeTestFieldNow(void) {
+    if (testFieldLife.retiring) return 0;
+#ifndef __APPLE__
+    if (testFieldDeploymentBusy) return 0;
+    testFieldInitialDeploymentReset();
+#endif
     resetTestFieldText();
     resetTestFieldFinal();
     turnOffTestFieldTraining();
@@ -126,8 +186,17 @@ static int closeTestFieldNow(void) {
     }
     int x = testField.x, y = testField.y, cleaned = 1;
     if (testField.spellWeaponRecord) memcpy(testField.spellWeaponRecord, testField.spellWeaponSaved, WEAPON_SIZE);
-    if (testField.editor) cleaned = removeTestFieldUnits();
-    else clearTestBattleSquare(x, y);
+    if (testField.editor) {
+#ifndef __APPLE__
+        cleaned = testFieldNameClose();
+        int logRestored = restoreTestFieldLog(), zoomRestored = restoreTestFieldZoom();
+        if (!logRestored || !zoomRestored) {
+            testFieldLife.failed = testFieldLife.pending = 1;
+            cleaned = 0;
+        }
+#endif
+        cleaned = removeTestFieldUnits() && cleaned;
+    } else clearTestBattleSquare(x, y);
     short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
     short *teamA = (short *)GAME_PTR(RVA_SLOT_TEAM), *teamB = (short *)GAME_PTR(RVA_SLOT_TEAM + (size_t)TEST_BATTLE_ENEMY_PLAYER * PLAYER_BLOCK_SIZE);
     memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);
@@ -154,6 +223,9 @@ static int closeTestFieldNow(void) {
                    (!testField.planeBorrowed || (!memcmp(planeRecord(0), testField.plane, PLANE_SIZE) && G32(RVA_LAST_PLANE) == testField.lastPlane));
     writeLog("test_field_closed", "x=%d y=%d borrowed_restored=%d neighbours_unchanged=%d actors_cleaned=%d session=%llu", x, y, restored,
              hashTestFieldNeighbours(x, y) == testField.neighbours, cleaned, testFieldLife.session);
+#ifndef __APPLE__
+    if (!restoreTestFieldEnvironment()) restored = 0;
+#endif
     if (!restored) testFieldLife.failed = testFieldLife.pending = 1;
     turnOffTestFieldLifecycle();
     return cleaned && restored;
@@ -172,9 +244,27 @@ typedef struct {
 
 typedef struct {
     lua_Integer monster, spell, standIn, terrain;
-    int terrainSpecified, allowMultipleUnique, emptyEditor;
+    int terrainSpecified, allowMultipleUnique, emptyEditor, minimumWidth;
     TestFieldSide friends, enemies;
 } TestFieldSpec;
+
+#ifndef __APPLE__
+static int testFieldWaterTransportMonster(int monster) {
+    uint64_t flags;memcpy(&flags,monsterRecord(monster)+MONSTER_MOVE_FLAGS,sizeof flags);
+    return (flags & UNIT_FLAG_SHIPMOVE) || monsterAbility(monster,0x1cf)>0 ||
+           monsterAbility(monster,0x1d2)>0 || monsterAbility(monster,0x1d3)>0;
+}
+static int testFieldWaterTransportUnit(int unit) {
+    uint64_t flags=GAME_FN(unsigned long long (*)(int),RVA_UNIT_FLAGS)(unit);
+    int (*total)(int,int,int,char *,int,int *)=GAME_FN(int (*)(int,int,int,char *,int,int *),RVA_UNIT_ABILITY_TOTAL);
+    return (flags & UNIT_FLAG_SHIPMOVE) || total(unit,0x1cf,1,NULL,0,NULL)>0 ||
+           total(unit,0x1d2,1,NULL,0,NULL)>0 || total(unit,0x1d3,1,NULL,0,NULL)>0;
+}
+static const char *testFieldWaterSideProblem(const TestFieldSide *side) {
+    for(int g=0;g<side->groupCount;g++)if(testFieldWaterTransportMonster(side->groups[g].monster))return "water_transport_unavailable";
+    return NULL;
+}
+#endif
 
 static const char *testFieldUniqueProblem(int commander, const TestFieldSide *friends, const TestFieldSide *enemies, int *monster, int *existing,
                                           long long *requested) {
@@ -266,7 +356,7 @@ static const char *readTestFieldGroups(lua_State *L, int index, TestFieldSide *s
 static int testFieldOptionScanChanged;
 
 static int testFieldHasEditorOption(lua_State *L) {
-    static const char *const KEYS[] = {"terrain", "allowMultipleUnique", "emptyEditor"};
+    static const char *const KEYS[] = {"terrain", "allowMultipleUnique", "emptyEditor", "minimumWidth"};
     testFieldOptionScanChanged = 0;
     if (!lua_istable(L, 1)) return 0;
     int wasOpen = testField.open, wasPlayer = G32(RVA_ACTIVE_PLAYER);
@@ -314,6 +404,15 @@ static const char *readTestFieldSpec(lua_State *L, TestFieldSpec *spec) {
     if (reason) return reason;
     if (!readTestFieldSwitch(L, "allowMultipleUnique", 0, &spec->allowMultipleUnique)) return "bad_allow_multiple_unique";
     if (!readTestFieldSwitch(L, "emptyEditor", 1, &spec->emptyEditor)) return "bad_empty_editor";
+    lua_pushliteral(L, "minimumWidth");
+    lua_rawget(L, 1);
+    if (!lua_isnil(L, -1)) {
+        lua_Integer width = lua_tointeger(L, -1);
+        int valid = lua_isinteger(L, -1) && width >= TEST_FIELD_MIN_WIDTH && width <= TEST_FIELD_MAX_WIDTH;
+        lua_pop(L, 1);
+        if (!valid) return "bad_minimum_width";
+        spec->minimumWidth = (int)width;
+    } else lua_pop(L, 1);
     if (spec->terrainSpecified) {
         reason = testFieldTerrainProblem(L, (int)spec->terrain);
         if (reason) return reason;
@@ -413,7 +512,7 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
                        : testField.open              ? "already_open"
                                                      : readTestFieldSpec(L, spec);
     if (editor && !reason && (testField.open || testFieldLife.session != expectedSession || G32(RVA_ACTIVE_PLAYER) >= 0)) reason = "context_changed";
-    if (!editor && !reason && (spec->terrainSpecified || spec->allowMultipleUnique || spec->emptyEditor)) reason = "context_changed";
+    if (!editor && !reason && (spec->terrainSpecified || spec->allowMultipleUnique || spec->emptyEditor || spec->minimumWidth)) reason = "context_changed";
     lua_Integer monster = spec->monster, spell = spec->spell, standIn = spec->standIn;
     int spellWeapon = spell >= 0 && spell < spellTableRecords() ? spellSlot((int)spell)->weapon : -1;
     if (!reason)
@@ -427,6 +526,13 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     int uniqueMonster = -1, existingUnique = -1;
     long long uniqueRequested = 0;
     if (editor && !reason && (testFieldLife.pending || testFieldLife.failed)) reason = "cleanup_unverified";
+#ifndef __APPLE__
+    if (editor && !reason && spec->terrainSpecified && testFieldTerrainPolicyWater(findTestFieldTerrainPolicy((int)spec->terrain))) {
+        reason = !spec->emptyEditor && testFieldWaterTransportMonster((int)monster) ? "water_transport_unavailable" :
+                 testFieldWaterSideProblem(&spec->friends);
+        if (!reason) reason = testFieldWaterSideProblem(&spec->enemies);
+    }
+#endif
     if (editor && !reason && !spec->allowMultipleUnique)
         reason = testFieldUniqueProblem((int)monster, &spec->friends, &spec->enemies, &uniqueMonster, &existingUnique, &uniqueRequested);
     if (editor && !reason && (G32(RVA_UNIT_COUNT) < -1 || G32(RVA_UNIT_COUNT) >= UNIT_TABLE_MAX)) reason = "bad_unit_table";
@@ -434,6 +540,17 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
         if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0 && G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE) == TEST_BATTLE_X &&
             G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE + 4) == TEST_BATTLE_Y)
             reason = "temporary_square_busy";
+    if (!reason && (spec->minimumWidth
+#ifndef __APPLE__
+        || (editor && spec->terrainSpecified)
+#endif
+        )) {
+#ifdef __APPLE__
+        reason = "minimum_width_unavailable";
+#else
+        if (!installBattleMapHooks()) reason = "minimum_width_unavailable";
+#endif
+    }
     if (reason)
         return refuseTestFieldOpen(s, call, spec, reason, "monster=%lld spell=%lld friends=%d enemies=%d unique_monster=%d existing_unit=%d requested=%lld",
                                    (long long)monster, (long long)spell, spec->friends.groupCount, spec->enemies.groupCount, uniqueMonster, existingUnique,
@@ -445,10 +562,22 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     testField.allowMultipleUnique = spec->allowMultipleUnique;
     testField.emptyEditor = spec->emptyEditor;
     testField.terrain = terrain;
+    testField.minimumWidth = spec->minimumWidth;
     testField.neighbours = hashTestFieldNeighbours(x, y);
     testField.mapW = G32(RVA_MAP_W);
     testField.mapH = G32(RVA_MAP_H);
     testField.planeBorrowed = explicitTerrain;
+#ifndef __APPLE__
+    testField.environmentBorrowed = editor && explicitTerrain;
+    testField.setupComplete = testField.nativeTemplateObserved = testField.customMapReplaced = 0;
+    testField.nativeTemplate[0] = 0;
+    if (testField.environmentBorrowed) {
+        testField.originalTower = G32(RVA_BATTLE_IS_TOWER);
+        testField.originalSea = G32(RVA_BATTLE_AT_SEA);
+        testField.originalShipsA = G32(RVA_BATTLE_SHIPS_A);
+        testField.originalShipsD = G32(RVA_BATTLE_SHIPS_D);
+    }
+#endif
     if (explicitTerrain) {
         memcpy(testField.plane, planeRecord(0), PLANE_SIZE);
         testField.lastPlane = G32(RVA_LAST_PLANE);
@@ -544,9 +673,37 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
              (long long)monster, (long long)spell, testFieldFriendMade, testFieldEnemyMade, terrain, explicitTerrain, *(short *)(square + SQUARE_GROUND),
              testField.emptyEditor, editor);
     enterTestFieldCode();
+    testField.sizing = testField.minimumWidth > 0;
+#ifndef __APPLE__
+    testField.settingUp = testField.environmentBorrowed;
+#endif
     GAME_FN(void (*)(int, int, int), RVA_BATTLE_SETUP)(x, y, 0);
+    testField.sizing = 0;
+#ifndef __APPLE__
+    testField.settingUp = 0;
+    testField.setupComplete = 1;
+    const char *invalid = testFieldEnvironmentProblem();
+    if (invalid) {
+        leaveTestFieldCode();
+        int cleaned = closeTestFieldNow();
+        return refuseTestFieldOpen(s, call, NULL, cleaned ? invalid : "cleanup_unverified", "terrain=%d", terrain);
+    }
+#endif
+    int readyWidth = G32(RVA_BATTLE_WIDTH);
+    if (testField.minimumWidth && (readyWidth < testField.minimumWidth || readyWidth > TEST_FIELD_MAX_WIDTH)) {
+        leaveTestFieldCode();
+        int cleaned = closeTestFieldNow();
+        return refuseTestFieldOpen(s, call, NULL, cleaned ? "minimum_width_not_applied" : "cleanup_unverified", "width=%d", readyWidth);
+    }
     GAME_FN(void (*)(int, int, int), RVA_BATTLE_DEPLOY)(-1, x, y);
     leaveTestFieldCode();
+    if (editor && (testFieldLife.failed || testFieldLife.pending)) {
+        closeTestFieldNow();
+        return refuseTestFieldOpen(s, call, NULL, "cleanup_unverified", "terrain=%d", terrain);
+    }
+#ifndef __APPLE__
+    if (editor && testField.environmentBorrowed) testFieldInitialDeploymentCapture(s);
+#endif
     return 1;
 }
 
@@ -576,9 +733,9 @@ static int testFieldCallIsEditor(lua_State *L) {
 }
 
 static int testFieldIsOpen(lua_State *L, const char *call) {
-    if (testField.open) return 1;
+    if (testField.open && !testFieldLife.retiring) return 1;
     LuaScript *s = checkLuaScript(L);
-    refuseLuaCall(s->mod, call, "not_open", "field=closed");
+    refuseLuaCall(s->mod, call, testFieldLife.retiring ? "retirement_in_progress" : "not_open", "available=0");
     return 0;
 }
 
@@ -601,8 +758,19 @@ static const char *testFieldFightProblem(const LuaScript *script, int *teamA, in
     if (!testField.open) return "not_open";
     if (_stricmp(script->mod, testField.owner)) return "not_owner";
     if (testField.fighting) return "in_fight";
+    if (testFieldLife.retiring) return "retirement_in_progress";
     if (testFieldFinalViewActive()) return "final_read_only";
     if (testFieldLife.pending || testFieldLife.failed || !testFieldLife.active) return "cleanup_unverified";
+#ifndef __APPLE__
+    if (testFieldDeploymentBusy) return "field_transaction_active";
+    const char *environment = testFieldEnvironmentProblem();
+    if (environment) return environment;
+    if (testField.environmentBorrowed && testFieldTerrainPolicyWater(findTestFieldTerrainPolicy(testField.terrain))) {
+        for (int unit = 0; unit < UNIT_TABLE_MAX; unit++)
+            if (isTestFieldActor(unit) && G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) > 0 && testFieldWaterTransportUnit(unit))
+                return "water_transport_unavailable";
+    }
+#endif
     int width = G32(RVA_BATTLE_WIDTH), last = G32(RVA_UNIT_COUNT);
     if (width < 1 || width > BATTLE_COLUMNS_MAX) return "bad_field";
     if (last < -1 || last >= UNIT_TABLE_MAX) return "bad_unit_table";
@@ -613,7 +781,7 @@ static const char *testFieldFightProblem(const LuaScript *script, int *teamA, in
         for (int y = 0; !reason && y < BATTLE_ROWS; y++) {
             int unit = *(const int *)battleCell(x, y);
             if (unit == -1) continue;
-            if (unit < 0 || unit > last || unit >= UNIT_TABLE_MAX || !isTestFieldActor(unit)) {
+            if (unit < 0 || unit > last || unit >= UNIT_TABLE_MAX || !isTestFieldBattler(unit)) {
                 reason = "not_on_field";
                 break;
             }
@@ -627,12 +795,14 @@ static const char *testFieldFightProblem(const LuaScript *script, int *teamA, in
             if (G16(RVA_UNIT_HP + at) <= 0) reason = "dead_unit";
             else if (!isUsedMonster(monster)) reason = "bad_monster";
             else if (G32(RVA_UNIT_X + at) != testField.x || G32(RVA_UNIT_X + at + 4) != testField.y) reason = "not_on_field";
-            else if (player == 0) (*teamA)++;
-            else if (player == TEST_BATTLE_ENEMY_PLAYER) (*teamB)++;
-            else reason = "not_on_field";
+            else if (player != 0 && player != TEST_BATTLE_ENEMY_PLAYER) reason = "not_on_field";
+            else if (isTestFieldActor(unit)) {
+                if (player == 0) (*teamA)++;
+                else (*teamB)++;
+            }
         }
     for (int unit = 0; !reason && unit < UNIT_TABLE_MAX; unit++)
-        if (isTestFieldActor(unit) && G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) > 0 && !seen[unit]) reason = "not_on_field";
+        if (isTestFieldBattler(unit) && G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) > 0 && !seen[unit]) reason = "not_on_field";
     free(seen);
     return reason ? reason : !*teamA ? "missing_team_a" : !*teamB ? "missing_team_b" : NULL;
 }
@@ -648,10 +818,16 @@ static int lDrawTestField(lua_State *L) {
 static void fightTestFieldNow(void) {
     resetTestFieldText();
     testField.fighting = 1;
+#ifndef __APPLE__
+    testFieldBattleCenterBegin();
+#endif
     enterTestFieldCode();
     GAME_FN(void (*)(int, int), RVA_FIGHT_THE_FIGHT)(testField.x, testField.y);
     leaveTestFieldCode();
     testField.fighting = 0;
+#ifndef __APPLE__
+    testFieldBattleCenterFinish();
+#endif
 }
 
 static void fireTestFieldNow(void) {
@@ -729,7 +905,8 @@ static int lCloseTestField(lua_State *L) {
     }
     checkLuaMainThread(L, "coe5.closeTestField");
     LuaScript *script = checkLuaScript(L);
-    const char *reason = testFieldLife.session && _stricmp(script->mod, testFieldLife.owner) ? "not_owner" : NULL;
+    const char *reason = testFieldLife.session && _stricmp(script->mod, testFieldLife.owner) ? "not_owner" :
+                         testFieldLife.retiring ? "retirement_in_progress" : NULL;
     int ok = !reason && closeTestFieldNow();
     if (!ok && !reason) reason = "cleanup_unverified";
     if (reason) refuseLuaCall(script->mod, "coe5.closeTestField", reason, "session=%llu", testFieldLife.session);
@@ -748,7 +925,8 @@ static int lAddTestFieldUnits(lua_State *L) {
     int friends = !strcmp(side, "friends"), enemies = !strcmp(side, "enemies");
     int player = friends ? 0 : TEST_BATTLE_ENEMY_PLAYER;
     TestFieldSide groups = {0};
-    const char *reason = editor && !gameCodeMatches                   ? "game_code_differs"
+    const char *reason = testFieldLife.retiring                       ? "retirement_in_progress"
+                       : editor && !gameCodeMatches                   ? "game_code_differs"
                        : !testField.open                              ? "not_open"
                        : editor && _stricmp(s->mod, testField.owner) ? "not_owner"
                        : editor && testField.fighting                 ? "in_fight"
@@ -758,7 +936,15 @@ static int lAddTestFieldUnits(lua_State *L) {
     if (editor && !reason &&
         (!testField.open || testFieldLife.session != expectedSession || _stricmp(s->mod, testField.owner) || testField.fighting || testFieldFinalViewActive()))
         reason = "context_changed";
+#ifndef __APPLE__
+    if (!reason && testFieldDeploymentBusy) reason = "field_transaction_active";
+#endif
     if (!reason && !groups.units) reason = "bad_count";
+    if (!reason && editor && (testFieldLife.pending || testFieldLife.failed)) reason = "cleanup_unverified";
+#ifndef __APPLE__
+    if (!reason && editor && testField.environmentBorrowed && testFieldTerrainPolicyWater(findTestFieldTerrainPolicy(testField.terrain)))
+        reason = testFieldWaterSideProblem(&groups);
+#endif
     int uniqueMonster = -1, existingUnique = -1;
     long long uniqueRequested = 0;
     if (editor && !reason && (testFieldLife.pending || testFieldLife.failed)) reason = "cleanup_unverified";
@@ -792,8 +978,9 @@ static int lAddTestFieldUnits(lua_State *L) {
 }
 
 static int testFieldTokenCovering(int x, int y, int layer, int self, int strict) {
-    for (int ax = x - 2; ax <= x; ax++)
-        for (int ay = y - 2; ay <= y; ay++) {
+    int reach = battleTokenReach();
+    for (int ax = x - reach + 1; ax <= x; ax++)
+        for (int ay = y - reach + 1; ay <= y; ay++) {
             if (ax < 0 || ay < 0) continue;
             int u = *(const int *)(battleCell(ax, ay) + layer);
             if (u == -1 || u == self) continue;
@@ -809,6 +996,23 @@ static int testFieldTokenCovering(int x, int y, int layer, int self, int strict)
     return -1;
 }
 
+#ifndef __APPLE__
+static int testFieldSiegeObjectCandidate(int object) {
+    if (!testField.environmentBorrowed || !testField.setupComplete || !G32(RVA_BATTLE_IS_SIEGE) ||
+        testFieldEnvironmentProblem() || !isTestFieldUnit(object)) return 0;
+    const TestFieldMadeUnit *made = &testFieldLife.actors[object];
+    size_t at = (size_t)object * UNIT_SIZE;
+    return (made->source == TEST_FIELD_MAP_OBJECT || made->source == TEST_FIELD_SCATTER) &&
+           G16(RVA_UNIT_HP + at) > 0 && G16(RVA_UNIT_PLAYER + at) == made->created.owner &&
+           G16(RVA_UNIT_MONSTER + at) == made->created.monster;
+}
+
+static int testFieldSiegeObjectPassable(int unit, int x, int y, int object) {
+    return isTestFieldActor(unit) && testFieldSiegeObjectCandidate(object) &&
+           GAME_FN(int (*)(int, int, int, int), RVA_BATTLE_CAN_STAND)(unit, x, y, 0);
+}
+#endif
+
 static int lMoveTestFieldUnit(lua_State *L) {
     int editor = testFieldCallIsEditor(L);
     if (editor) checkLuaMainThread(L, "coe5.moveTestFieldUnit");
@@ -816,6 +1020,7 @@ static int lMoveTestFieldUnit(lua_State *L) {
     lua_Integer unit = luaL_checkinteger(L, 1), x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
     int fromX = -1, fromY = -1;
     const char *reason = NULL;
+    if (testFieldLife.retiring) return refuseTestFieldCall(L, "coe5.moveTestFieldUnit", "retirement_in_progress", 0, "field=unchanged");
     if (!editor) {
         reason = !testField.open ? "not_open" : unit < 0 || unit >= UNIT_TABLE_MAX || !unitBattleCell((int)unit, &fromX, &fromY) ? "not_on_field" : NULL;
     } else {
@@ -826,6 +1031,7 @@ static int lMoveTestFieldUnit(lua_State *L) {
                : testFieldFinalViewActive()                                      ? "final_read_only"
                : unit < 0 || unit >= UNIT_TABLE_MAX || unit > G32(RVA_UNIT_COUNT) ? "bad_unit"
                                                                                  : NULL;
+        if (!reason && (testFieldLife.failed || testFieldLife.pending)) reason = "cleanup_unverified";
         if (!reason && !isTestFieldActor((int)unit)) reason = "not_on_field";
         if (!reason && (G32(RVA_BATTLE_WIDTH) < 1 || G32(RVA_BATTLE_WIDTH) > BATTLE_COLUMNS_MAX)) reason = "bad_field";
         if (!reason) {
@@ -842,18 +1048,28 @@ static int lMoveTestFieldUnit(lua_State *L) {
     if (!reason) {
         w = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE_2)((int)unit);
         h = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE)((int)unit);
-        if (x < 0 || y < 0 || x + w > G32(RVA_BATTLE_WIDTH) || y + h > BATTLE_ROWS) reason = "off_field";
+        if (w < 1 || w > battleTokenReach() || h < 1 || h > battleTokenReach()) reason = "bad_footprint";
+        else if (x < 0 || y < 0 || x > G32(RVA_BATTLE_WIDTH) - w || y > BATTLE_ROWS - h) reason = "off_field";
     }
     for (int cx = (int)x; !reason && cx < x + w; cx++)
-        for (int cy = (int)y; !reason && cy < y + h; cy++)
-            if (testFieldTokenCovering(cx, cy, 0, (int)unit, editor) >= 0 || testFieldTokenCovering(cx, cy, BATTLE_CELL_OBJECT, (int)unit, editor) >= 0)
-                reason = "blocked";
+        for (int cy = (int)y; !reason && cy < y + h; cy++) {
+            int actor = testFieldTokenCovering(cx, cy, 0, (int)unit, editor);
+            int object = testFieldTokenCovering(cx, cy, BATTLE_CELL_OBJECT, (int)unit, editor);
+#ifndef __APPLE__
+            if (editor && actor < 0 && object >= 0 && testFieldSiegeObjectPassable((int)unit, (int)x, (int)y, object)) continue;
+#endif
+            if (actor >= 0 || object >= 0) reason = "blocked";
+        }
     if (reason && !editor) {
         refuseLuaCall(s->mod, "coe5.moveTestFieldUnit", reason, "unit=%lld x=%lld y=%lld", (long long)unit, (long long)x, (long long)y);
         lua_pushboolean(L, 0);
         return 1;
     }
     if (reason) return refuseTestFieldCall(L, "coe5.moveTestFieldUnit", reason, 0, "unit=%lld x=%lld y=%lld", (long long)unit, (long long)x, (long long)y);
+#ifndef __APPLE__
+    if (testFieldDeploymentBusy) return refuseTestFieldCall(L, "coe5.moveTestFieldUnit", "field_transaction_active", 0, "field=unchanged");
+    if (editor) testFieldInitialDeploymentReset();
+#endif
     *(int *)battleCell(fromX, fromY) = -1;
     *(int *)battleCell((int)x, (int)y) = (int)unit;
     lua_pushboolean(L, 1);

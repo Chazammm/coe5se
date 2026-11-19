@@ -214,6 +214,12 @@ static void clearspecLineHook(const char *line, int level);
 static int itemWordLineHook(const char *line, size_t len, int mod, int level);
 static int declinedItemWordLine(const char *line, size_t len, int mod, int level);
 static int refusedItemSpellPathLine(const char *line, size_t len, int mod, int level);
+static void battleTokenLineHook(const char *line, size_t len, int level);
+static int battlesizeWidth(int monster);
+static int battlesizeHeight(int monster);
+static int battleTokenReach(void);
+static void battleTokenSizesBeforePass(int level);
+static void battleTokenSizesAfterPass(int level);
 static void ritualWordsAfterPass(int level);
 static const char *corpseWordLineHook(const char *line, size_t len, int mod, int level);
 static int corpseEventLine(const char *line, int level);
@@ -1289,10 +1295,25 @@ static void notifyObservers(CallSite site, const CallInfo *call, int after) {
     }
 }
 
+#ifndef __APPLE__
+static _Thread_local uintptr_t observedNewUnitCaller;
+#endif
+
 static u64 runObserved(CallSite site, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u64 a6, u64 a7, u64 a8) {
     CallInfo call = {{a1, a2, a3, a4, a5, a6}, 0};
+#ifndef __APPLE__
+    uintptr_t caller = 0;
+    if (site == SITE_NEW_UNIT) memcpy(&caller, (const void *)siteStubData(site)->rsp, sizeof caller);
+#endif
     notifyObservers(site, &call, 0);
+#ifndef __APPLE__
+    uintptr_t previous = observedNewUnitCaller;
+    if (site == SITE_NEW_UNIT) observedNewUnitCaller = caller;
+#endif
     u64 result = nextObserved[site](a1, a2, a3, a4, a5, a6, a7, a8);
+#ifndef __APPLE__
+    if (site == SITE_NEW_UNIT) observedNewUnitCaller = previous;
+#endif
     call = (CallInfo){{a1, a2, a3, a4, a5, a6}, result};
     notifyObservers(site, &call, 1);
     return result;
@@ -1958,12 +1979,21 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_input.h"
 #include "lua_test_field_final.h"
 #include "lua_test_field_inspect.h"
+#ifndef __APPLE__
+#include "lua_test_field_names.h"
+#include "lua_test_field_actor_state.h"
+#include "lua_test_field_log.h"
+#include "lua_test_field_zoom.h"
+#endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "lua_battle_banish.h"
 #include "lua_battle_summon.h"
 #include "read_filter.h"
 #include "preview_world.h"
+#ifndef __APPLE__
+#include "lua_test_field_monster_inspect.h"
+#endif
 #include "lua_loading.h"
 #include "game_data.h"
 #include "content_travel.h"
@@ -1975,9 +2005,16 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "preview_lines.h"
 #include "terrain_looks.h"
 #include "battle_maps.h"
+#ifndef __APPLE__
+#include "lua_test_field_environment.h"
+#include "lua_test_field_actor_body.h"
+#include "lua_test_field_deployment.h"
+#include "lua_test_field_unique_policy.h"
+#endif
 #include "lua_transport.h"
 #include "transport_deck.h"
 #include "transport_site.h"
+#include "battle_token_size.h"
 #include "event_finders.h"
 #include "drown_search.h"
 #include "battle_snapshot.h"
@@ -2125,6 +2162,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_WEAPON_TRAITS)) weaponTraitsInit();
     if (featureOn(FEATURE_SPELL_WORDS)) healArmyInit();
     if (featureOn(FEATURE_GROWTH)) growthInit();
+    if (featureOn(FEATURE_BATTLE_TOKENS)) battleTokenWordsInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) beamWidthInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) lookColorInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) traitLinesInit();

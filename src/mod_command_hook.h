@@ -71,6 +71,7 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     if (featureOn(FEATURE_MONSTER_FLAGS) && flagOffLineHook(line, len, mod, level)) return;
     if (featureOn(FEATURE_MONSTER_FLAGS) && itemWordLineHook(line, len, mod, level)) return;
     if (featureOn(FEATURE_WEAPON_TRAITS)) weaponTraitLineHook(line, len, level);
+    if (featureOn(FEATURE_BATTLE_TOKENS)) battleTokenLineHook(line, len, level);
     if (featureOn(FEATURE_NO_EXPLODE)) noExplodeLineHook(line, len, mod, level);
     clearspecLineHook(line, level);
     recBonusLineHook(line, len, mod, level);

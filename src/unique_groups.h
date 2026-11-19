@@ -229,8 +229,11 @@ static int uniqueGroupUnitFirst(int monster) {
     return uniqueGroupSearch(monster, -1);
 }
 
+static int testFieldBypassPreviewUnique(int monster);
+static unsigned char *uniqueGroupNewUnitStub;
+
 static int newUnitUniqueHook(int monster) {
-    if (testFieldAllowsSecondUnique()) return -1;
+    if (testFieldBypassPreviewUnique(monster) || testFieldAllowsSecondUnique()) return -1;
     return uniqueGroupUnitFirst(monster);
 }
 
@@ -266,6 +269,7 @@ static int installUniqueGroupSearches(void) {
     makePagesReadExecute(page, 0x1000);
     uniqueGroupPickRsp = (uintptr_t *)data;
     uniqueGroups.newUnitCall = redirectCall(RVA_NEW_UNIT_UNIQUE_CALL, RVA_MONSTER_UNIT_FIRST, page, (void *)newUnitUniqueHook, "unique_new_unit", NULL);
+    if (uniqueGroups.newUnitCall) uniqueGroupNewUnitStub = page;
     int ok = uniqueGroups.newUnitCall +
              redirectCall(RVA_SUMMON_TO_UNIT_UNIQUE_CALL, RVA_MONSTER_UNIT_FIRST, page + UNIQUE_GROUP_STUB, (void *)uniqueGroupUnitFirst,
                           "unique_summon", NULL) +

@@ -30,6 +30,7 @@ static int monsterBattleSizeCopy(int monster);
 
 // @platform-split test_field_copies: Mac's compiler copied the memorize allowance and the monster token width into their callers, so CoE5SE's copies run there (lua_game_copies.h)
 static int monsterTokenWidth(int monster) {
+    if (battlesizeWidth(monster)) return battlesizeWidth(monster);
 #ifdef __APPLE__
     return monsterBattleSizeCopy(monster);
 #else
@@ -38,6 +39,7 @@ static int monsterTokenWidth(int monster) {
 }
 
 static int monsterTokenHeight(int monster) {
+    if (battlesizeHeight(monster)) return battlesizeHeight(monster);
     const unsigned char *record = monsterRecord(monster);
     uint64_t flags, moveFlags;
     memcpy(&flags, record + (RVA_MONSTER_FLAGS - RVA_MONSTER_TABLE), sizeof flags);
@@ -70,7 +72,7 @@ static const char *readTestFieldFootprint(LuaScript *script, lua_Integer monster
         height = monsterTokenHeight((int)monster);
         if (!height) return "bad_sprite_size";
     }
-    if (width < 1 || width > 3 || height < 1 || height > 3) return "bad_footprint";
+    if (width < 1 || width > battleTokenReach() || height < 1 || height > battleTokenReach()) return "bad_footprint";
     *out = (TestFieldFootprint){(int)monster, (int)unit, width, height};
     return NULL;
 }
@@ -108,8 +110,9 @@ static int testFieldUnitCovering(int x, int y, int layer, int ignore, int *uncer
         *uncertain = 1;
         return -1;
     }
-    for (int ax = x - 2; ax <= x; ax++)
-        for (int ay = y - 2; ay <= y; ay++) {
+    int reach = battleTokenReach();
+    for (int ax = x - reach + 1; ax <= x; ax++)
+        for (int ay = y - reach + 1; ay <= y; ay++) {
             if (ax < 0 || ay < 0) continue;
             int unit = *(const int *)(battleCell(ax, ay) + layer);
             if (unit == -1 || unit == ignore) continue;
@@ -125,7 +128,7 @@ static int testFieldUnitCovering(int x, int y, int layer, int ignore, int *uncer
             }
             int w = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE_2)(unit);
             int h = GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE)(unit);
-            if (w < 1 || w > 3 || h < 1 || h > 3) {
+            if (w < 1 || w > reach || h < 1 || h > reach) {
                 *uncertain = 1;
                 continue;
             }
@@ -160,6 +163,9 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
     lua_createtable(L, 0, 15);
     int result = lua_gettop(L);
     pushTestFieldFootprint(L, &f);
+#ifndef __APPLE__
+    setIntField(L, "version", 2);
+#endif
     setBoolField(L, "partial", 1);
     lua_pushliteral(L, "geometry_and_occupancy_only");
     lua_setfield(L, result, "reason");
@@ -168,11 +174,23 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
     for (int dx = 0; dx < f.width; dx++)
         for (int dy = 0; dy < f.height; dy++) {
             int cx = (int)x + dx, cy = (int)y + dy, actor = -1, object = -1, uncertain = 0;
-            const char *status = "out_of_bounds";
+            const char *status = "out_of_bounds", *decision = NULL;
             if (cx >= 0 && cy >= 0 && cx < view.width && cy < view.height) {
                 actor = testFieldUnitCovering(cx, cy, 0, ignoreSelf ? (int)unit : -1, &uncertain);
                 object = testFieldUnitCovering(cx, cy, BATTLE_CELL_OBJECT, ignoreSelf ? (int)unit : -1, &uncertain);
                 status = uncertain ? "unknown" : actor >= 0 ? "occupied" : object >= 0 ? "terrain" : "clear";
+#ifndef __APPLE__
+                if (!uncertain && actor < 0 && object >= 0 && testFieldSiegeObjectCandidate(object)) {
+                    int fits = x >= 0 && y >= 0 && x <= view.width - f.width && y <= view.height - f.height;
+                    if (unit < 0) {
+                        status = "unknown";
+                        decision = "requires_instance";
+                    } else if (fits && testFieldSiegeObjectPassable((int)unit, (int)x, (int)y, object)) {
+                        status = "clear";
+                        decision = "native_instance_accepted";
+                    } else decision = "native_move_rejected";
+                }
+#endif
             }
             if (strcmp(status, "clear")) valid = 0;
             lua_createtable(L, 0, 8);
@@ -182,6 +200,10 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
             setIntField(L, "object", object);
             lua_pushstring(L, status);
             lua_setfield(L, -2, "status");
+            if (decision) {
+                lua_pushstring(L, decision);
+                lua_setfield(L, -2, "objectDecision");
+            }
             lua_pushnumber(L, ((float)cx + 0.5f) * view.cellSize + view.baseX + view.cameraX);
             lua_setfield(L, -2, "screenX");
             lua_pushnumber(L, ((float)cy + 0.5f) * view.cellSize + view.baseY + view.cameraY);
