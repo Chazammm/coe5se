@@ -8,6 +8,11 @@
 #define TEST_BATTLE_DELAY 400000
 #define TEST_FIELD_MIN_WIDTH 32
 #define TEST_FIELD_MAX_WIDTH 1536
+#if !defined(__APPLE__) && defined(__clang__) && __clang_major__ == 23
+#define TEST_FIELD_VERIFIED_WINDOWS_ABI 1
+#else
+#define TEST_FIELD_VERIFIED_WINDOWS_ABI 0
+#endif
 #include "test_field_terrain_arg.h"
 #include "test_field_terrain_policy.h"
 
@@ -20,6 +25,9 @@ static void turnOffTestFieldTraining(void);
 #ifndef __APPLE__
 static int testFieldNameClose(void);
 static int restoreTestFieldLog(void);
+static int restoreTestFieldZoom(void);
+static void testFieldBattleCenterBegin(void);
+static void testFieldBattleCenterFinish(void);
 #endif
 static int installBattleMapHooks(void);
 #ifndef __APPLE__
@@ -181,7 +189,8 @@ static int closeTestFieldNow(void) {
     if (testField.editor) {
 #ifndef __APPLE__
         cleaned = testFieldNameClose();
-        if (!restoreTestFieldLog()) {
+        int logRestored = restoreTestFieldLog(), zoomRestored = restoreTestFieldZoom();
+        if (!logRestored || !zoomRestored) {
             testFieldLife.failed = testFieldLife.pending = 1;
             cleaned = 0;
         }
@@ -810,10 +819,16 @@ static int lDrawTestField(lua_State *L) {
 static void fightTestFieldNow(void) {
     resetTestFieldText();
     testField.fighting = 1;
+#ifndef __APPLE__
+    testFieldBattleCenterBegin();
+#endif
     enterTestFieldCode();
     GAME_FN(void (*)(int, int), RVA_FIGHT_THE_FIGHT)(testField.x, testField.y);
     leaveTestFieldCode();
     testField.fighting = 0;
+#ifndef __APPLE__
+    testFieldBattleCenterFinish();
+#endif
 }
 
 static void fireTestFieldNow(void) {

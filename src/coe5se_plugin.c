@@ -1978,6 +1978,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_names.h"
 #include "lua_test_field_actor_state.h"
 #include "lua_test_field_log.h"
+#include "lua_test_field_zoom.h"
 #endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"

@@ -4346,6 +4346,7 @@ function coe5.setTestFieldSpells(unit, state) end
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
 ---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction.
 ---Windows-only optional capabilities include multipleUniquePolicy, battleLogVisibility and clearHeldItems.
+---battleZoom, battleViewport and battleCenter advertise Windows native viewport control.
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
 ---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
@@ -4518,6 +4519,83 @@ function coe5.battleScreenToCell(uiX, uiY) end
 ---@return number|nil uiX nil off the field, or when refused as coe5.battleView()
 ---@return number|nil uiY
 function coe5.battleCellToScreen(x, y) end
+
+---Windows 5.43 owned idle field view with the supported Clang 23 build. Getter reads validated native globals without
+---installing a hook; values describe the current projection, not proof that pixels were redrawn.
+---Zoom is relative to viewport-height / 20. Mutations belong after BATTLE_WAIT next() returns;
+---BATTLE_DRAW is read-only. Wait for a fresh native DRAW before processing mapped input.
+---@return {version:integer,zoom:number,minZoom:number,maxZoom:number,cellSize:number}|nil view
+---@return string|nil reason
+function coe5.testFieldZoom() end
+
+---Changes actual native cell scale/camera, with optional UI-coordinate anchor. Finite zoom 0.1..2;
+---default anchor is screen centre. Native pan bounds still apply. Retained within the same owned
+---field; caller must reapply after rebuilding. Close restores the saved scale/camera. No campaign,
+---combat or final-view mutation. Exact supported native code is required; errors are explicit.
+---@param zoom number
+---@param anchorX? number
+---@param anchorY? number
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldZoom(zoom, anchorX, anchorY) end
+
+---Experimental Windows 5.43 owned idle editor viewport, in lower-left native UI coordinates.
+---Margins are retained across window resizing. Width/height must be finite and >4, and the
+---rectangle must lie inside the native screen. Native projection globals remain shared with
+---rendering, pointer mapping, previews and Inspect. Set/Fit/Pan mutate only after native WAIT;
+---DRAW is read-only. Wait for a fresh DRAW before handling mapped input. Close restores the
+---original scale/camera. Refusal does not imply a fallback projection; unverified rollback
+---disables the view contract and retains the close recovery snapshot. Mac is unavailable.
+---@param rectangle {x:number,y:number,width:number,height:number}
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldViewport(rectangle) end
+
+---Read actual usable rectangle and projection, including reachable map origins. The two-unit
+---inner padding is included in min/maxOrigin. fits requires both axes; it describes geometric
+---fit, not a completed render or an unobscured OS window. No hook installation by this getter.
+---@return {version:integer,x:number,y:number,width:number,height:number,cellSize:number,originX:number,originY:number,minOriginX:number,maxOriginX:number,minOriginY:number,maxOriginY:number,fitsX:boolean,fitsY:boolean,fits:boolean,fieldWidth:integer,fieldHeight:integer,margin:number}|nil viewport
+---@return string|nil reason
+function coe5.testFieldViewport() end
+
+---Choose an undistorted uniform scale using actual native field columns/20 rows. Clamp to
+---0.1..2; a huge field may still return fits=false and require native arrows/middle-drag or Pan.
+---Requires a previously accepted usable rectangle. Read back actual zoom and viewport.
+---@return boolean accepted
+---@return string|nil reason
+function coe5.fitTestFieldViewport() end
+
+---Pan in native UI units, clamped to the accepted viewport's full reachable map extent.
+---The scoped native pan clamp runs before native cursor/effect-cache delta translations.
+---@param dx number finite
+---@param dy number finite
+---@return boolean accepted
+---@return string|nil reason
+function coe5.panTestFieldViewport(dx,dy) end
+
+---Windows owned idle-field input, during BATTLE_WAIT only. Returns
+---the native frame-latched cumulative wheel count as unsigned 32-bit (wraps).
+---Read-only/non-consuming; compute successive deltas modulo 2^32, initializing
+---a fresh baseline on entering the field. Discard deltas over menus, text focus,
+---panels/modals/scrollable controls; never replay them on return to the map.
+---This getter alone does not suppress native input or choose a scroll region.
+---@return integer|nil count
+---@return string|nil reason
+function coe5.testFieldPointerWheel() end
+
+---Queue a one-shot camera center for the next verified fight in this owned editor field.
+---Apply on the first authenticated combat-map reset at native combat scale. The editor's last
+---zoom is observational. Subsequent native battle panning stays available.
+---@return boolean queued
+---@return string|nil reason
+function coe5.requestTestFieldBattleCenter() end
+
+---Read the current owned session's camera request, including status and applied native geometry.
+---A queued or armed request has no observed camera position. An applied request includes
+---fieldWidth, fieldHeight, initialCellSize, initialOriginX/Y and initialScreenW/H.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldBattleCenterState() end
 
 ---A unit's items by position (0 to 19: id, -1 for none, slotType, and an item's name, cursed and permanentEffects), its
 ---schools (each magic path its monster has: templateBase, its monster's level, base, the level set, level, bonus,
