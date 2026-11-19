@@ -4455,6 +4455,9 @@ function coe5.inspectTestFieldItem(item) end
 ---projectiles are kept. When the fight ran without the capture, phase is unavailable with the issue capture_hook_unavailable.
 ---@return table|nil final nil when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, no_final_state
 ---@return string|nil reason the reason, with that nil
+---Windows final snapshots include classificationVersion=1. Each generation's
+---kind and creationSource distinguish roster actors, scenery and native gates.
+---Native owner and team are reported separately, including a gate's original side.
 function coe5.testFieldFinalState() end
 
 ---Takes the keyboard for a script's text field on the test field (true), or gives it back. While you have it, typed
