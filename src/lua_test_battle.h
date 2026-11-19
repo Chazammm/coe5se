@@ -6,6 +6,8 @@
 #define TEST_BATTLE_ENEMY_PLAYER 24
 #define TEST_FIELD_FIRE_RANGE 30
 #define TEST_BATTLE_DELAY 400000
+#define TEST_FIELD_MIN_WIDTH 32
+#define TEST_FIELD_MAX_WIDTH 1536
 #include "test_field_terrain_arg.h"
 #include "test_field_terrain_policy.h"
 
@@ -15,6 +17,7 @@ static void resetTestFieldFinal(void);
 static void turnOffTestFieldFinal(void);
 static int testFieldFinalViewActive(void);
 static void turnOffTestFieldTraining(void);
+static int installBattleMapHooks(void);
 
 static void clearTestBattleSquare(int x, int y) {
     int last = G32(RVA_UNIT_COUNT);
@@ -71,12 +74,22 @@ static struct {
     int planeBorrowed, lastPlane;
     char owner[MOD_NAME_MAX];
     int fighting;
+    int minimumWidth, sizing;
     short army, teamA, teamB;
     int mapW, mapH, activePlayer, delay, showFlag;
     unsigned char *spellWeaponRecord, spellWeaponSaved[WEAPON_SIZE];
 } testField;
 
 #include "test_field_lifecycle.h"
+
+// Applies an owned field's floor before native map allocation and placement.
+static int applyTestFieldMinimumWidth(int width) {
+    if (!testField.open || !testField.editor || !testField.sizing || !testFieldLife.active ||
+        GetCurrentThreadId() != testFieldLife.thread || G32(RVA_BATTLE_X) != testField.x ||
+        G32(RVA_BATTLE_Y) != testField.y || width < 1 || width >= testField.minimumWidth) return width;
+    *(int *)GAME_PTR(RVA_BATTLE_WIDTH) = testField.minimumWidth;
+    return testField.minimumWidth;
+}
 
 static unsigned long long testFieldDrawSession;
 static const char *testFieldOpenFailure;
@@ -172,7 +185,7 @@ typedef struct {
 
 typedef struct {
     lua_Integer monster, spell, standIn, terrain;
-    int terrainSpecified, allowMultipleUnique, emptyEditor;
+    int terrainSpecified, allowMultipleUnique, emptyEditor, minimumWidth;
     TestFieldSide friends, enemies;
 } TestFieldSpec;
 
@@ -266,7 +279,7 @@ static const char *readTestFieldGroups(lua_State *L, int index, TestFieldSide *s
 static int testFieldOptionScanChanged;
 
 static int testFieldHasEditorOption(lua_State *L) {
-    static const char *const KEYS[] = {"terrain", "allowMultipleUnique", "emptyEditor"};
+    static const char *const KEYS[] = {"terrain", "allowMultipleUnique", "emptyEditor", "minimumWidth"};
     testFieldOptionScanChanged = 0;
     if (!lua_istable(L, 1)) return 0;
     int wasOpen = testField.open, wasPlayer = G32(RVA_ACTIVE_PLAYER);
@@ -314,6 +327,15 @@ static const char *readTestFieldSpec(lua_State *L, TestFieldSpec *spec) {
     if (reason) return reason;
     if (!readTestFieldSwitch(L, "allowMultipleUnique", 0, &spec->allowMultipleUnique)) return "bad_allow_multiple_unique";
     if (!readTestFieldSwitch(L, "emptyEditor", 1, &spec->emptyEditor)) return "bad_empty_editor";
+    lua_pushliteral(L, "minimumWidth");
+    lua_rawget(L, 1);
+    if (!lua_isnil(L, -1)) {
+        lua_Integer width = lua_tointeger(L, -1);
+        int valid = lua_isinteger(L, -1) && width >= TEST_FIELD_MIN_WIDTH && width <= TEST_FIELD_MAX_WIDTH;
+        lua_pop(L, 1);
+        if (!valid) return "bad_minimum_width";
+        spec->minimumWidth = (int)width;
+    } else lua_pop(L, 1);
     if (spec->terrainSpecified) {
         reason = testFieldTerrainProblem(L, (int)spec->terrain);
         if (reason) return reason;
@@ -413,7 +435,7 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
                        : testField.open              ? "already_open"
                                                      : readTestFieldSpec(L, spec);
     if (editor && !reason && (testField.open || testFieldLife.session != expectedSession || G32(RVA_ACTIVE_PLAYER) >= 0)) reason = "context_changed";
-    if (!editor && !reason && (spec->terrainSpecified || spec->allowMultipleUnique || spec->emptyEditor)) reason = "context_changed";
+    if (!editor && !reason && (spec->terrainSpecified || spec->allowMultipleUnique || spec->emptyEditor || spec->minimumWidth)) reason = "context_changed";
     lua_Integer monster = spec->monster, spell = spec->spell, standIn = spec->standIn;
     int spellWeapon = spell >= 0 && spell < spellTableRecords() ? spellSlot((int)spell)->weapon : -1;
     if (!reason)
@@ -434,6 +456,13 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
         if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0 && G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE) == TEST_BATTLE_X &&
             G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE + 4) == TEST_BATTLE_Y)
             reason = "temporary_square_busy";
+    if (!reason && spec->minimumWidth) {
+#ifdef __APPLE__
+        reason = "minimum_width_unavailable";
+#else
+        if (!installBattleMapHooks()) reason = "minimum_width_unavailable";
+#endif
+    }
     if (reason)
         return refuseTestFieldOpen(s, call, spec, reason, "monster=%lld spell=%lld friends=%d enemies=%d unique_monster=%d existing_unit=%d requested=%lld",
                                    (long long)monster, (long long)spell, spec->friends.groupCount, spec->enemies.groupCount, uniqueMonster, existingUnique,
@@ -445,6 +474,7 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     testField.allowMultipleUnique = spec->allowMultipleUnique;
     testField.emptyEditor = spec->emptyEditor;
     testField.terrain = terrain;
+    testField.minimumWidth = spec->minimumWidth;
     testField.neighbours = hashTestFieldNeighbours(x, y);
     testField.mapW = G32(RVA_MAP_W);
     testField.mapH = G32(RVA_MAP_H);
@@ -544,7 +574,15 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
              (long long)monster, (long long)spell, testFieldFriendMade, testFieldEnemyMade, terrain, explicitTerrain, *(short *)(square + SQUARE_GROUND),
              testField.emptyEditor, editor);
     enterTestFieldCode();
+    testField.sizing = testField.minimumWidth > 0;
     GAME_FN(void (*)(int, int, int), RVA_BATTLE_SETUP)(x, y, 0);
+    testField.sizing = 0;
+    int readyWidth = G32(RVA_BATTLE_WIDTH);
+    if (testField.minimumWidth && (readyWidth < testField.minimumWidth || readyWidth > TEST_FIELD_MAX_WIDTH)) {
+        leaveTestFieldCode();
+        int cleaned = closeTestFieldNow();
+        return refuseTestFieldOpen(s, call, NULL, cleaned ? "minimum_width_not_applied" : "cleanup_unverified", "width=%d", readyWidth);
+    }
     GAME_FN(void (*)(int, int, int), RVA_BATTLE_DEPLOY)(-1, x, y);
     leaveTestFieldCode();
     return 1;

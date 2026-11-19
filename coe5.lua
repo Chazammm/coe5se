@@ -4166,13 +4166,14 @@ function coe5.loadedContentOrigin(kind, id) end
 ---group a monster's index and a count (1 when left out). Friends follow the commander. No count is capped, and the
 ---enemies need at least one unit; spell and standIn are optional fields. The units come back as the second value,
 ---and coe5.closeTestField takes every one of them off.
----Any of terrain, allowMultipleUnique or emptyEditor in the table, even false, opens an editor field, which the
+---Any of terrain, allowMultipleUnique, emptyEditor or minimumWidth in the table opens an editor field, which the
 ---calls after coe5.closeTestField edit and read. It stands on terrain, a number from coe5.testFieldTerrains() (0, Plain,
 ---when left out). With emptyEditor true it has no commander (leave commander out, and spell and standIn too), either
 ---side may be empty, and the units' commander is -1. Without allowMultipleUnique it holds one unit of a unique monster
 ---at most, and none while one lives anywhere (unique_count, unique_exists). An editor field's refusal gives its reason
----as the second value.
----@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
+---as the second value. On Windows, minimumWidth is an integer from 32 to 1536. Native setup may make the field wider.
+---Read the resulting width with coe5.testFieldState().width. Omit minimumWidth for the native default.
+---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean, minimumWidth?: integer}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
 ---@param monster integer
 ---@param spell integer|nil
 ---@param enemy integer
@@ -4236,6 +4237,7 @@ function coe5.testFieldTerrains() end
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
 ---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
+---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
 function coe5.testFieldEditorCapabilities() end
 
