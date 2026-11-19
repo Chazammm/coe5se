@@ -4249,6 +4249,35 @@ function coe5.testFieldEditorCapabilities() end
 ---@return string|nil reason the reason, with that false
 function coe5.removeTestFieldUnit(unit) end
 
+---Windows 5.43 owned main-menu test field only. Read the actual personal-name
+---source and the game's native formatted title for this session/generation.
+---Ordinary actors: owned_native_formatter_override (no native per-unit string
+---exists); commanders: native_commander_record, shown as "name the type".
+---Works after fighting only while the original record remains identifiable.
+---Counters show formatter use, not proof that every game surface was tested.
+---@param unit integer
+---@return table|nil state {version:1,unit:integer,generation:integer,commander:integer,custom:boolean,name:string,shown:string,storage:string,maxBytes:47,nativeLogLineBytes:63,formatterReads:integer,combatReads:integer}
+---@return string|nil reason
+function coe5.testFieldUnitName(unit) end
+
+---Guarded individual rename for a living owned editor actor, outside simulation
+---and final view. Strict UTF-8, at most47 bytes, NUL/control/bidi characters,
+---percent/comma and whitespace-only nonempty strings refuse. No truncation or
+---normalization. Empty restores the original commander record or ordinary
+---type/effect formatter. Never writes monsterName or another unit/template.
+---Native Inspect and combat use the real formatter; combat rows still truncate
+---at63 bytes for the ENTIRE line. Fonts may lack glyphs. Not campaign-save or
+---promotion/commander-conversion support. Generation/session bound; cleared on
+---field close. Failure with rollbackVerified=false requires quarantine/recovery.
+---Caps: individualNameVersion=1, individualNameMaxBytes=47, nativeLogLineBytes=63;
+---these describe support, not installed hook or successful rendering evidence.
+---@param unit integer
+---@param name string empty clears
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail {version:1,maxBytes:47,rollbackVerified:boolean}
+function coe5.setTestFieldUnitName(unit, name) end
+
 ---Every unit and cell of your editor field. units holds each living unit of both sides and each unit a cell holds, in
 ---unit order, with among others unit, hp, monster, owner, generation, width, height, anchors and occupied (its cells),
 ---and anchorX, anchorY when it stands on one cell. grid[x * 20 + y + 1] is cell (x, y). Each issue is a code and the

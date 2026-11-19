@@ -191,6 +191,9 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "maxBaseSchoolLevel", 3);
 #ifndef __APPLE__
     setIntField(L, "unitRetirement", lifecycle);
+    setIntField(L, "individualNameVersion", lifecycle);
+    setIntField(L, "individualNameMaxBytes", COMMANDER_NAME_SIZE - 1);
+    setIntField(L, "nativeLogLineBytes", 63);
     setIntField(L, "minimumWidthVersion", lifecycle);
     setIntField(L, "minimumWidthMin", TEST_FIELD_MIN_WIDTH);
     setIntField(L, "minimumWidthMax", TEST_FIELD_MAX_WIDTH);

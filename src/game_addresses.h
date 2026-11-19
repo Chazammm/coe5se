@@ -1449,6 +1449,7 @@
 #define RVA_DROUGHT_MONTHS                     ADDR(       0x5822f68,          0x10ce02ee0)
 #define RVA_TRADE_BONUS_PERCENT                ADDR(        0x32ee80,          MAC_INLINED)
 #define RVA_DATE                               ADDR(        0x118890,          MAC_INLINED)
+#define RVA_INSPECT_CARD_UNIT_TYPE_CALL        ADDR(        0x1d4a3b,          MAC_NOT_LOOKED_UP)
 #define RVA_UNIT_SHOWN_NAME                    ADDR(        0x0f8520,          0x1003bb774)
 #define RVA_COMMANDER_THE_NAME                 ADDR(        0x0f8bd0,          MAC_INLINED)
 #define RVA_COMMANDER_THE_NAME_INDEX           ADDR(       0x5804c40,          0x1069b1eb0)

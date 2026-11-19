@@ -21,6 +21,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"battleCellToScreen", lBattleCellToScreen}, {"testFieldLoadoutState", lTestFieldLoadoutState},
     {"setTestFieldConfiguration", lSetTestFieldConfiguration}, {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
+    {"testFieldUnitName", lTestFieldUnitName}, {"setTestFieldUnitName", lSetTestFieldUnitName},
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
     {"setPreviewDocks", lSetPreviewDocks}, {"setPreviewHoverText", lSetPreviewHoverText},

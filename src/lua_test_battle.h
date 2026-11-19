@@ -17,6 +17,9 @@ static void resetTestFieldFinal(void);
 static void turnOffTestFieldFinal(void);
 static int testFieldFinalViewActive(void);
 static void turnOffTestFieldTraining(void);
+#ifndef __APPLE__
+static int testFieldNameClose(void);
+#endif
 static int installBattleMapHooks(void);
 
 static void clearTestBattleSquare(int x, int y) {
@@ -140,8 +143,12 @@ static int closeTestFieldNow(void) {
     }
     int x = testField.x, y = testField.y, cleaned = 1;
     if (testField.spellWeaponRecord) memcpy(testField.spellWeaponRecord, testField.spellWeaponSaved, WEAPON_SIZE);
-    if (testField.editor) cleaned = removeTestFieldUnits();
-    else clearTestBattleSquare(x, y);
+    if (testField.editor) {
+#ifndef __APPLE__
+        cleaned = testFieldNameClose();
+#endif
+        cleaned = removeTestFieldUnits() && cleaned;
+    } else clearTestBattleSquare(x, y);
     short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
     short *teamA = (short *)GAME_PTR(RVA_SLOT_TEAM), *teamB = (short *)GAME_PTR(RVA_SLOT_TEAM + (size_t)TEST_BATTLE_ENEMY_PLAYER * PLAYER_BLOCK_SIZE);
     memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);

@@ -1958,6 +1958,9 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_input.h"
 #include "lua_test_field_final.h"
 #include "lua_test_field_inspect.h"
+#ifndef __APPLE__
+#include "lua_test_field_names.h"
+#endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
 #include "lua_battle_banish.h"
