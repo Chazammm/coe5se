@@ -280,12 +280,13 @@ static void fitCustomCorpses(const short *corpses) {
         int held = 0;
         for (int k = 0; k < customCorpseKindCount; k++)
             if (customCorpseKinds[k].base == base) held += customCorpseCount(square, k);
-        int excess = held - corpses[base];
-        while (excess > 0) {
+        int excess = held - (corpses[base] > 0 ? corpses[base] : 0);
+        for (int took = 1; excess > 0 && took;) {
+            took = 0;
             for (int k = 0; k < customCorpseKindCount && excess > 0; k++) {
                 if (customCorpseKinds[k].base != base) continue;
                 CustomCorpseCell *cell = customCorpseCell(square, k, 0);
-                if (cell && cell->count > 0) cell->count--, excess--, noteCustomCorpseSquare(square);
+                if (cell && cell->count > 0) cell->count--, excess--, took = 1, noteCustomCorpseSquare(square);
             }
         }
     }
@@ -347,8 +348,8 @@ static void moveCustomCorpseBase(int k, int base) {
         CustomCorpseCell *cell = &customCorpseCells[i];
         if (!cell->key || (cell->key - 1) % CUSTOM_CORPSE_KINDS_MAX != k || !cell->count) continue;
         short *corpses = (short *)(gameBase + RVA_SQUARE_RECORDS + (size_t)((cell->key - 1) / CUSTOM_CORPSE_KINDS_MAX) * SQUARE_SIZE + SQUARE_CORPSES);
-        int n = cell->count;
-        if (old >= 0) n = n < corpses[old] ? n : corpses[old], corpses[old] = (short)(corpses[old] - n);
+        int n = cell->count, had = old >= 0 && corpses[old] > 0 ? corpses[old] : 0;
+        if (old >= 0) n = n < had ? n : had, corpses[old] = (short)(corpses[old] - n);
         if (base >= 0) {
             int before = corpses[base];
             addCorpses(corpses, base, n);

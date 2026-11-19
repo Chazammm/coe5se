@@ -102,11 +102,39 @@ static const int *apiSetting(const char *name) {
 }
 
 // ---- The game's screen widgets for plugins (UiApi) --------------------------------------------
+static size_t textCutLength(const char *text, size_t max) {
+    size_t n = strlen(text);
+    if (n <= max) return n;
+    while (max > 0 && ((unsigned char)text[max] & 0xc0) == 0x80) max--;
+    return max;
+}
+
+static void endAtWholeLetter(char *text, size_t size) {
+    if (!text || size < 2 || strnlen(text, size) != size - 1) return;
+    size_t n = size - 1, start = n;
+    while (start > 0 && n - start < 4 && ((unsigned char)text[start - 1] & 0xc0) == 0x80) start--;
+    if (!start) return;
+    unsigned char lead = (unsigned char)text[start - 1];
+    size_t need = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1;
+    if (n - (start - 1) < need) text[start - 1] = '\0';
+}
+
 static const char *fitGameText(void *caller, const char *call, const char *text, char *buf, size_t size) {
     if (strlen(text) < size) return text;
     noteApiCut(caller, call, "text", text, (int)size - 1);
-    memcpy(buf, text, size - 1);
-    buf[size - 1] = '\0';
+    size_t n = textCutLength(text, size - 1);
+    memcpy(buf, text, n);
+    buf[n] = '\0';
+    return buf;
+}
+
+static int textLookedUp(const char *text);
+static const char *fitTranslatedText(void *caller, const char *call, const char *text, char *buf, size_t size) {
+    static char translated[TRANSLATED_SIZE];
+    if (strlen(text) >= sizeof translated - 1 || textLookedUp(text)) return fitGameText(caller, call, text, buf, size);
+    translateText(text, translated, sizeof translated);
+    const char *fit = fitGameText(caller, call, translated, buf, size);
+    if (fit != buf) snprintf(buf, size, "%s", fit);
     return buf;
 }
 
@@ -114,10 +142,12 @@ static void uiScreenBegin(const char *title) {
     static char translated[TRANSLATED_SIZE];
     _Static_assert(SCREEN_TITLE_TEXT_SIZE <= TRANSLATED_SIZE, "the title is cut inside the translation buffer");
     screenBegin();
-    translateText(title ? title : "", translated, sizeof translated);
+    if (!title) title = "";
+    if (textLookedUp(title) || strlen(title) >= sizeof translated - 1) snprintf(translated, sizeof translated, "%s", title);
+    else translateText(title, translated, sizeof translated);
     noteApiCut(__builtin_return_address(0), "ui.screenBegin", "title", translated, SCREEN_TITLE_TEXT_SIZE - 1);
-    translated[SCREEN_TITLE_TEXT_SIZE - 1] = '\0';
-    GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", translated);
+    translated[textCutLength(translated, SCREEN_TITLE_TEXT_SIZE - 1)] = '\0';
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", translated));
     screenWidth(setupScreenWidth());
 }
 static void uiSectionBegin(const char *header) {
@@ -126,19 +156,19 @@ static void uiSectionBegin(const char *header) {
 }
 static void uiText(int id, const char *text) {
     char cut[TEXT_BUTTON_TEXT_SIZE];
-    textButton(id, fitGameText(__builtin_return_address(0), "ui.text", text ? text : "", cut, sizeof cut));
+    textButtonAsIs(id, fitTranslatedText(__builtin_return_address(0), "ui.text", text ? text : "", cut, sizeof cut));
 }
 static void uiCheckbox(int id, int *value, const char *label) {
     char cut[CHECKBOX_TEXT_SIZE];
-    if (value) checkbox(id, value, fitGameText(__builtin_return_address(0), "ui.checkbox", label ? label : "", cut, sizeof cut));
+    if (value) checkboxAsIs(id, value, fitTranslatedText(__builtin_return_address(0), "ui.checkbox", label ? label : "", cut, sizeof cut));
 }
 static void uiChoice(int id, int selected, const char *label) {
     char cut[RADIO_OPTION_TEXT_SIZE];
-    radioOption(id, selected, fitGameText(__builtin_return_address(0), "ui.choice", label ? label : "", cut, sizeof cut));
+    radioOptionAsIs(id, selected, fitTranslatedText(__builtin_return_address(0), "ui.choice", label ? label : "", cut, sizeof cut));
 }
 static void uiTooltip(const char *text) {
     char cut[TOOLTIP_TEXT_SIZE];
-    if (text) tooltip(fitGameText(__builtin_return_address(0), "ui.tooltip", text, cut, sizeof cut));
+    if (text) tooltipAsIs(fitTranslatedText(__builtin_return_address(0), "ui.tooltip", text, cut, sizeof cut));
 }
 static void uiBindKey(int id, int key) {
     if (key == UI_KEY_ESCAPE) key = ESCAPE_KEY();
@@ -160,7 +190,7 @@ static void uiListRow(int id, const char *text) {
     rowArea(id, LIST_WIDTH);
     columnX(0.0f);
     char cut[TEXT_BUTTON_TEXT_SIZE];
-    textButton(id, fitGameText(__builtin_return_address(0), "ui.listRow", text ? text : "", cut, sizeof cut));
+    textButtonAsIs(id, fitTranslatedText(__builtin_return_address(0), "ui.listRow", text ? text : "", cut, sizeof cut));
     rowBegin(0);
 }
 static void uiListEnd(void) { listGap(LIST_GAP); }
@@ -176,7 +206,7 @@ static void uiListRow(int id, const char *text) {
     GAME_FN(void (*)(int, float, float, float, float, float), RVA_ROW_AREA)(id, LIST_WIDTH, 0.0f, 0.0f, 0.0f, 0.0f);
     GAME_FN(void (*)(float), RVA_COLUMN_X)(0.0f);
     char cut[TEXT_BUTTON_TEXT_SIZE];
-    textButton(id, fitGameText(__builtin_return_address(0), "ui.listRow", text ? text : "", cut, sizeof cut));
+    textButtonAsIs(id, fitTranslatedText(__builtin_return_address(0), "ui.listRow", text ? text : "", cut, sizeof cut));
     GAME_FN(void (*)(int), RVA_ROW_BEGIN)(1);
 }
 static void uiListEnd(void) { GAME_FN(void (*)(float), RVA_LIST_GAP)(LIST_GAP); }

@@ -9,6 +9,7 @@
 static const char *const CONTENT_FREE_WORDS[] = {
     "icon", "description", "coeversion", "modversion", "modprio", "requires",
     "needs_script_extender", "needs_coe5se", "needs_glu32.dll_and_CoE5SE_enabled_at_launch", "maxdata", PERSONALMOD_WORD, NOMULTIPLAYER_WORD,
+    "fallbackfont",
 };
 
 static int isContentFreeWord(const char *word) {
@@ -67,11 +68,20 @@ static int hashContentLine(const char *line, u64 *hash) {
     return 1;
 }
 
-typedef struct { int settingsOpen, contentFree, longLine, personal, noMultiplayer, hasScript; u64 hash; } ModFileScan;
+typedef struct {
+    int settingsOpen, contentFree, longLine, personal, noMultiplayer, hasScript;
+    LanguageScan language;
+    u64 hash;
+} ModFileScan;
 
 static void scanModLine(const char *line, ModFileScan *scan, int mayDeclare) {
     char word[64];
     int crLed = firstModWord(line, word, sizeof word);
+    if (word[0] && scanLanguageLine(word, strstr(line, word) + strlen(word), mayDeclare, &scan->language)) {
+        scan->settingsOpen = 0;
+        if (crLed || !isUnhashedWord(word)) hashContentLine(line, &scan->hash);
+        return;
+    }
     if (mayDeclare && isModKindLine(line, word, PERSONALMOD_WORD)) scan->personal = 1;
     if (mayDeclare && isModKindLine(line, word, NOMULTIPLAYER_WORD)) scan->noMultiplayer = 1;
     if (!word[0]) {
@@ -101,6 +111,8 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
     FILE *f = fopen(path, "rb");
     if (!f) return 0;
     static char line[MOD_LINE_MAX + 2];
+    int outerLanguage = scan->language.open;
+    scan->language.open = 0;
     long at = ftell(f);
     while (fgets(line, sizeof line, f)) {
         long next = ftell(f);
@@ -114,7 +126,7 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
         } else {
             const char *own = kind == SCAN_C5M ? sidecarLineText(line) : NULL, *text = own ? own : line;
             char file[INCLUDE_FILE_MAX + 2], included[MAX_PATH];
-            if ((own || kind == SCAN_SIDECAR) && readIncludeLine(text, file, sizeof file) > 0) {
+            if ((own || kind == SCAN_SIDECAR) && !scan->language.open && readIncludeLine(text, file, sizeof file) > 0) {
                 hashContentLine(text, &scan->hash);
                 scan->settingsOpen = 0;
                 if (!findIncludedFile(mod, file, included, sizeof included)) scanModFile(mod, included, scan, SCAN_INCLUDED);
@@ -125,6 +137,7 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
     }
     fclose(f);
     scan->longLine = 0;
+    scan->language.open = outerLanguage;
     return 1;
 }
 
@@ -159,6 +172,33 @@ static int scanMod(int mod, ModFileScan *scan) {
     scanModFile(mod, path, scan, SCAN_SIDECAR);
     scan->hasScript = modHasScriptFile(mod);
     return 1;
+}
+
+static int modFileMayOpenLanguage(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    static char line[MOD_LINE_MAX + 2];
+    int may = 0;
+    while (!may && fgets(line, sizeof line, f)) {
+        const char *own = sidecarLineText(line), *p = own ? own : line;
+        p += strspn(p, " \t\r\n");
+        may = !strncmp(p, LANGUAGE_WORD, sizeof LANGUAGE_WORD - 1) || !strncmp(p, INCLUDE_WORD, sizeof INCLUDE_WORD - 1);
+    }
+    fclose(f);
+    return may;
+}
+
+static int scanModLanguages(int mod, LanguageScan *out) {
+    char c5m[MAX_PATH], sidecarPath[MAX_PATH];
+    *out = (LanguageScan){0};
+    if (!buildPath(c5m, sizeof c5m, __func__, "%s" PATH_SEP "%s" MOD_FILE_SUFFIX, modFolder(mod), modName(mod)) ||
+        !buildPath(sidecarPath, sizeof sidecarPath, __func__, "%s" PATH_SEP "%s" SIDECAR_SUFFIX, modFolder(mod), modName(mod)))
+        return 0;
+    if (!modFileMayOpenLanguage(c5m) && !modFileMayOpenLanguage(sidecarPath)) return 0;
+    ModFileScan scan;
+    int read = scanMod(mod, &scan);
+    *out = scan.language;
+    return read && scan.contentFree;
 }
 
 // ---- Scripts in the compare -----------------------------------------------------------------------
@@ -480,7 +520,7 @@ static void notePlayerModStates(void) {
 
 static void showNoMultiplayerSaveAndExit(const char *mod) {
     static char text[POPUP_TEXT_SIZE];
-    snprintf(text, sizeof text, "Save holds content of mod '%s', marked nomultiplayer.\n\nNot loadable in a network game.", mod);
+    formatLookedUp(text, sizeof text, "Save holds content of mod '%s', marked nomultiplayer.\n\nNot loadable in a network game.", mod);
     okBoxOrLog("CoE5SE: Mod not for network games", text);
     GAME_FN(void (*)(const char *), RVA_EXIT_GAME)("");
 }

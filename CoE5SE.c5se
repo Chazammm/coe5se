@@ -32,15 +32,23 @@ onoff
 default 1
 restart
 label "Use CoE5SE graphics changes"
-tip "Off turns off both settings below: native graphics and frame controls, no graphics hooks or extra menu choices. Takes effect next launch. CoE5 5.43 only."
+tip "Off uses native graphics and frame controls for all settings below. Takes effect next launch. CoE5 5.43 only."
 
 newsetting smoother_map_rendering
 onoff
 default 1
 restart
 parent graphics_changes
-label "Use texture array batching"
-tip "Batches map decorations at every quality with original detail and order. Off by default on NVIDIA. Off installs no rendering hooks. Takes effect next launch."
+label "Use texture array batching on the world map"
+tip "Batches map decorations at every quality, plus compatible terrain and army sprites on Windows. Preserves original detail and order. Off by default on NVIDIA. Takes effect next launch."
+
+newsetting scene_sprite_batching
+onoff
+default 0
+restart
+parent graphics_changes
+label "Use texture array batching in battles"
+tip "Windows CoE5 5.43. Batches compatible terrain, unit sprites, spell particles and projectiles with original detail and order. Unsupported draws stay native. Takes effect next launch."
 
 newsetting frame_controls
 onoff

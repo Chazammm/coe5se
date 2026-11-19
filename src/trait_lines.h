@@ -17,7 +17,9 @@ static TraitLine *traitLines;
 static int traitLineCount, traitLineCapacity;
 
 #define TRAIT_DESCRIPTION_SLOTS  512
+#define AFFLICTION_DESCRIPTION_SLOTS 200
 static const char **traitDescriptions;
+static int afflictionDescriptionId(const char *text);
 
 typedef struct {
     char path[MAX_PATH];
@@ -59,7 +61,7 @@ static int traitPictureSprite(int pic) {
 }
 
 static const char **allocTraitDescriptions(void) {
-    uintptr_t table = (uintptr_t)GAME_PTR(RVA_ABILITY_DESCRIPTIONS), bytes = TRAIT_DESCRIPTION_SLOTS * sizeof(char *);
+    uintptr_t table = (uintptr_t)GAME_PTR(RVA_ABILITY_DESCRIPTIONS), bytes = (TRAIT_DESCRIPTION_SLOTS + AFFLICTION_DESCRIPTION_SLOTS) * sizeof(char *);
 #ifndef __APPLE__
     SYSTEM_INFO si;
     GetSystemInfo(&si);
@@ -95,6 +97,8 @@ static int traitLookupHook(const char *text) {
             if (id > 0) return id;
             break;
         }
+    int affliction = afflictionDescriptionId(text);
+    if (affliction > 0) return affliction;
     return GAME_FN(AbilityLookupFn, RVA_ABILITY_LOOKUP)(text);
 }
 

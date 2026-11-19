@@ -306,6 +306,12 @@ static int lSetPlaneShape(lua_State *L) {
 
 static int lSetTerrainLooks(lua_State *L);
 static int lAddBattleMap(lua_State *L);
+static int lAddTransport(lua_State *L);
+static int lGiveAffliction(lua_State *L), lCureAffliction(lua_State *L), lHasAffliction(lua_State *L), lUnitAfflictions(lua_State *L);
+static int lAfflictedUnits(lua_State *L), lAfflictionTurn(lua_State *L), lAfflictionValue(lua_State *L), lSetAfflictionTurn(lua_State *L);
+static int lSetAfflictionValue(lua_State *L), lRemoveAffliction(lua_State *L);
+static int lAfflictionEffect(lua_State *L);
+static void dropAfflictionEffects(const LuaScript *s);
 static int lSetBattleScatter(lua_State *L);
 static int lFactionSlot(lua_State *L);
 static int lAddFaction(lua_State *L);
@@ -405,6 +411,18 @@ static int lLocalPlayer(lua_State *L) {
     if (role == NET_ROLE_HOST || (role == NET_ROLE_CLIENT && !netClientInTurn) || player < 0 || player >= playerSlotCount())
         lua_pushnil(L);
     else lua_pushinteger(L, player);
+    return 1;
+}
+
+static int lTranslate(lua_State *L) {
+    size_t length;
+    const char *text = luaL_checklstring(L, 1, &length);
+    if (length >= TRANSLATED_SIZE || strlen(text) != length) {
+        lua_pushvalue(L, 1);
+        return 1;
+    }
+    char translated[TRANSLATED_SIZE];
+    lua_pushstring(L, translateText(text, translated, sizeof translated));
     return 1;
 }
 
@@ -607,34 +625,25 @@ static int lRevealMap(lua_State *L) {
     return 1;
 }
 
-static const char *centerMapRefusal(int activePlayer, lua_Integer x, lua_Integer y, int mapW, int mapH, int plane, int windows) {
-    if (!windows) return "windows_only";
+static const char *centerMapRefusal(int activePlayer, lua_Integer x, lua_Integer y, int mapW, int mapH, int plane) {
     if (activePlayer < 0) return "no_game";
     if (x < 0 || y < 0 || x >= mapW || y >= mapH || x >= MAP_COLUMNS_MAX || y >= MAP_COLUMN_SQUARES) return "off_map";
     if (plane < 0) return "no_plane";
     return NULL;
 }
 
-// @platform-split center_map: Windows calls RVA_CENTER_MAP_ON; Mac's wasn't looked up, so the call is refused there
 static int lCenterMap(lua_State *L) {
     lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
-#ifdef __APPLE__
-    int windows = 0;
-#else
-    int windows = 1;
-#endif
     int mapW = G32(RVA_MAP_W), mapH = G32(RVA_MAP_H), plane = -1;
-    if (windows && x >= 0 && y >= 0 && x < mapW && y < mapH && x < MAP_COLUMNS_MAX && y < MAP_COLUMN_SQUARES)
+    if (x >= 0 && y >= 0 && x < mapW && y < mapH && x < MAP_COLUMNS_MAX && y < MAP_COLUMN_SQUARES)
         plane = GAME_FN(int (*)(int, int), RVA_PLANE_AT)((int)x, (int)y);
-    const char *reason = centerMapRefusal(G32(RVA_ACTIVE_PLAYER), x, y, mapW, mapH, plane, windows);
+    const char *reason = centerMapRefusal(G32(RVA_ACTIVE_PLAYER), x, y, mapW, mapH, plane);
     if (reason) {
         refuseLuaCall(runningLuaMod(), "coe5.centerMap", reason, "x=%lld y=%lld", (long long)x, (long long)y);
         lua_pushboolean(L, 0);
         return 1;
     }
-#ifndef __APPLE__
     GAME_FN(void (*)(int, int), RVA_CENTER_MAP_ON)((int)x, (int)y);
-#endif
     writeLog("lua_map_centered", "mod=%s x=%lld y=%lld plane=%d", runningLuaMod(), (long long)x, (long long)y, plane);
     lua_pushboolean(L, 1);
     return 1;

@@ -68,14 +68,20 @@ static void warnModsMissingPlugins(void) {
     int one = count == 1;
     size_t n = 0;
     for (int i = 0; i < count && i < MISSING_POPUP_MODS; i++) {
-        char label[80];
+        char label[80], shown[SETTING_SHOWN_TEXT_MAX];
         modDisplayName(missingPluginMods[i].mod, label, sizeof label);
-        appendText(text, sizeof text, &n, "%s\n", label);
+        appendText(text, sizeof text, &n, "%s\n", translateText(label, shown, sizeof shown));
     }
-    if (count > MISSING_POPUP_MODS) appendText(text, sizeof text, &n, "...and %d more.\n", count - MISSING_POPUP_MODS);
-    appendText(text, sizeof text, &n, "%s",
-               one ? "\nNo " HERE_PLATFORM " DLL. Mod incomplete without it.\n\nDisable mod?"
-                   : "\nNo " HERE_PLATFORM " DLLs. Mods incomplete without them.\n\nDisable mods?");
+    if (count > MISSING_POPUP_MODS) {
+        appendLookedUp(text, sizeof text, &n, "...and %d more.", count - MISSING_POPUP_MODS);
+        appendText(text, sizeof text, &n, "\n");
+    }
+    char line[SETTING_SHOWN_TEXT_MAX], ask[SETTING_SHOWN_TEXT_MAX];
+    translateText(one ? "No " HERE_PLATFORM " DLL. Mod incomplete without it." : "No " HERE_PLATFORM " DLLs. Mods incomplete without them.",
+                  line, sizeof line);
+    translateText(one ? "Disable mod?" : "Disable mods?", ask, sizeof ask);
+    appendText(text, sizeof text, &n, "\n%s\n\n%s", line, ask);
+    noteTextLookedUp(text, sizeof text);
     writeLog("plugin_missing_popup", "mods=%d platform=%s", count, HERE_PLATFORM_LOG);
     int choice = messageBox("CoE5SE: Missing " HERE_PLATFORM " DLL", text, "Yes", "No", 0, 0, 0);
     if (choice != 1) {
@@ -94,18 +100,17 @@ static void warnModsMissingPlugins(void) {
 }
 
 static void drawModsMissingPlugins(int count) {
-    char row[224], tip[1600], label[80];
+    char row[2 * SETTING_SHOWN_TEXT_MAX], tip[TOOLTIP_TEXT_SIZE], label[80], shown[SETTING_SHOWN_TEXT_MAX];
     for (int i = 0; i < count; i++) {
         const ModMissingPlugin *m = &missingPluginMods[i];
         modDisplayName(m->mod, label, sizeof label);
-        snprintf(row, sizeof row, "%s (no " HERE_PLATFORM " version of its DLL)", label);
-        textButton(0, row);
-        snprintf(tip, sizeof tip,
-                 "This mod has no " HERE_PLATFORM " version of its DLL. Its folder has only the " OTHER_PLATFORM
-                 " version (%.300s; " HERE_PLATFORM " needs %.300s). Without its DLL, the mod won't work as its author "
-                 "meant. Don't play it this way: disable it on the Mods screen, or ask its author for a " HERE_PLATFORM
-                 " version.\nFolder: %.200s",
-                 m->files, m->missing, m->folder);
-        tooltip(tip);
+        textButtonAsIs(0, formatLookedUp(row, sizeof row, "%s (no " HERE_PLATFORM " version of its DLL)", translateText(label, shown, sizeof shown)));
+        formatLookedUp(tip, sizeof tip,
+                       "This mod has no " HERE_PLATFORM " version of its DLL. Its folder has only the " OTHER_PLATFORM
+                       " version (%.300s; " HERE_PLATFORM " needs %.300s). Without its DLL, the mod won't work as its author "
+                       "meant. Don't play it this way: disable it on the Mods screen, or ask its author for a " HERE_PLATFORM
+                       " version.\nFolder: %.200s",
+                       m->files, m->missing, m->folder);
+        tooltipAsIs(tip);
     }
 }

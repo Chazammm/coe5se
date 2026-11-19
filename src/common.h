@@ -409,8 +409,11 @@ static UNUSED int redirectCall(unsigned int siteRva, unsigned int targetRva, uns
 #endif
 
 #define TRANSLATED_SIZE      5000
+static UNUSED int textLookupOwn;
 static UNUSED const char *translateText(const char *text, char *out, int size) {
+    textLookupOwn++;
     GAME_FN(void (*)(const char *, char *, int), RVA_TRANSLATE_FORMAT)(text, out, size);
+    textLookupOwn--;
     return out;
 }
 #ifdef __APPLE__
@@ -428,9 +431,11 @@ static UNUSED void screenBegin(void) {
 #else
 static UNUSED void screenBegin(void) { GAME_FN(void (*)(void), RVA_SCREEN_BEGIN)(); }
 #endif
+static UNUSED int textArgsLookedUp;
+#define CALL_WITH_TEXT_LOOKED_UP(call) do { textArgsLookedUp = 1; call; textArgsLookedUp = 0; } while (0)
 static UNUSED void screenTitle(const char *t) {
     static char translated[TRANSLATED_SIZE];
-    GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", translateText(t, translated, sizeof translated));
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", translateText(t, translated, sizeof translated)));
 }
 
 #define LAYOUT_F(e, off) (*(float *)((e) + (off)))
@@ -517,18 +522,28 @@ static UNUSED void screenWidth(float w) { GAME_FN(void (*)(float), RVA_SCREEN_WI
 static UNUSED void sectionBegin(void) { GAME_FN(int (*)(unsigned int), RVA_SECTION_BEGIN)(1); }
 static UNUSED void sectionEnd(void) { GAME_FN(int (*)(void), RVA_SECTION_END)(); }
 static UNUSED void sectionHeader(const char *t) { GAME_FN(void (*)(const char *), RVA_SECTION_HEADER)(t); }
-static UNUSED void radioOption(int id, int selected, const char *text) {
-    GAME_FN(void (*)(int, int, FMT_ARGS), RVA_RADIO_OPTION)(id, selected, "%s", text);
+static UNUSED int (*textAlreadyLookedUp)(const char *text);
+static UNUSED const char *translatedText(const char *text) {
+    static char translated[TRANSLATED_SIZE];
+    if (textAlreadyLookedUp && textAlreadyLookedUp(text)) return text;
+    return translateText(text, translated, sizeof translated);
 }
-static UNUSED void textButton(int id, const char *text) {
-    GAME_FN(void (*)(int, FMT_ARGS), RVA_TEXT_BUTTON)(id, "%s", text);
+static UNUSED void radioOptionAsIs(int id, int selected, const char *text) {
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(int, int, FMT_ARGS), RVA_RADIO_OPTION)(id, selected, "%s", text));
 }
-static UNUSED void checkbox(int id, int *value, const char *label) {
-    GAME_FN(int (*)(int, int *, FMT_ARGS), RVA_CHECKBOX)(id, value, "%s", label);
+static UNUSED void radioOption(int id, int selected, const char *text) { radioOptionAsIs(id, selected, translatedText(text)); }
+static UNUSED void textButtonAsIs(int id, const char *text) {
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(int, FMT_ARGS), RVA_TEXT_BUTTON)(id, "%s", text));
 }
-static UNUSED void tooltip(const char *text) {
-    GAME_FN(unsigned long long (*)(FMT_ARGS), RVA_TOOLTIP)("%s", text);
+static UNUSED void textButton(int id, const char *text) { textButtonAsIs(id, translatedText(text)); }
+static UNUSED void checkboxAsIs(int id, int *value, const char *label) {
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(int (*)(int, int *, FMT_ARGS), RVA_CHECKBOX)(id, value, "%s", label));
 }
+static UNUSED void checkbox(int id, int *value, const char *label) { checkboxAsIs(id, value, translatedText(label)); }
+static UNUSED void tooltipAsIs(const char *text) {
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(unsigned long long (*)(FMT_ARGS), RVA_TOOLTIP)("%s", text));
+}
+static UNUSED void tooltip(const char *text) { tooltipAsIs(translatedText(text)); }
 static UNUSED void bindHotkey(int id, int key) { GAME_FN(void (*)(int, int), RVA_BIND_HOTKEY)(id, key); }
 #define POPUP_TEXT_SIZE 4000
 static UNUSED int messageBox(const char *title, const char *text, const char *button1, const char *button2, int cancel,
@@ -614,7 +629,7 @@ static UNUSED int runNameBox(int spriteKind, int sprite, char *buf, int maxLen, 
     for (;;) {
         screenBegin();
         screenWidth(NAME_BOX_WIDTH);
-        GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", title);
+        CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", title));
         listGap(NAME_BOX_TOP_GAP);
         rowOpen();
         listStyle(LAYOUT_TYPE_LIST_STYLE);

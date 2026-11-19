@@ -93,8 +93,11 @@ static int patchCeremonyRowCopies(void);
 static int prepareSiteCode(CallSite site) {
     if (site == SITE_TOP_BAR_INCOME) return installTopBarIncomeDraws();
     if (site == SITE_SQUARE_PANEL_WRAP) return installSquarePanelIcons();
-    if (site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS) return installComputedHook(site);
+    if (site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_UNIT_BANISHABLE ||
+        site == SITE_IMMORTAL_REFORM)
+        return installComputedHook(site);
     if (site == SITE_GAME_SAVE) return hookSaveFileOpens();
+    if (site == SITE_UNIT_HEAL_RATE) return healRateHooksIn;
     if (site == SITE_GAME_START) return checkGameStartOnceCode();
     if (site == SITE_AI_SPLIT_ARMY) return checkSplitMinUnitsCode();
     if (site == SITE_SEAL_EVENT) return patchSealEventStep();

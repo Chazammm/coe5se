@@ -46,6 +46,7 @@ enum {
     T_GARRISON_LEFT,
     T_UNIT_STRENGTH,
     T_UNIT_ARMOR,
+    T_UNIT_STR,
     T_UNIT_VISIBLE,
     T_MONSTER_ATTACK,
     T_SQUARE_CITADEL,
@@ -127,7 +128,6 @@ typedef struct { const char *name; int count3, stride3, list, nameBack; uintptr_
 #define FORT_PART_BITS 32
 #define RESOURCE_COUNT 14
 #define NAME_SIZE 100
-#define MESSAGE_BOX_TEXT_SIZE 10000
 #define COUNT_AT_CALL 0
 #define SQUARE_COLUMN_SIZE (MAP_COLUMN_SQUARES * SQUARE_SIZE)
 static const GameVar GAME_VARS[] = {
@@ -389,19 +389,25 @@ static const GameVar GAME_VARS[] = {
     {"traceLevel",     RVA_DEBUG_LEVEL,                   T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"bugChecksOff",   RVA_NO_CHECKS,                     BUG_CHECKS_OFF_TYPE, 1, 0, 0, 1, 0, 0, 0},
     {"commanderName",  RVA_COMMANDER_NAMES,               T_STR, COMMANDER_TABLE_MAX, COMMANDER_SIZE, COMMANDER_NAME_SIZE, 1, 0, 0, 0},
+    {"commanderBattleStrength", RVA_COMMANDERS, T_COMMANDER_STRENGTH, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
     {"commanderStrength", RVA_COMMANDERS, T_COMMANDER_STRENGTH, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
     {"commanderGarrisonLeft", RVA_COMMANDERS, T_GARRISON_LEFT, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
     {"slotHomeX",      RVA_PLAYER_HOME_X,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
     {"slotHomeY",      RVA_PLAYER_HOME_Y,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
     {"squareGems",     RVA_SQUARE_RECORDS + SQUARE_GEMS,  T_U8, MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE, 0, 1, 0, MAP_COLUMN_SQUARES, SQUARE_SIZE},
     {"squareCorpses",  RVA_SQUARE_RECORDS + SQUARE_CORPSES, T_I16, MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE, 0, 1, 0, MAP_COLUMN_SQUARES, SQUARE_SIZE},
+    {"squareBattleStrength", 0,                           T_SQUARE_STRENGTH, PLAYER_SLOTS, 0, 0, 0, 0, MAP_COLUMNS_MAX, 0},
     {"squareStrength", 0,                                 T_SQUARE_STRENGTH, PLAYER_SLOTS, 0, 0, 0, 0, MAP_COLUMNS_MAX, 0},
+    {"squareRememberedBattleStrength", RVA_SQUARE_RECORDS + SQUARE_AI_STRENGTH, T_REMEMBERED_STRENGTH, PLAYER_SLOTS, 4, 0, 1, 0,
+     MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE},
     {"squareRememberedStrength", RVA_SQUARE_RECORDS + SQUARE_AI_STRENGTH, T_REMEMBERED_STRENGTH, PLAYER_SLOTS, 4, 0, 1, 0,
      MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE},
     {"squareArmyStationary", 0,                           T_ARMY_STATIONARY, MAP_COLUMNS_MAX, 0, 0, 0, 0, MAP_COLUMN_SQUARES, 0},
     {"squareArmyHolds", 0,                                T_ARMY_HOLDS, MAP_COLUMNS_MAX, 0, 0, 1, 0, MAP_COLUMN_SQUARES, 0},
+    {"unitBattleStrength", 0,                             T_UNIT_STRENGTH, PLAYER_SLOTS, 0, 0, 0, 0, UNIT_TABLE_MAX, 0},
     {"unitStrength",   0,                                 T_UNIT_STRENGTH, PLAYER_SLOTS, 0, 0, 0, 0, UNIT_TABLE_MAX, 0},
     {"unitArmor",      RVA_UNITS,                         T_UNIT_ARMOR, UNIT_TABLE_MAX, UNIT_SIZE, 0, 0, 0, 0, 0},
+    {"unitStr",        RVA_UNITS,                         T_UNIT_STR, UNIT_TABLE_MAX, UNIT_SIZE, 0, 0, 0, 0, 0},
     {"unitVisibleTo",  0,                                 T_UNIT_VISIBLE, UNIT_TABLE_MAX, 0, 0, 0, 0, PLAYER_SLOTS, 0},
     {"monsterAttackType", RVA_MONSTER_TABLE + MONSTER_ATTACKS, T_MONSTER_ATTACK, MONSTER_TABLE_MAX, MONSTER_SIZE,
      0, 1, 0, MONSTER_ATTACK_MAX, MONSTER_ATTACK_SIZE},
@@ -539,8 +545,11 @@ static const GameVarShape GAME_VAR_SHAPES[] = {
     {"planeTint", 0, 0, LIST_NONE, 0, RVA_LAST_PLANE, 0},
     {"squareGems", SQUARE_GEM_KINDS, 1, LIST_NONE, 0, 0, 0},
     {"squareCorpses", SQUARE_CORPSE_KINDS, 2, LIST_NONE, 0, 0, 0},
+    {"squareBattleStrength", MAP_COLUMN_SQUARES, 0, LIST_NONE, 0, 0, 1},
     {"squareStrength", MAP_COLUMN_SQUARES, 0, LIST_NONE, 0, 0, 1},
+    {"squareRememberedBattleStrength", MAP_COLUMN_SQUARES, SQUARE_SIZE, LIST_NONE, 0, 0, 0},
     {"squareRememberedStrength", MAP_COLUMN_SQUARES, SQUARE_SIZE, LIST_NONE, 0, 0, 0},
+    {"unitBattleStrength", 0, 0, LIST_NONE, 0, 0, 1},
     {"unitStrength", 0, 0, LIST_NONE, 0, 0, 1},
     {"squareCitadel", MAP_COLUMN_SQUARES, 0, LIST_NONE, 0, 0, 1},
     {"unitKnownSpell", 0, 0, LIST_TO_BELOW_ZERO, 0, 0, 0},
@@ -819,6 +828,15 @@ static int unitArmorNow(int unit) {
     return GAME_FN(int (*)(int), RVA_UNIT_ARMOR)(unit);
 }
 
+static int unitStrNow(int unit, int *str) {
+    if (!unitAliveInTable(unit)) return 0;
+    const unsigned char *record = monsterRecord((short)G16(RVA_UNIT_MONSTER + (size_t)unit * UNIT_SIZE));
+    if (!record) return 0;
+    int bonus = ((int (*)(int))siteEntry(SITE_UNIT_DAMAGE_BONUS, GAME_PTR(RVA_UNIT_DAMAGE_BONUS)))(unit);
+    *str = *(const short *)(record + MONSTER_STR) + bonus;
+    return 1;
+}
+
 static int unitStateFlagsNow(int unit, unsigned long long *flags) {
     if (!unitAliveInTable(unit)) return 0;
     *flags = GAME_FN(unsigned long long (*)(int), RVA_UNIT_STATE_FLAGS)(unit);
@@ -836,13 +854,15 @@ static int unitVisibleToNow(int unit, int player) {
     return GAME_FN(int (*)(int, int, int, int), RVA_UNIT_VISIBLE_TO)(player, unit, G32(RVA_UNIT_X + at), G32(RVA_UNIT_X + 4 + at)) != 0;
 }
 
-static int monsterAttackField(const unsigned char *rows, int row, int field, int *value) {
+static int monsterAttackField(const unsigned char *rows, int row, int field, long long *value) {
     for (int k = 0; k <= row && k < MONSTER_ATTACK_MAX; k++) {
         const unsigned char *r = rows + (size_t)k * MONSTER_ATTACK_SIZE;
         if (*(const int *)r < 1 || *(const int *)(r + MONSTER_ATTACK_WEAPON) < 0) return -1;
     }
     if (row < 0 || row >= MONSTER_ATTACK_MAX) return -1;
-    *value = *(const int *)(rows + (size_t)row * MONSTER_ATTACK_SIZE + field);
+    const unsigned char *at = rows + (size_t)row * MONSTER_ATTACK_SIZE + field;
+    if (field == MONSTER_ATTACK_VALUE) memcpy(value, at, 8);
+    else *value = *(const int *)at;
     return 0;
 }
 

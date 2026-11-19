@@ -160,6 +160,16 @@ static void useItemSlotsChunk(const SaveChunk *chunk, SaveFile kind);
 #define SAVE_TAG_CWRT SAVE_TAG('C', 'W', 'R', 'T')
 static void addContentWritesChunk(SaveList *list);
 static void useContentWritesChunk(const SaveChunk *chunk, SaveFile kind);
+#define SAVE_TAG_AFFS SAVE_TAG('A', 'F', 'F', 'S')
+#define SAVE_AFFS_CHUNKS_MAX 32
+static void addCustomAfflictionsChunks(SaveList *list);
+static void useCustomAfflictionsChunks(const SaveChunk *const *chunks, int count, SaveFile kind);
+#define SAVE_TAG_UKIL SAVE_TAG('U', 'K', 'I', 'L')
+static void addUnitKillsChunk(SaveList *list);
+static void useUnitKillsChunk(const SaveChunk *chunk, SaveFile kind);
+#define SAVE_TAG_VHCL SAVE_TAG('V', 'H', 'C', 'L')
+static void addVehiclesChunk(SaveList *list);
+static void useVehiclesChunk(const SaveChunk *chunk, SaveFile kind);
 
 static int saveVanillaLastIndex(int kind) {
     if (kind == 0) return VANILLA_SPELL_COUNT - 1;
@@ -183,6 +193,9 @@ static void buildSaveList(SaveList *list, SaveNamesWritten *written) {
     addRandomEventsChunk(list);
     addCommanderCastsChunk(list);
     addItemSlotsChunk(list);
+    addCustomAfflictionsChunks(list);
+    addUnitKillsChunk(list);
+    addVehiclesChunk(list);
     addContentWritesChunk(list);
     addHostSettingsChunk(list);
     addCoe5seVersionChunk(list);
@@ -286,7 +299,8 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
     const char *versionResult = "none";
     char version[SAVE_STRING_MAX + 1] = "";
     const SaveChunk *modc = NULL, *modh = NULL, *vers = NULL, *gameData = NULL, *customCorpses = NULL, *randomEvents = NULL,
-                    *commanderCasts = NULL, *itemSlots = NULL, *contentWritten = NULL;
+                    *commanderCasts = NULL, *itemSlots = NULL, *contentWritten = NULL, *unitKills = NULL, *vehicles = NULL, *afflictions[SAVE_CHUNKS_MAX];
+    int afflictionChunks = 0;
     if (castCounts < 0) read->result = "bad_block", read->reason = "cast_counts_block";
     else if (castCounts > 0) {
         const char *failed = readSaveList(file, &list, &read->reason);
@@ -304,6 +318,9 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
                 else if (list.chunks[i].tag == SAVE_TAG_CMXC) commanderCasts = &list.chunks[i];
                 else if (list.chunks[i].tag == SAVE_TAG_ITMS) itemSlots = &list.chunks[i];
                 else if (list.chunks[i].tag == SAVE_TAG_CWRT) contentWritten = &list.chunks[i];
+                else if (list.chunks[i].tag == SAVE_TAG_AFFS) afflictions[afflictionChunks++] = &list.chunks[i];
+                else if (list.chunks[i].tag == SAVE_TAG_UKIL) unitKills = &list.chunks[i];
+                else if (list.chunks[i].tag == SAVE_TAG_VHCL) vehicles = &list.chunks[i];
                 else if (!isSaveNameTag(list.chunks[i].tag) && list.chunks[i].tag != SAVE_TAG_PLNS && list.chunks[i].tag != SAVE_TAG_FCTN &&
                          list.chunks[i].tag != SAVE_TAG_FCDT && list.chunks[i].tag != SAVE_TAG_MSET)
                     read->unknown++;
@@ -318,6 +335,9 @@ static void readSaveTail(void *file, int onlyPlayer, SaveFile kind) {
     useRandomEventsChunk(randomEvents, kind);
     useCommanderCastsChunk(commanderCasts, kind);
     useItemSlotsChunk(itemSlots, kind);
+    useCustomAfflictionsChunks(afflictions, afflictionChunks, kind);
+    useUnitKillsChunk(unitKills, kind);
+    useVehiclesChunk(vehicles, kind);
     useContentWritesChunk(contentWritten, kind);
     if (kind == SAVE_FILE_SAVE) loadedSaveWrittenOn = read->writtenOn;
     writeLog("save_names_read", "file=%s result=%s reason=%s skipped=%s written_on=%s chunks=%d unknown=%d", SAVE_FILE_NAMES[kind],

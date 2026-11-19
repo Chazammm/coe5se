@@ -174,7 +174,7 @@ static int factionEventWordKind(const char *line, size_t len) {
 static const char *factionNameEventLine(const char *line, int level, const char *mod) {
     size_t len = strcspn(line, " \t");
     int kind = factionEventWordKind(line, len);
-    if (!kind || level == 4 || G32(RVA_EVENT_STATE) < 1) return line;
+    if (!kind || level != 3 || G32(RVA_EVENT_STATE) < 1) return line;
     const char *at = line + len;
     while (*at == ' ' || *at == '\t') at++;
     if (*at != '"') return line;

@@ -160,15 +160,10 @@ static int lTestFieldPointerButtons(lua_State *L) {
     return 1;
 }
 
-// @platform-split test_field_unique: multipleUnique is 0 on Mac, whose newunit has no unique search call to answer
 static int lTestFieldEditorCapabilities(lua_State *L) {
     checkLuaMainThread(L, "coe5.testFieldEditorCapabilities");
     int ready = gameCodeMatches != 0, lifecycle = ready && testFieldLife.installed >= 0;
-#ifdef __APPLE__
-    int multipleUnique = 0;
-#else
     int multipleUnique = lifecycle;
-#endif
     lua_createtable(L, 0, 13);
     setIntField(L, "uniqueGuard", ready);
     setIntField(L, "state", ready);

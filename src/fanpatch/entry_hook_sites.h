@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 56
+#define ENTRY_HOOK_COUNT 71
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -49,6 +49,12 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"battle_item_effects", 0x0d69a0, 6, 0, {{0, 0}}},
     {"ai_redistribute_items", 0x0734b0, 5, 0, {{0, 0}}},
     {"commander_use_items", 0x185060, 5, 0, {{0, 0}}},
+    {"text_wrap", 0x053c50, 6, 0, {{0, 0}}},
+    {"translate_format", 0x03d200, 5, 0, {{0, 0}}},
+    {"text_draw_line", 0x052370, 8, 1, {{4, 0x0524c3}}},
+    {"text_draw_line_scaled", 0x0524e0, 8, 1, {{4, 0x052658}}},
+    {"text_measure", 0x0521d0, 6, 0, {{0, 0}}},
+    {"english_text_pass", 0x05c8a0, 5, 0, {{0, 0}}},
     {"unit_attack_row", 0x0d7570, 5, 0, {{0, 0}}},
     {"new_unit", 0x1297b0, 8, 0, {{0, 0}}},
     {"unit_spell_weapon_level", 0x2e7050, 6, 0, {{0, 0}}},
@@ -59,6 +65,15 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"load_battle_replay", 0x0f3cb0, 5, 0, {{0, 0}}},
     {"unit_resistances", 0x32a250, 6, 0, {{0, 0}}},
     {"unit_flags", 0x328a00, 6, 0, {{0, 0}}},
+    {"unit_max_hp", 0x3259d0, 5, 0, {{0, 0}}},
+    {"unit_banishable", 0x322130, 6, 0, {{0, 0}}},
+    {"weapon_hit", 0x0dcaa0, 5, 0, {{0, 0}}},
+    {"ai_item_use_rating", 0x183790, 5, 0, {{0, 0}}},
+    {"immortal_reform_place", 0x326de0, 5, 0, {{0, 0}}},
+    {"commander_army_ap_left", 0x328880, 6, 0, {{0, 0}}},
+    {"commander_ap_left", 0x3289a0, 10, 0, {{0, 0}}},
+    {"commander_add_ap_used", 0x12c210, 8, 1, {{4, 0x12c31f}}},
+    {"shipmove_spend_ap", 0x104fd0, 8, 1, {{4, 0x10531d}}},
 };
 #else
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
@@ -108,6 +123,12 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"battle_item_effects", 0x000000, 0, 0, {{0, 0}}},
     {"ai_redistribute_items", 0x000000, 0, 0, {{0, 0}}},
     {"commander_use_items", 0x000000, 0, 0, {{0, 0}}},
+    {"text_wrap", 0x34d7b8, 16, 0, {{0, 0}}},
+    {"translate_format", 0x33b4a8, 16, 0, {{0, 0}}},
+    {"text_draw_line", 0x34d0c0, 16, 0, {{0, 0}}},
+    {"text_draw_line_scaled", 0x34c634, 16, 0, {{0, 0}}},
+    {"text_measure", 0x34d3b0, 16, 0, {{0, 0}}},
+    {"english_text_pass", 0x3346f0, 16, 0, {{0, 0}}},
     {"unit_attack_row", 0x3f184c, 16, 0, {{0, 0}}},
     {"new_unit", 0x46e828, 16, 0, {{0, 0}}},
     {"unit_spell_weapon_level", 0x000000, 0, 0, {{0, 0}}},
@@ -118,5 +139,14 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"load_battle_replay", 0x000000, 0, 0, {{0, 0}}},
     {"unit_resistances", 0x567474, 16, 0, {{0, 0}}},
     {"unit_flags", 0x569d20, 16, 0, {{0, 0}}},
+    {"unit_max_hp", 0x56a8e0, 16, 0, {{0, 0}}},
+    {"unit_banishable", 0x000000, 0, 0, {{0, 0}}},
+    {"weapon_hit", 0x3c1f7c, 16, 0, {{0, 0}}},
+    {"ai_item_use_rating", 0x4e8420, 16, 0, {{0, 0}}},
+    {"immortal_reform_place", 0x5682b0, 16, 0, {{0, 0}}},
+    {"commander_army_ap_left", 0x56a728, 16, 0, {{0, 0}}},
+    {"commander_ap_left", 0x56a66c, 16, 0, {{0, 0}}},
+    {"commander_add_ap_used", 0x481578, 16, 0, {{0, 0}}},
+    {"shipmove_spend_ap", 0x481120, 16, 0, {{0, 0}}},
 };
 #endif

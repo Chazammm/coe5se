@@ -99,13 +99,59 @@ static TestFieldUnitSnapshot readTestFieldUnitSnapshot(int unit) {
 
 static int (*gameNewUnit)(int x, int y, int player, int commander, int monster);
 
+static int testFieldAllowsSecondUnique(void) {
+    return testFieldLife.active && testFieldLife.overrideDepth > 0 && testFieldLife.allowMultiple && GetCurrentThreadId() == testFieldLife.thread;
+}
+
 #ifndef __APPLE__
-// @platform-split test_field_unique: Windows answers newunit's own call of the unique search; Mac's newunit holds a copy of the search, so allowMultipleUnique is refused there (windows_only)
+// @platform-split test_field_unique: Windows answers newunit's own call of the unique search; Mac's newunit holds a copy of the search, whose count read a step hook answers
 static int testFieldMonsterUnitFirstHook(int monster) {
-    if (testFieldLife.active && testFieldLife.overrideDepth > 0 && testFieldLife.allowMultiple && GetCurrentThreadId() == testFieldLife.thread) return -1;
-    return GAME_FN(int (*)(int), RVA_MONSTER_UNIT_FIRST)(monster);
+    if (testFieldAllowsSecondUnique()) return -1;
+    return uniqueGroupUnitFirst(monster);
 }
 static TestFieldCall testFieldUniqueCall = {RVA_NEW_UNIT_UNIQUE_CALL, RVA_MONSTER_UNIT_FIRST, (void *)testFieldMonsterUnitFirstHook, "new_unit_unique", NULL, 0};
+#else
+// @platform-split test_field_unique: Windows answers newunit's own call of the unique search; Mac's newunit holds a copy of the search, whose count read a step hook answers
+#define NEW_UNIT_UNIQUE_COUNT_READ_WORD 0xb9487908u
+#define UNIT_COUNT_PAGE_OFFSET 0x878
+static const int32_t testFieldNoUnitCount = -1;
+static struct {
+    StepHook hook;
+    uint32_t game, branch;
+    int put, on;
+} testFieldUniqueRead;
+
+static void testFieldUniqueCountRead(StepContext *ctx, const StepHook *hook) {
+    (void)hook;
+    if (testFieldAllowsSecondUnique()) ctx->x[8] = (uint64_t)(uintptr_t)&testFieldNoUnitCount - UNIT_COUNT_PAGE_OFFSET;
+}
+
+static int pointTestFieldUniqueRead(void) {
+    if (testFieldUniqueRead.on) return 1;
+    unsigned char *at = gameBase + RVA_NEW_UNIT_UNIQUE_COUNT_READ;
+    if (!testFieldUniqueRead.put) {
+        memcpy(&testFieldUniqueRead.game, at, 4);
+        if (testFieldUniqueRead.game != NEW_UNIT_UNIQUE_COUNT_READ_WORD) {
+            writeLog("hook_skipped", "site=new_unit_unique reason=not_the_expected_code");
+            return 0;
+        }
+        testFieldUniqueRead.hook.handler = testFieldUniqueCountRead;
+        if (!putStepHookMac(RVA_NEW_UNIT_UNIQUE_COUNT_READ, &testFieldUniqueRead.hook, "new_unit_unique", 0)) return 0;
+        memcpy(&testFieldUniqueRead.branch, at, 4);
+        testFieldUniqueRead.put = testFieldUniqueRead.on = 1;
+        return 1;
+    }
+    if (!writeGameCode(at, &testFieldUniqueRead.branch, 4)) return 0;
+    testFieldUniqueRead.on = 1;
+    return 1;
+}
+
+static int restoreTestFieldUniqueRead(void) {
+    if (!testFieldUniqueRead.on) return 1;
+    if (!writeGameCode(gameBase + RVA_NEW_UNIT_UNIQUE_COUNT_READ, &testFieldUniqueRead.game, 4)) return 0;
+    testFieldUniqueRead.on = 0;
+    return 1;
+}
 #endif
 
 static int testFieldNewUnitHook(int x, int y, int player, int commander, int monster) {
@@ -137,6 +183,8 @@ static int testFieldNewUnitHook(int x, int y, int player, int commander, int mon
 static void turnOffTestFieldLifecycle(void) {
 #ifndef __APPLE__
     restoreTestFieldCall(&testFieldUniqueCall);
+#else
+    restoreTestFieldUniqueRead();
 #endif
     if (testFieldLife.pending || !testFieldLife.tracking) return;
     if (fanpatchHookEnable(gameBase + RVA_NEW_UNIT, 0)) testFieldLife.tracking = 0;
@@ -160,13 +208,13 @@ static int turnOnTestFieldLifecycle(int multiple) {
         testFieldLife.tracking = 1;
     }
 #ifndef __APPLE__
-    if (multiple && !pointTestFieldCall(&testFieldUniqueCall)) {
+    if (multiple && !uniqueGroups.newUnitCall && !pointTestFieldCall(&testFieldUniqueCall)) {
+#else
+    if (multiple && !pointTestFieldUniqueRead()) {
+#endif
         turnOffTestFieldLifecycle();
         return 0;
     }
-#else
-    (void)multiple;
-#endif
     testFieldLife.installed = 1;
     return 1;
 }

@@ -250,8 +250,8 @@ static int lButton(lua_State *L) {
     b->id = (int)id;
     memcpy(b->colour, colour, sizeof b->colour);
     char cut[UI_BUTTON_TEXT];
-    snprintf(b->label, sizeof b->label, "%s", fitGameText((void *)lButton, "coe5.ui.button", label, cut, sizeof cut));
-    snprintf(b->line2, sizeof b->line2, "%s", fitGameText((void *)lButton, "coe5.ui.button", line2, cut, sizeof cut));
+    snprintf(b->label, sizeof b->label, "%s", fitTranslatedText((void *)lButton, "coe5.ui.button", label, cut, sizeof cut));
+    snprintf(b->line2, sizeof b->line2, "%s", fitTranslatedText((void *)lButton, "coe5.ui.button", line2, cut, sizeof cut));
     addUiButtonRow(b->id, size[0], size[1]);
     return 0;
 }
@@ -350,7 +350,7 @@ static int lDrawText(lua_State *L) {
     if (!luaDrawFloats(L, "coe5.ui.drawText", 1, 3, pos) || !luaDrawFloats(L, "coe5.ui.drawText", 5, 8, colour)) return 0;
     if (!luaMayDraw(L, "coe5.ui.drawText")) return 0;
     char cut[DRAW_TEXT_SIZE];
-    text = fitGameText((void *)lDrawText, "coe5.ui.drawText", text, cut, sizeof cut);
+    text = fitTranslatedText((void *)lDrawText, "coe5.ui.drawText", text, cut, sizeof cut);
     drawUiText(pos[0], pos[1], pos[2], text, colour[0], colour[1], colour[2], colour[3]);
     return 0;
 }
@@ -508,8 +508,8 @@ static int lNameBox(lua_State *L) {
     }
     int sprite = (int)wanted;
     char titleCut[SCREEN_TITLE_TEXT_SIZE], promptCut[NAME_BOX_PROMPT_SIZE];
-    title = fitGameText((void *)lNameBox, "coe5.ui.nameBox", title, titleCut, sizeof titleCut);
-    prompt = fitGameText((void *)lNameBox, "coe5.ui.nameBox", prompt, promptCut, sizeof promptCut);
+    title = fitTranslatedText((void *)lNameBox, "coe5.ui.nameBox", title, titleCut, sizeof titleCut);
+    prompt = fitTranslatedText((void *)lNameBox, "coe5.ui.nameBox", prompt, promptCut, sizeof promptCut);
     char name[NAME_BOX_LENGTH_MAX + 2] = "";
     luaCodeRunning--;
     int ok = runNameBox(NAME_BOX_MONSTER_SPRITE, sprite, name, (int)max, 1, title, prompt);
@@ -558,18 +558,18 @@ static int lMonsterRow(lua_State *L) {
     }
     int sprite = *(const int *)(monsterRecord((int)monster) + (RVA_MONSTER_SPRITES - RVA_MONSTER_TABLE));
     char cut[TEXT_BUTTON_TEXT_SIZE], cut2[TEXT_BUTTON_TEXT_SIZE];
-    text = fitGameText((void *)lMonsterRow, "coe5.ui.monsterRow", text, cut, sizeof cut);
+    text = fitTranslatedText((void *)lMonsterRow, "coe5.ui.monsterRow", text, cut, sizeof cut);
     int stripe = (monsterRowIndex++ & 1) + 1;
     monsterRowBegin();
     if (!line2) {
         GAME_FN(void (*)(int, int), RVA_ROW_STRIPE)(stripe, MONSTER_ROW_STRIPE_WIDTH);
         GAME_FN(void *(*)(int, int, int, int), RVA_SPRITE_BUTTON)((int)id, SPRITE_KIND_MONSTER, sprite, MONSTER_ROW_SPRITE_FLAGS);
         monsterRowColumn(MONSTER_ROW_TEXT_X);
-        textButton((int)id, text);
+        textButtonAsIs((int)id, text);
         monsterRowEnd();
         return 0;
     }
-    line2 = fitGameText((void *)lMonsterRow, "coe5.ui.monsterRow", line2, cut2, sizeof cut2);
+    line2 = fitTranslatedText((void *)lMonsterRow, "coe5.ui.monsterRow", line2, cut2, sizeof cut2);
     int width = (int)setupScreenWidth();
     GAME_FN(void (*)(int, int), RVA_ROW_STRIPE)(stripe, width);
     float scale = textScaleNow();
@@ -578,14 +578,14 @@ static int lMonsterRow(lua_State *L) {
     setTextScale(scale);
     float textX = GF(RVA_COLUMN_BASE) * (1.0f + MONSTER_ROW_SUBTEXT_SCALE) + MONSTER_ROW_TALL_GAP;
     monsterRowColumn(textX);
-    textButton((int)id, text);
+    textButtonAsIs((int)id, text);
     monsterRowEnd();
     monsterRowBegin();
     GAME_FN(void (*)(int, int), RVA_ROW_STRIPE)(stripe, width);
     monsterRowColumn(textX);
     setTextScale(scale * MONSTER_ROW_SUBTEXT_SCALE);
-    GAME_FN(void (*)(int, float, float, float, float, FMT_ARGS), RVA_BUTTON_CORE)((int)id, TEXT_COLOUR_KEEP, TEXT_COLOUR_KEEP,
-                                                                                  TEXT_COLOUR_KEEP, MONSTER_ROW_SUBTEXT_ALPHA, "%s", line2);
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(int, float, float, float, float, FMT_ARGS), RVA_BUTTON_CORE)(
+        (int)id, TEXT_COLOUR_KEEP, TEXT_COLOUR_KEEP, TEXT_COLOUR_KEEP, MONSTER_ROW_SUBTEXT_ALPHA, "%s", line2));
     setTextScale(scale);
     monsterRowEnd();
     return 0;
@@ -611,11 +611,55 @@ static int lShowMessageBox(lua_State *L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    char titleCut[SCREEN_TITLE_TEXT_SIZE], textCut[TEXT_BUTTON_TEXT_SIZE];
+    char titleCut[TRANSLATED_ARG_SIZE - 1], textCut[MESSAGE_BOX_TEXT_SIZE];
     title = fitGameText((void *)lShowMessageBox, "coe5.showMessageBox", title, titleCut, sizeof titleCut);
     text = fitGameText((void *)lShowMessageBox, "coe5.showMessageBox", text, textCut, sizeof textCut);
     writeLog("lua_message_box_shown", "mod=%s title=%.80s", runningLuaMod(), title);
     messageBox(title, text, "Ok", "", 0, UI_KEY_ENTER, 0);
     lua_pushboolean(L, 1);
     return 1;
+}
+
+// ---- One-button boxes ---------------------------------------------------------------------------
+static void messageBoxSecondButton(int id, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    const char *text = va_arg(args, const char *);
+    va_end(args);
+    if (!text || !*text) return;
+    GAME_FN(void (*)(int, FMT_ARGS), RVA_TEXT_BUTTON)(id, format, text);
+}
+
+static int redirectMessageBoxCall(unsigned int rva, unsigned int targetRva, void *hook, const char *label) {
+#ifdef __APPLE__
+    if (blTarget(gameBase + rva) != gameBase + targetRva) {
+        writeLog("hook_skipped", "site=%s reason=not_the_expected_call", label);
+        return 0;
+    }
+    unsigned char *trampoline = newTrampoline(hook);
+    uint32_t word = trampoline ? blTo(gameBase + rva, trampoline) : 0;
+    if (trampoline && writeGameCode(gameBase + rva, &word, 4)) return 1;
+    writeLog("hook_skipped", "site=%s reason=%s", label, trampoline ? "code_unwritable" : "no_padding");
+    return 0;
+#else
+    unsigned char *stub = allocNear(gameBase + rva);
+    if (!stub) {
+        writeLog("hook_skipped", "site=%s reason=no_near_page", label);
+        return 0;
+    }
+    makePagesReadExecute(stub, 0x1000);
+    return redirectCall(rva, targetRva, stub, hook, label, NULL);
+#endif
+}
+
+static void installMessageBoxOneButton(void) {
+    static const unsigned int calls[] = {RVA_MESSAGE_BOX_BUTTON2_CALL,
+#ifdef __APPLE__
+                                         RVA_MESSAGE_BOX_BUTTON2_CALL_2, RVA_MESSAGE_BOX_BUTTON2_CALL_3,
+#endif
+    };
+    int count = (int)(sizeof calls / sizeof calls[0]), pointed = 0;
+    for (int i = 0; i < count; i++)
+        pointed += redirectMessageBoxCall(calls[i], RVA_TEXT_BUTTON, (void *)messageBoxSecondButton, "message_box_button2");
+    writeResultLog(pointed == count, "message_box_one_button_installed", "ok=%d calls=%d of %d", pointed == count, pointed, count);
 }

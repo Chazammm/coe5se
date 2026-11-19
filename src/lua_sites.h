@@ -13,6 +13,9 @@ enum {
     K_SEAL_BREAK,
     K_TEST,
     K_SEAL_EVENT,
+    K_DESTINATION,
+    K_REFORM,
+    K_BATTLE_SQUARE,
 };
 #define LUA_CALL_ARGS 17
 #define LUA_TEXT_ARGS 6
@@ -181,10 +184,11 @@ static const LuaSite luaSites[] = {
     {"FIGHT_THE_FIGHT",               SITE_FIGHT_THE_FIGHT,               K_OBSERVE, "i:ii"},
     {"BATTLE_ROUND",                  SITE_BATTLE_ROUND,                  K_OBSERVE, "x:"},
     {"DAMAGE_UNIT",                   SITE_DAMAGE_UNIT,                   K_OBSERVE, "x:ii"},
-    {"DOATTACK",                      SITE_DOATTACK,                      K_OBSERVE, "x:iii"},
+    {"DOATTACK",                      SITE_DOATTACK,                      K_CALL,    "x:iii"},
     {"BATTLE_SPELL_PICK",             SITE_BATTLE_SPELL_PICK,             K_CALL,    "i:ii"},
     {"WEAPON_HIT",                    SITE_WEAPON_HIT,                    K_CALL,    "i:iiiiii"},
     {"BATTLE_TARGET_CHECK",           SITE_BATTLE_TARGET_CHECK,           K_CALL,    "i:iiiii"},
+    {"BATTLE_TARGET_SQUARE",          SITE_BATTLE_TARGET_SQUARE,          K_BATTLE_SQUARE, "i:iiiii"},
     {"EXECUTE_RITUAL",                SITE_EXECUTE_RITUAL,                K_OBSERVE, "i:iiiiii"},
     {"NEW_UNIT",                      SITE_NEW_UNIT,                      K_OBSERVE, "i:iiiii"},
     {"REMOVE_UNIT",                   SITE_REMOVE_UNIT,                   K_OBSERVE, "x:i"},
@@ -196,7 +200,7 @@ static const LuaSite luaSites[] = {
     {"BATTLE_SETUP",                  SITE_BATTLE_SETUP,                  K_OBSERVE, "x:iii"},
     {"BATTLE_SETUP_SIDE",             SITE_BATTLE_SETUP_SIDE,             K_OBSERVE, "x:iiiii"},
     {"BATTLE_SETUP_AMBUSH",           SITE_BATTLE_SETUP_AMBUSH,           K_OBSERVE, "x:iiiii"},
-    {"BATTLE_ADVANCE_UNIT",           SITE_BATTLE_ADVANCE_UNIT,           K_OBSERVE, "x:ii"},
+    {"BATTLE_ADVANCE_UNIT",           SITE_BATTLE_ADVANCE_UNIT,           K_CALL,    "x:ii"},
     {"BATTLE_TURN_EFFECTS",           SITE_BATTLE_TURN_EFFECTS,           K_OBSERVE, "x:ii"},
     {"BATTLE_TRANSFORM",              SITE_BATTLE_TRANSFORM,              K_OBSERVE, "x:iii"},
     {"FOUND_ITEM",                    SITE_FOUND_ITEM,                    K_OBSERVE, "x:iii"},
@@ -265,7 +269,7 @@ static const LuaSite luaSites[] = {
     {"ALTER_TERRAIN",                 SITE_ALTER_TERRAIN,                 K_OBSERVE, "i:iiiiii"},
     {"RUIN_SQUARE",                   SITE_RUIN_SQUARE,                   K_OBSERVE, "v:iii"},
     {"DESTROY_GATEWAY",               SITE_DESTROY_GATEWAY,               K_OBSERVE, "i:iiii"},
-    {"DIG_TUNNEL_SQUARE",             SITE_DIG_TUNNEL_SQUARE,             K_OBSERVE, "i:iii"},
+    {"DIG_TUNNEL_SQUARE",             SITE_DIG_TUNNEL_SQUARE,             K_OBSERVE, SITE_SIGNATURE("i:iii", "x:iii")},
     {"MONTH_SQUARE_RESET",            SITE_MONTH_SQUARE_RESET,            K_OBSERVE, "v:"},
     {"ROLL_CLASS",                    SITE_ROLL_CLASS,                    K_OBSERVE, "x:ii"},
     {"RESET_INCOME_CACHES",           SITE_RESET_INCOME_CACHES,           K_OBSERVE, "v:"},
@@ -273,10 +277,10 @@ static const LuaSite luaSites[] = {
     {"TRIM_TEAM_LOCATIONS",           SITE_TRIM_TEAM_LOCATIONS,           K_OBSERVE, "x:"},
     {"SWAP_TEAM_LOCATIONS",           SITE_SWAP_TEAM_LOCATIONS,           K_OBSERVE, "x:"},
     {"CREATE_CITADELS_STEP",          SITE_CREATE_CITADELS_STEP,          K_OBSERVE, "x:"},
-    {"FIX_PORTALS",                   SITE_FIX_PORTALS,                   K_OBSERVE, "i:"},
+    {"FIX_PORTALS",                   SITE_FIX_PORTALS,                   K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"VOID_FLUCTUATIONS",             SITE_VOID_FLUCTUATIONS,             K_OBSERVE, "v:"},
     {"PLANESHIFT_COMMANDER",          SITE_PLANESHIFT_COMMANDER,          K_OBSERVE, "x:ii"},
-    {"MIST_SPREAD",                   SITE_MIST_SPREAD,                   K_OBSERVE, "i:"},
+    {"MIST_SPREAD",                   SITE_MIST_SPREAD,                   K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"TEMPERATURE_CHANGE",            SITE_TEMPERATURE_CHANGE,            K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"SPECIAL_SITE_POPULATE",                 SITE_SPECIAL_SITE_POPULATE,                 K_OBSERVE, "v:"},
     {"UNIT_SWALLOW",                  SITE_UNIT_SWALLOW,                  K_OBSERVE, "v:ii"},
@@ -285,9 +289,9 @@ static const LuaSite luaSites[] = {
     {"UNIT_CATCH_FIRE",               SITE_UNIT_CATCH_FIRE,               K_OBSERVE, "i:ii"},
     {"UNIT_CRUSH",                    SITE_UNIT_CRUSH,                    K_OBSERVE, "x:i"},
     {"REMOVE_BAD_FOLLOWERS",          SITE_REMOVE_BAD_FOLLOWERS,          K_OBSERVE, "v:"},
-    {"OVERPOP_CULL",                  SITE_OVERPOP_CULL,                  K_OBSERVE, "i:"},
+    {"OVERPOP_CULL",                  SITE_OVERPOP_CULL,                  K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"MONKEY_CLOAK",                  SITE_MONKEY_CLOAK,                  K_OBSERVE, "v:i"},
-    {"RECYCLE_UNITS",                 SITE_RECYCLE_UNITS,                 K_OBSERVE, "i:"},
+    {"RECYCLE_UNITS",                 SITE_RECYCLE_UNITS,                 K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"RANDOM_TELEPORT",               SITE_RANDOM_TELEPORT,               K_OBSERVE, SITE_SIGNATURE("i:iii", "x:iii")},
     {"POP_HORRORS",                   SITE_POP_HORRORS,                   K_OBSERVE, "v:i"},
     {"KILL_TERRAIN_UNITS",            SITE_KILL_TERRAIN_UNITS,            K_OBSERVE, "v:"},
@@ -295,8 +299,8 @@ static const LuaSite luaSites[] = {
     {"CREATE_BOATS",                  SITE_CREATE_BOATS,                  K_OBSERVE, "x:"},
     {"BATTLE_TRAPS",                  SITE_BATTLE_TRAPS,                  K_OBSERVE, "x:"},
     {"BATTLE_ENCHANT_TRAPS",          SITE_BATTLE_ENCHANT_TRAPS,          K_OBSERVE, "x:"},
-    {"BATTLE_SUMMON_STRING",          SITE_BATTLE_SUMMON_STRING,          K_OBSERVE, "x:"},
-    {"PAY_SPELL_LIFEFORCE",           SITE_PAY_SPELL_LIFEFORCE,           K_OBSERVE, "x:"},
+    {"BATTLE_SUMMON_STRING",          SITE_BATTLE_SUMMON_STRING,          K_OBSERVE, "i:"},
+    {"PAY_SPELL_LIFEFORCE",           SITE_PAY_SPELL_LIFEFORCE,           K_OBSERVE, "i:"},
     {"WORLD_NEWS",                    SITE_WORLD_NEWS,                    K_OBSERVE, "v:s"},
     {"SEASON_NEWS",                   SITE_SEASON_NEWS,                   K_OBSERVE, "v:i"},
     {"CHECK_GAME_WON",                SITE_CHECK_GAME_WON,                K_OBSERVE, "v:"},
@@ -342,7 +346,7 @@ static const LuaSite luaSites[] = {
     {"BATTLE_FIGHT_MOVE",             SITE_BATTLE_FIGHT_MOVE,             K_OBSERVE, "x:iiiii"},
     {"BATTLE_FLY_MOVE",               SITE_BATTLE_FLY_MOVE,               K_OBSERVE, "x:i"},
     {"BATTLE_FLEE",                   SITE_BATTLE_FLEE,                   K_OBSERVE, "x:i"},
-    {"BATTLE_FEAR_CHECK",             SITE_BATTLE_FEAR_CHECK,             K_OBSERVE, "x:i"},
+    {"BATTLE_FEAR_CHECK",             SITE_BATTLE_FEAR_CHECK,             K_OBSERVE, "x:"},
     {"BATTLE_CLOUD_STEP",             SITE_BATTLE_CLOUD_STEP,             K_OBSERVE, "x:i"},
     {"BATTLE_ENSNARE_CHECK",          SITE_BATTLE_ENSNARE_CHECK,          K_OBSERVE, "x:i"},
     {"BATTLE_ENSNARE_RELEASE",        SITE_BATTLE_ENSNARE_RELEASE,        K_OBSERVE, "x:i"},
@@ -371,12 +375,12 @@ static const LuaSite luaSites[] = {
     {"CREATE_RANDOM_MAP",             SITE_CREATE_RANDOM_MAP,             K_OBSERVE, "x:"},
     {"WORLD_PART_TERRAIN",            SITE_WORLD_PART_TERRAIN,            K_OBSERVE, "v:"},
     {"MAPGEN_REMOVE_SMALL_ISLANDS",   SITE_MAPGEN_REMOVE_SMALL_ISLANDS,   K_OBSERVE, "v:"},
-    {"MAPGEN_RIVER_CROSSINGS",        SITE_MAPGEN_RIVER_CROSSINGS,        K_OBSERVE, "i:"},
-    {"MAPGEN_ANCIENT_FOREST",         SITE_MAPGEN_ANCIENT_FOREST,         K_OBSERVE, "i:"},
+    {"MAPGEN_RIVER_CROSSINGS",        SITE_MAPGEN_RIVER_CROSSINGS,        K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
+    {"MAPGEN_ANCIENT_FOREST",         SITE_MAPGEN_ANCIENT_FOREST,         K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"MAPGEN_CLEAR_AREA",             SITE_MAPGEN_CLEAR_AREA,             K_OBSERVE, "v:ii"},
     {"MAPGEN_ADJUST_TEMPERATURE",     SITE_MAPGEN_ADJUST_TEMPERATURE,     K_OBSERVE, "v:"},
     {"MARK_RIVER",                    SITE_MARK_RIVER,                    K_OBSERVE, "i:iiiiii"},
-    {"GEN_DIAGONAL_FIX",              SITE_GEN_DIAGONAL_FIX,              K_OBSERVE, "i:i"},
+    {"GEN_DIAGONAL_FIX",              SITE_GEN_DIAGONAL_FIX,              K_OBSERVE, SITE_SIGNATURE("i:i", "x:i")},
     {"GEN_UPDATE_MOIST_WALLS",        SITE_GEN_UPDATE_MOIST_WALLS,        K_OBSERVE, "v:i"},
     {"GEN_TERRAIN_BLOB",              SITE_GEN_TERRAIN_BLOB,              K_OBSERVE, "i:iiiiii"},
     {"CREATE_CELESTIAL_PLANE",        SITE_CREATE_CELESTIAL_PLANE,        K_OBSERVE, "v:"},
@@ -387,13 +391,13 @@ static const LuaSite luaSites[] = {
     {"CREATE_ELEMENTAL_PLANE",        SITE_CREATE_ELEMENTAL_PLANE,        K_OBSERVE, "v:"},
     {"LOAD_AZTLAN_PLANE",             SITE_LOAD_AZTLAN_PLANE,             K_OBSERVE, "v:"},
     {"LOAD_PRIMAL_PLANE",             SITE_LOAD_PRIMAL_PLANE,             K_OBSERVE, "v:"},
-    {"AUTO_RECRUIT",                  SITE_AUTO_RECRUIT,                  K_OBSERVE, "x:i"},
+    {"AUTO_RECRUIT",                  SITE_AUTO_RECRUIT,                  K_OBSERVE, "x:"},
     {"USE_LIBRARY",                   SITE_USE_LIBRARY,                   K_OBSERVE, "x:i"},
     {"ADD_GROUND_ITEMS",              SITE_ADD_GROUND_ITEMS,              K_OBSERVE, "x:ii"},
     {"VOID_INSANITY",                 SITE_VOID_INSANITY,                 K_OBSERVE, "x:iii"},
     {"WANDERER_PICK_TARGET",          SITE_WANDERER_PICK_TARGET,          K_OBSERVE, "x:ii"},
     {"WANDERER_PICK_UP",              SITE_WANDERER_PICK_UP,              K_OBSERVE, "i:i"},
-    {"SET_HOLDIT",                    SITE_SET_HOLDIT,                    K_OBSERVE, "i:iii"},
+    {"SET_HOLDIT",                    SITE_SET_HOLDIT,                    K_OBSERVE, SITE_SIGNATURE("i:iii", "x:iii")},
     {"LIBRARY_SCREEN",                SITE_LIBRARY_SCREEN,                K_OBSERVE, "x:i"},
     {"CHOP_BURN_SCREEN",              SITE_CHOP_BURN_SCREEN,              K_OBSERVE, "x:"},
     {"SLAVE_HUNT_SCREEN",             SITE_SLAVE_HUNT_SCREEN,             K_OBSERVE, "x:"},
@@ -423,9 +427,9 @@ static const LuaSite luaSites[] = {
     {"WILD_SPAWN",                    SITE_WILD_SPAWN,                    K_OBSERVE, "v:ii"},
     {"REVELS_SPAWN",                  SITE_REVELS_SPAWN,                  K_OBSERVE, "v:ii"},
     {"HORROR_LORD_PICK",              SITE_HORROR_LORD_PICK,              K_OBSERVE, "x:ii"},
-    {"UNIT_STRENGTH",                 SITE_UNIT_STRENGTH,                 K_CALL,    "i:iii"},
-    {"SQUARE_STRENGTH",               SITE_SQUARE_STRENGTH,               K_CALL,    "i:iii"},
-    {"COMMANDER_STRENGTH",            SITE_COMMANDER_STRENGTH,            K_CALL,    SITE_SIGNATURE("i:ii", "i:i")},
+    {"UNIT_BATTLE_STRENGTH",          SITE_UNIT_BATTLE_STRENGTH,          K_CALL,    "i:iii"},
+    {"SQUARE_BATTLE_STRENGTH",        SITE_SQUARE_BATTLE_STRENGTH,        K_CALL,    "i:iii"},
+    {"COMMANDER_BATTLE_STRENGTH",     SITE_COMMANDER_BATTLE_STRENGTH,     K_CALL,    SITE_SIGNATURE("i:ii", "i:i")},
     {"PLAYER_ABILITY",                SITE_PLAYER_ABILITY,                K_CALL,    "i:iii"},
     {"UNIT_STATE_FLAGS",              SITE_UNIT_STATE_FLAGS,              K_CALL,    "u:i"},
     {"ARMY_MOVE_FLAGS",               SITE_ARMY_MOVE_FLAGS,               K_CALL,    "u:i"},
@@ -438,18 +442,51 @@ static const LuaSite luaSites[] = {
     {"RITUAL_LOCATION_CHECK",         SITE_RITUAL_LOCATION_CHECK,         K_CALL,    "i:iiii"},
     {"CEREMONY_SCREEN_ROW",           SITE_CEREMONY_SCREEN_ROW,           K_CALL,    RITUAL_ROW_SIGNATURE},
     {"CEREMONY_SCREEN_WAIT",          SITE_CEREMONY_SCREEN_WAIT,          K_CALL,    "i:ii"},
+    {"PLAYER_GOLD_INCOME",            SITE_PLAYER_GOLD_INCOME,            K_OBSERVE, "i:i"},
+    {"PLAYER_IRON_INCOME",            SITE_PLAYER_IRON_INCOME,            K_OBSERVE, "i:i"},
+    {"PLAYER_HERBS_INCOME",           SITE_PLAYER_HERBS_INCOME,           K_OBSERVE, "i:i"},
+    {"PLAYER_FUNGUS_INCOME",          SITE_PLAYER_FUNGUS_INCOME,          K_OBSERVE, "i:i"},
+    {"PLAYER_SACRIFICES_INCOME",      SITE_PLAYER_SACRIFICES_INCOME,      K_OBSERVE, "i:i"},
+    {"PLAYER_HANDS_INCOME",           SITE_PLAYER_HANDS_INCOME,           K_OBSERVE, "i:i"},
+    {"PLAYER_WEED_INCOME",            SITE_PLAYER_WEED_INCOME,            K_OBSERVE, "i:i"},
+    {"PLAYER_TRADE_INCOME",           SITE_PLAYER_TRADE_INCOME,           K_OBSERVE, "i:i"},
+    {"PLAYER_RELICS_INCOME",          SITE_PLAYER_RELICS_INCOME,          K_OBSERVE, "i:i"},
+    {"PLAYER_LIFEFORCE_INCOME",       SITE_PLAYER_LIFEFORCE_INCOME,       K_OBSERVE, "i:ii"},
+    {"PLAYER_GEM_INCOME",             SITE_PLAYER_GEM_INCOME,             K_OBSERVE, "i:ii"},
+    {"TRADE_INCOME_APPLY",            SITE_TRADE_INCOME_APPLY,            K_OBSERVE, "v:i"},
+    {"UNIT_DAMAGE_BONUS",             SITE_UNIT_DAMAGE_BONUS,             K_CALL,    "i:i"},
+    {"UNIT_MORALE",                   SITE_UNIT_MORALE,                   K_CALL,    "i:i"},
+    {"UNIT_MR",                       SITE_UNIT_MR,                       K_CALL,    "i:i"},
+    {"UNIT_BATTLE_RANK",              SITE_UNIT_BATTLE_RANK,              K_CALL,    "i:i"},
+    {"UNIT_MAX_HP",                   SITE_UNIT_MAX_HP,                   K_CALL,    "i:i"},
+    {"UNIT_PATH_BONUS",               SITE_UNIT_PATH_BONUS,               K_CALL,    "i:ii"},
+    {"UNIT_BLINDNESS",                SITE_UNIT_BLINDNESS,                K_CALL,    "i:i"},
+    {"UNIT_INCAPACITATED",            SITE_UNIT_INCAPACITATED,            K_TEST,    "i:i"},
+    {"UNIT_FIRE_RESISTANCE",          SITE_UNIT_FIRE_RESISTANCE,          K_CALL,    "i:i"},
+    {"UNIT_BANISHABLE",               SITE_UNIT_BANISHABLE,               K_CALL,    "i:iii"},
+    {"BANISH_DESTINATION",            SITE_BANISH_DESTINATION,            K_DESTINATION, "i:iii"},
+    {"IMMORTAL_REFORM",               SITE_IMMORTAL_REFORM,               K_REFORM,  "v:iii"},
+    {"UNIT_HEAL_RATE",                SITE_UNIT_HEAL_RATE,                K_CALL,    "i:i"},
+    {"RITUAL_COST_PERCENT",           SITE_RITUAL_COST_PERCENT,           K_OBSERVE, "i:ii"},
 };
+
+static int isIncomeSite(CallSite site) { return site >= SITE_PLAYER_GOLD_INCOME && site <= SITE_TRADE_INCOME_APPLY; }
 
 static int luaSiteGuardsReentry(CallSite site) {
     switch (site) {
-    case SITE_UNIT_STRENGTH: case SITE_SQUARE_STRENGTH: case SITE_COMMANDER_STRENGTH: case SITE_PLAYER_ABILITY:
+    case SITE_UNIT_BATTLE_STRENGTH: case SITE_SQUARE_BATTLE_STRENGTH: case SITE_COMMANDER_BATTLE_STRENGTH: case SITE_PLAYER_ABILITY:
     case SITE_UNIT_STATE_FLAGS: case SITE_ARMY_MOVE_FLAGS: case SITE_UNIT_PATH_LEVEL: case SITE_UNIT_VISIBLE_TO:
     case SITE_RESOURCE_AVAILABLE: case SITE_UNIT_RESISTANCES: case SITE_UNIT_FLAGS:
     case SITE_UNIT_ARMOR: case SITE_UNIT_RETURNS: case SITE_AI_COUNT_CITADELS: case SITE_MOVE_INDEPENDENT_ARMY:
     case SITE_SQUARE_CITADEL: case SITE_SQUARE_FORT_PARTS: case SITE_SQUARE_WATERLIKE: case SITE_SQUARE_OPEN_LAND:
     case SITE_SQUARE_LIBRARY_LEVEL:
-    case SITE_RITUAL_CAN_CAST: case SITE_RITUAL_LOCATION_CHECK: return 1;
-    default: return 0;
+    case SITE_RITUAL_CAN_CAST: case SITE_RITUAL_LOCATION_CHECK:
+    case SITE_RITUAL_COST_PERCENT:
+    case SITE_UNIT_DAMAGE_BONUS: case SITE_UNIT_MORALE: case SITE_UNIT_MR: case SITE_UNIT_BATTLE_RANK: case SITE_UNIT_MAX_HP:
+    case SITE_UNIT_PATH_BONUS: case SITE_UNIT_BLINDNESS: case SITE_UNIT_INCAPACITATED: case SITE_UNIT_FIRE_RESISTANCE: return 1;
+    case SITE_UNIT_BANISHABLE: return 1;
+    case SITE_IMMORTAL_REFORM: return 1;
+    default: return isIncomeSite(site);
     }
 }
 
@@ -477,6 +514,351 @@ static char siteResult(const LuaSite *ls) {
     return 'v';
 }
 static const char *siteArgs(const LuaSite *ls) { return ls->signature ? strchr(ls->signature, ':') + 1 : ""; }
+
+// ---- What a wrap may change at an observe site -------------------------------------------------------
+typedef struct { CallSite site; const char *args; char result; } ObservedSiteKinds;
+static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
+    {SITE_RITUAL_SCREEN_LOCATION_CHECK, "ckkk", 'k'},
+    {SITE_RITUAL_SCREEN_CAN_CAST, "cr", 'k'},
+    {SITE_GAME_START, "kk", '-'},
+    {SITE_MONTH_START, "kk", '-'},
+    {SITE_PLAYER_TURN_START, "p-", '-'},
+    {SITE_HUMAN_TURN, "p", '-'},
+    {SITE_CLIENT_TURN, "p", '-'},
+    {SITE_MODS_READ, "", '-'},
+    {SITE_AI_TURN, "p", '-'},
+    {SITE_PLAYER_TURN_END, "p", 'k'},
+    {SITE_GAME_OVER, "p", '-'},
+    {SITE_GAME_SAVE, "kk", '-'},
+    {SITE_GAME_LOAD, "kk", '-'},
+    {SITE_AFTER_GAME_TURN, "", '-'},
+    {SITE_DO_ALL_FIGHTS, "", '-'},
+    {SITE_MOVE_ALL_INDEPENDENTS, "p", '-'},
+    {SITE_CONQUER_SQUARE, "xyp", '-'},
+    {SITE_FIGHT_THE_FIGHT, "xy", 'w'},
+    {SITE_BATTLE_ROUND, "", '-'},
+    {SITE_DAMAGE_UNIT, "u-", '-'},
+    {SITE_EXECUTE_RITUAL, "urxy--", '-'},
+    {SITE_NEW_UNIT, "xypcm", 'u'},
+    {SITE_REMOVE_UNIT, "u", '-'},
+    {SITE_TURN_UNIT_UPKEEP, "p", '-'},
+    {SITE_SQUARE_UPKEEP, "pkxy", '-'},
+    {SITE_RECRUIT_BUY, "pkxy", '-'},
+    {SITE_PROMOTE_UNIT, "pum-", '-'},
+    {SITE_MASTERY_TRANSFORM, "u", '-'},
+    {SITE_BATTLE_SETUP, "xyk", '-'},
+    {SITE_BATTLE_SETUP_SIDE, "pxykk", '-'},
+    {SITE_BATTLE_SETUP_AMBUSH, "pxykk", '-'},
+    {SITE_BATTLE_TURN_EFFECTS, "u-", '-'},
+    {SITE_BATTLE_TRANSFORM, "umu", '-'},
+    {SITE_FOUND_ITEM, "xyT", '-'},
+    {SITE_REMOVE_DEAD_PLAYERS, "", '-'},
+    {SITE_CREATE_CITADEL, "pxy", '-'},
+    {SITE_INQUISITION_SPAWN, "p", '-'},
+    {SITE_ANIMAL_SUMMONING, "c-", '-'},
+    {SITE_ORDER_SLAVE_HUNT, "c", '-'},
+    {SITE_ORDER_EAT_VILLAGE, "c", '-'},
+    {SITE_UPDATE_VOID, "", '-'},
+    {SITE_VOID_SHUFFLE, "", '-'},
+    {SITE_PLANESHIFT_UNIT, "ul-", '-'},
+    {SITE_NEW_PORTAL_PAIR, "xyxy-", '-'},
+    {SITE_PLANE_DISCOVERED_PASS, "", '-'},
+    {SITE_MOVE_INFERNO_PLAYER, "", '-'},
+    {SITE_MOVE_HADES_PLAYER, "", '-'},
+    {SITE_MOVE_CELESTIAL_PLAYER, "", '-'},
+    {SITE_POPULATE_CELESTIAL, "", '-'},
+    {SITE_POPULATE_SKY, "", '-'},
+    {SITE_POPULATE_AGARTHA, "", '-'},
+    {SITE_POPULATE_INFERNO, "", '-'},
+    {SITE_POPULATE_HADES, "", '-'},
+    {SITE_POPULATE_AZTLAN, "", '-'},
+    {SITE_POPULATE_PRIMAL, "", '-'},
+    {SITE_POPULATE_ELEMENTAL, "", '-'},
+    {SITE_PLANE_RISE_TO_ELYSIUM, "l---", '-'},
+    {SITE_ENLARGE_PLANE, "lkkkkk", '-'},
+    {SITE_GEN_FLOOD_PLANE, "l", '-'},
+    {SITE_ADDPLANE, "kkk", 'k'},
+    {SITE_LOAD_MAP_PLANE, "kkl", '-'},
+    {SITE_UNIT_ADD_XP, "u-", '-'},
+    {SITE_USE_SPECIAL_SITE, "xyc", '-'},
+    {SITE_LONER_STEP, "u", '-'},
+    {SITE_REMOVE_TEMP_MEN, "", '-'},
+    {SITE_MOVE_WANDERING_MONSTERS, "", '-'},
+    {SITE_MOVE_PLAYER_STUPIDS, "", '-'},
+    {SITE_OVERRUN_CHECK, "pxy", 'k'},
+    {SITE_KILL_UNIT_999, "u", '-'},
+    {SITE_DAMAGE_UNIT_PLAIN, "u-", '-'},
+    {SITE_CONTINUE_MOVE_ORDERS, "pc", '-'},
+    {SITE_HUMAN_MULTI_MOVE, "cxyk", 'k'},
+    {SITE_GROUP_MOVE, "kxy", 'k'},
+    {SITE_MOVE_ORDER_ROUTE, "cxy", 'k'},
+    {SITE_UNIT_REMOVE_ITEM, "uT", '-'},
+    {SITE_MEMORIZE_SPELL, "us", '-'},
+    {SITE_LEARN_RANDOM_SPELL, "ukk", 'k'},
+    {SITE_GET_START_RITUALS, "c", '-'},
+    {SITE_COMMANDER_LEARN_RITUAL, "cr", '-'},
+    {SITE_BOLSTER_BLESSING, "pk-", '-'},
+    {SITE_ADD_PLAYER_BLESSING, "pk--", '-'},
+    {SITE_REMOVE_ENCHANT, "kkxy", 'k'},
+    {SITE_RITUAL_PAY_COSTS, "pcr--", '-'},
+    {SITE_RITUAL_COST_PERCENT, "cr", 'n'},
+    {SITE_RITUAL_FAR_SUMMON_UNITS, "uk-pxy", 'u'},
+    {SITE_PRIEST_FREESPAWN, "p", '-'},
+    {SITE_EVENT_KILL_SQUARE, "xy", '-'},
+    {SITE_GIVE_ITEM_BY_NAME, "u-", '-'},
+    {SITE_TAKE_ITEM_BY_NAME, "u-", '-'},
+    {SITE_GIVE_RANDOM_ITEM, "uk-k", '-'},
+    {SITE_SQUAREEVENT_START, "", '-'},
+    {SITE_TERRAIN_PRESENT_RESCAN, "", '-'},
+    {SITE_SHOP_OFFER_MESSAGE, "p", '-'},
+    {SITE_WORLD_FIRE_UPDATE, "", '-'},
+    {SITE_EVENT_VAR_CHANGED, "k", '-'},
+    {SITE_CONSCRIPTION, "p", '-'},
+    {SITE_GAME_STATISTICS, "", '-'},
+    {SITE_ALTER_TERRAIN, "pxykkk", 'k'},
+    {SITE_RUIN_SQUARE, "pxy", '-'},
+    {SITE_DESTROY_GATEWAY, "pxy-", 'k'},
+    {SITE_DIG_TUNNEL_SQUARE, "pxy", '-'},
+    {SITE_MONTH_SQUARE_RESET, "", '-'},
+    {SITE_ROLL_CLASS, "p-", '-'},
+    {SITE_RESET_INCOME_CACHES, "", '-'},
+    {SITE_TEAM_START_LOCATIONS, "", '-'},
+    {SITE_TRIM_TEAM_LOCATIONS, "", '-'},
+    {SITE_SWAP_TEAM_LOCATIONS, "", '-'},
+    {SITE_CREATE_CITADELS_STEP, "", '-'},
+    {SITE_FIX_PORTALS, "", 'k'},
+    {SITE_VOID_FLUCTUATIONS, "", '-'},
+    {SITE_PLANESHIFT_COMMANDER, "cl", '-'},
+    {SITE_MIST_SPREAD, "", 'k'},
+    {SITE_TEMPERATURE_CHANGE, "", 'k'},
+    {SITE_SPECIAL_SITE_POPULATE, "", '-'},
+    {SITE_UNIT_SWALLOW, "uu", '-'},
+    {SITE_UNIT_UNSWALLOW, "u", '-'},
+    {SITE_LIFEFORCE_DRAIN_UNIT, "ku-", '-'},
+    {SITE_UNIT_CATCH_FIRE, "kk", 'k'},
+    {SITE_UNIT_CRUSH, "u", '-'},
+    {SITE_REMOVE_BAD_FOLLOWERS, "", '-'},
+    {SITE_OVERPOP_CULL, "", 'k'},
+    {SITE_MONKEY_CLOAK, "p", '-'},
+    {SITE_RECYCLE_UNITS, "", 'k'},
+    {SITE_RANDOM_TELEPORT, "ukk", 'k'},
+    {SITE_POP_HORRORS, "-", '-'},
+    {SITE_KILL_TERRAIN_UNITS, "", '-'},
+    {SITE_KILL_SUNKEN_SHIPS, "xy", '-'},
+    {SITE_CREATE_BOATS, "", '-'},
+    {SITE_BATTLE_TRAPS, "", '-'},
+    {SITE_BATTLE_ENCHANT_TRAPS, "", '-'},
+    {SITE_BATTLE_SUMMON_STRING, "", 'k'},
+    {SITE_PAY_SPELL_LIFEFORCE, "", 'k'},
+    {SITE_WORLD_NEWS, "k", '-'},
+    {SITE_SEASON_NEWS, "k", '-'},
+    {SITE_CHECK_GAME_WON, "", '-'},
+    {SITE_SPY_CAUGHT, "", '-'},
+    {SITE_TOGGLE_AUTO_RECRUIT, "pxym", 'k'},
+    {SITE_CHANGE_LOYALTY, "xy-p", 'k'},
+    {SITE_ALTER_TERRAIN_RECT, "xy", '-'},
+    {SITE_RESPAWN_VOID, "", '-'},
+    {SITE_BATTLE_SIEGE_UNIT, "u", '-'},
+    {SITE_GATHER_SHIPS, "", '-'},
+    {SITE_ADVANCE_SHIPS, "", '-'},
+    {SITE_MOVE_ENCHANTS, "xyxy", '-'},
+    {SITE_MOVE_GEMS, "xyxy", '-'},
+    {SITE_TAINTED_RITUAL_EFFECT, "cr", '-'},
+    {SITE_LOCATION_SWAP, "xyxy", 'k'},
+    {SITE_APE_POSSESSION, "ck", 'k'},
+    {SITE_RITUAL_ASK_HEMISPHERE, "", 'k'},
+    {SITE_GET_TITHES, "", '-'},
+    {SITE_ELIMINATE_PLAYER, "p", '-'},
+    {SITE_FIND_START_SQUARE, "p", '-'},
+    {SITE_TROLL_FOREST_SPAWN, "xy", '-'},
+    {SITE_AI_MAKE_DEFENDERS, "p", '-'},
+    {SITE_AI_REDISTRIBUTE_ITEMS, "pxy", '-'},
+    {SITE_AI_SHIPS, "c", 'k'},
+    {SITE_AI_SHIP_DROP_CREW, "c", 'k'},
+    {SITE_AI_SHIP_TAKE_BOAT, "c", 'k'},
+    {SITE_AI_SHIP_TAKE_CREW, "c", 'k'},
+    {SITE_CHECK_FOLLOWER_LINKS, "c", '-'},
+    {SITE_STEP_BURN_FOREST, "pxy", '-'},
+    {SITE_ORDER_BURN_FOREST, "-c", '-'},
+    {SITE_ORDER_CHOP_FOREST, "-c", '-'},
+    {SITE_LIFEFORCE_DRAIN_SQUARE, "pxy-", '-'},
+    {SITE_SPEND_ALL_AP_AT, "pxy", '-'},
+    {SITE_SWAP_SQUARES, "xyxy", 'k'},
+    {SITE_TELEPORT_UNIT, "uxy", '-'},
+    {SITE_UNIT_CLEAR_BENEFITS, "u", '-'},
+    {SITE_GAME_MENU, "", '-'},
+    {SITE_ARMY_COMMANDS_MENU, "c", '-'},
+    {SITE_CEREMONY_SCREEN, "c", '-'},
+    {SITE_INCOME_DETAIL_SCREEN, "pk", '-'},
+    {SITE_BATTLE_CREATE_TREES, "xy", '-'},
+    {SITE_BATTLE_DEPLOY, "kxy", '-'},
+    {SITE_BATTLE_FIGHT_MOVE, "ukkkk", '-'},
+    {SITE_BATTLE_FLY_MOVE, "u", '-'},
+    {SITE_BATTLE_FLEE, "u", '-'},
+    {SITE_BATTLE_FEAR_CHECK, "", '-'},
+    {SITE_BATTLE_CLOUD_STEP, "u", '-'},
+    {SITE_BATTLE_ENSNARE_CHECK, "u", '-'},
+    {SITE_BATTLE_ENSNARE_RELEASE, "u", '-'},
+    {SITE_BATTLE_WALL_ENCHANTS, "", '-'},
+    {SITE_BATTLE_WALL_EFFECTS, "", '-'},
+    {SITE_BATTLE_START_SETUP, "", '-'},
+    {SITE_BATTLE_TUNNEL_MOVE, "u", '-'},
+    {SITE_BATTLE_BANISH, "u", '-'},
+    {SITE_BATTLE_DEPLOY_UNIT, "ukk", '-'},
+    {SITE_BATTLE_AFTER_FIGHT_UPKEEP, "xy", '-'},
+    {SITE_BATTLE_AFTERMATH_RETURN, "xyp", '-'},
+    {SITE_BATTLE_MR_ROLL, "u", '-'},
+    {SITE_BATTLE_SUMMON_WEAPON, "", '-'},
+    {SITE_BATTLE_GATE_SWAP, "", '-'},
+    {SITE_BATTLE_SPREAD_COLLAPSE, "", '-'},
+    {SITE_UNIT_CURE_AFFLICTION, "u", '-'},
+    {SITE_UNIT_HP_SHAPE_CHANGE, "u", '-'},
+    {SITE_BERSERK_END, "u", '-'},
+    {SITE_UNIT_RANDOM_AFFLICTION, "u", '-'},
+    {SITE_REVEAL_TERRAIN_ON_PLANE, "plk", 'k'},
+    {SITE_NEAR_TERRAIN_SQUARE, "lkxy", '-'},
+    {SITE_PLAY_SAMPLE, "k-", '-'},
+    {SITE_GROVE_REVERSION, "xy", '-'},
+    {SITE_PUT_RARE_SQUARE, "xy", '-'},
+    {SITE_RANDOM_ITEM_PICK, "uk-kk", 'k'},
+    {SITE_CREATE_RANDOM_MAP, "", '-'},
+    {SITE_WORLD_PART_TERRAIN, "", '-'},
+    {SITE_MAPGEN_REMOVE_SMALL_ISLANDS, "", '-'},
+    {SITE_MAPGEN_RIVER_CROSSINGS, "", 'k'},
+    {SITE_MAPGEN_ANCIENT_FOREST, "", 'k'},
+    {SITE_MAPGEN_CLEAR_AREA, "xy", '-'},
+    {SITE_MAPGEN_ADJUST_TEMPERATURE, "", '-'},
+    {SITE_MARK_RIVER, "xyxykk", 'k'},
+    {SITE_GEN_DIAGONAL_FIX, "l", 'k'},
+    {SITE_GEN_UPDATE_MOIST_WALLS, "l", '-'},
+    {SITE_GEN_TERRAIN_BLOB, "kxy-kk", 'k'},
+    {SITE_CREATE_CELESTIAL_PLANE, "", '-'},
+    {SITE_CREATE_SKY_PLANE, "", '-'},
+    {SITE_CREATE_AGARTHA_PLANE, "", '-'},
+    {SITE_CREATE_INFERNO_PLANE, "", '-'},
+    {SITE_CREATE_HADES_PLANE, "", '-'},
+    {SITE_CREATE_ELEMENTAL_PLANE, "", '-'},
+    {SITE_LOAD_AZTLAN_PLANE, "", '-'},
+    {SITE_LOAD_PRIMAL_PLANE, "", '-'},
+    {SITE_AUTO_RECRUIT, "", '-'},
+    {SITE_USE_LIBRARY, "u", '-'},
+    {SITE_ADD_GROUND_ITEMS, "xy", '-'},
+    {SITE_VOID_INSANITY, "uxy", '-'},
+    {SITE_WANDERER_PICK_TARGET, "ck", '-'},
+    {SITE_WANDERER_PICK_UP, "c", 'k'},
+    {SITE_SET_HOLDIT, "pxy", 'k'},
+    {SITE_LIBRARY_SCREEN, "u", '-'},
+    {SITE_CHOP_BURN_SCREEN, "", '-'},
+    {SITE_SLAVE_HUNT_SCREEN, "", '-'},
+    {SITE_UNIT_STATS_SCREEN, "u", '-'},
+    {SITE_ITEM_INFO_SCREEN, "T", '-'},
+    {SITE_WEAPON_INFO_WINDOW, "w", '-'},
+    {SITE_PLANE_INFO_SCREEN, "l", '-'},
+    {SITE_BATTLE_INTRO_SCREEN, "ppxy", '-'},
+    {SITE_COMMANDER_SET_DONE, "", '-'},
+    {SITE_SELECT_NEXT_COMMANDER, "", '-'},
+    {SITE_SELECT_PREV_COMMANDER, "", '-'},
+    {SITE_RUN_HATREDS, "", '-'},
+    {SITE_SANDSTORM_CLOUD_UPDATE, "", '-'},
+    {SITE_TAINTED_MAGIC_PASS, "kk", '-'},
+    {SITE_HERO_ARRIVAL, "p", '-'},
+    {SITE_CLEAN_SQUARE, "xy", '-'},
+    {SITE_ADJUST_FOR_SNOW, "xykk", '-'},
+    {SITE_START_TUNE, "k-", '-'},
+    {SITE_SQUARE_SET_OWNER, "xyp", '-'},
+    {SITE_TEAMLESS_OWN_TEAM, "", '-'},
+    {SITE_ADD_BENEFIT, "u", '-'},
+    {SITE_SOCIETY_PRESETS, "k", '-'},
+    {SITE_MOVE_STEP_AFTER, "", '-'},
+    {SITE_NUMBER_BOX, "--", 'k'},
+    {SITE_ENCHANTS_DESTROYED_AT, "pxy", '-'},
+    {SITE_STORM_SPAWN, "xy", '-'},
+    {SITE_WILD_SPAWN, "xy", '-'},
+    {SITE_REVELS_SPAWN, "xy", '-'},
+    {SITE_HORROR_LORD_PICK, "xy", '-'},
+    {SITE_PLAYER_GOLD_INCOME, "p", '-'},
+    {SITE_PLAYER_IRON_INCOME, "p", '-'},
+    {SITE_PLAYER_HERBS_INCOME, "p", '-'},
+    {SITE_PLAYER_FUNGUS_INCOME, "p", '-'},
+    {SITE_PLAYER_SACRIFICES_INCOME, "p", '-'},
+    {SITE_PLAYER_HANDS_INCOME, "p", '-'},
+    {SITE_PLAYER_WEED_INCOME, "p", '-'},
+    {SITE_PLAYER_TRADE_INCOME, "p", '-'},
+    {SITE_PLAYER_RELICS_INCOME, "p", '-'},
+    {SITE_PLAYER_LIFEFORCE_INCOME, "p-", '-'},
+    {SITE_PLAYER_GEM_INCOME, "gp", '-'},
+    {SITE_TRADE_INCOME_APPLY, "p", '-'},
+};
+
+static const ObservedSiteKinds *observedSiteKinds(CallSite site) {
+    for (size_t i = 0; i < sizeof OBSERVED_SITE_KINDS / sizeof OBSERVED_SITE_KINDS[0]; i++)
+        if (OBSERVED_SITE_KINDS[i].site == site) return &OBSERVED_SITE_KINDS[i];
+    return NULL;
+}
+
+static int observedKindRange(char kind, lua_Integer *min, lua_Integer *max) {
+    switch (kind) {
+    case 'u': *min = 0, *max = UNIT_TABLE_MAX - 1; return 1;
+    case 'c': *min = 0, *max = COMMANDER_TABLE_MAX - 1; return 1;
+    case 'p': *min = 0, *max = lastPlayerSlot(); return 1;
+    case 'x': *min = 0, *max = MAP_COLUMNS_MAX - 1; return 1;
+    case 'y': *min = 0, *max = MAP_COLUMN_SQUARES - 1; return 1;
+    case 'm': *min = 0, *max = lastMonsterNumber(); return 1;
+    case 'T': *min = 0, *max = lastItemNumber(); return 1;
+    case 'r': *min = 0, *max = lastRitualSlot(); return 1;
+    case 'l': *min = 0, *max = lastPlaneInUse(); return 1;
+    case 'w': *min = 0, *max = lastWeaponNumber(); return 1;
+    case 's': *min = -1, *max = lastSpellSlot(); return 1;
+    case 'g': *min = 0, *max = 3; return 1;
+    case '-': *min = LLONG_MIN, *max = LLONG_MAX; return 1;
+    default: return 0;
+    }
+}
+
+static void checkObservedArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, const char *mod) {
+    const ObservedSiteKinds *k = observedSiteKinds(ls->site);
+    const char *types = siteArgs(ls);
+    for (int i = 0; types[i]; i++) {
+        char kind = k && k->args[i] ? k->args[i] : 'k';
+        if (types[i] == 's' || types[i] == 'z') {
+            const char *text = (const char *)(uintptr_t)a->a[i], *own = (const char *)(uintptr_t)orig->a[i];
+            int same = text == own || (text && own && !strcmp(text, own));
+            if (!same && kind != '-') refuseLuaCall(mod, ls->name, "argument_kept", "arg=%d text=%.200s", i + 1, text ? text : "(none)");
+            if (!same && kind != '-') a->a[i] = orig->a[i];
+            continue;
+        }
+        lua_Integer value = types[i] == 'h' ? (short)a->a[i] : (int)a->a[i], own = types[i] == 'h' ? (short)orig->a[i] : (int)orig->a[i];
+        if (value == own) {
+            a->a[i] = orig->a[i];
+            continue;
+        }
+        lua_Integer min, max;
+        if (!observedKindRange(kind, &min, &max)) {
+            refuseLuaCall(mod, ls->name, "argument_kept", "arg=%d value=%lld own=%lld", i + 1, (long long)value, (long long)own);
+            a->a[i] = orig->a[i];
+        } else if (value < min || value > max) {
+            refuseLuaCall(mod, ls->name, "out_of_range", "arg=%d value=%lld min=%lld max=%lld", i + 1, (long long)value,
+                          (long long)min, (long long)max);
+            a->a[i] = orig->a[i];
+        }
+    }
+}
+
+static u64 takeObservedResult(const LuaSite *ls, const LuaFrame *f, u64 result, const char *mod) {
+    if (siteResult(ls) != 'i') return result;
+    const ObservedSiteKinds *k = observedSiteKinds(ls->site);
+    char kind = k ? k->result : 'k';
+    lua_Integer value = (int)result, own = f->nextCalled ? (int)f->result : 0;
+    if (value == own || kind == '-') return result;
+    lua_Integer min = kind == 'u' ? -1 : kind == 'n' ? 0 : -2,
+                max = kind == 'u' ? UNIT_TABLE_MAX - 1 : kind == 'n' ? INT_MAX : lastPlayerSlot();
+    if (kind == 'k') refuseLuaCall(mod, ls->name, "result_kept", "value=%lld own=%lld", (long long)value, (long long)own);
+    else if (value < min || value > max)
+        refuseLuaCall(mod, ls->name, "out_of_range", "arg=result value=%lld min=%lld max=%lld", (long long)value, (long long)min,
+                      (long long)max);
+    else return result;
+    return f->nextCalled ? f->result : (u64)(kind == 'k' || kind == 'n' ? 0 : -1);
+}
 
 static void pushLuaValue(lua_State *L, char type, u64 value) {
     if (type == 'i') lua_pushinteger(L, (int)value);
@@ -510,6 +892,11 @@ static int pushLuaArgs(lua_State *L, const LuaSite *ls, const LuaArgs *a) {
         lua_pushinteger(L, (int)a->a[0]);
         lua_pushinteger(L, (int)a->a[2]);
         return 2;
+    case K_REFORM:
+        lua_pushinteger(L, (int)a->a[0]);
+        lua_pushinteger(L, (int)a->a[1]);
+        lua_pushboolean(L, (int)a->a[2] != 0);
+        return 3;
     default: {
         const char *types = siteArgs(ls);
         int n = 0;
@@ -551,6 +938,11 @@ static void readNextArgs(lua_State *L, const LuaSite *ls, LuaArgs *a) {
         a->a[0] = (u64)luaL_checkinteger(L, 1);
         a->a[2] = (u64)luaL_checkinteger(L, 2);
         break;
+    case K_REFORM:
+        if (!lua_isnoneornil(L, 1)) a->a[0] = (u64)luaL_checkinteger(L, 1);
+        if (!lua_isnoneornil(L, 2)) a->a[1] = (u64)luaL_checkinteger(L, 2);
+        if (!lua_isnoneornil(L, 3)) a->a[2] = (u64)(lua_isboolean(L, 3) ? lua_toboolean(L, 3) : luaL_checkinteger(L, 3) != 0);
+        break;
     default: {
         const char *types = siteArgs(ls);
         for (int n = 0; types[n]; n++) {
@@ -562,8 +954,21 @@ static void readNextArgs(lua_State *L, const LuaSite *ls, LuaArgs *a) {
     }
 }
 
+static int luaSiteIsUnitStat(CallSite site) {
+    switch (site) {
+    case SITE_UNIT_DAMAGE_BONUS: case SITE_UNIT_MORALE: case SITE_UNIT_MR: case SITE_UNIT_BATTLE_RANK: case SITE_UNIT_MAX_HP:
+    case SITE_UNIT_PATH_BONUS: case SITE_UNIT_BLINDNESS: case SITE_UNIT_INCAPACITATED: case SITE_UNIT_FIRE_RESISTANCE:
+    case SITE_DOATTACK: case SITE_BATTLE_ADVANCE_UNIT: case SITE_UNIT_BANISHABLE: case SITE_BANISH_DESTINATION:
+    case SITE_UNIT_HEAL_RATE: return 1;
+    default: return 0;
+    }
+}
 typedef struct { int index; const char *name; lua_Integer min, max; } NextArgCheck;
 static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, const char *mod) {
+    if (ls->kind == K_OBSERVE) {
+        checkObservedArgs(ls, a, orig, mod);
+        return;
+    }
     if (ls->kind == K_BANNER) {
         const char *path = (const char *)(uintptr_t)a->a[0], *own = (const char *)(uintptr_t)orig->a[0];
         if (path != own && (!path || !own || strcmp(path, own))) {
@@ -592,13 +997,29 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
         }
         return;
     }
+    if (ls->kind == K_REFORM) {
+        static const char *const NAMES[3] = {"unit", "plane", "apply"}, *const REASONS[3] = {"unit_changed", "plane_changed", "apply_changed"};
+        for (int i = 0; i < 3; i++) {
+            if ((int)a->a[i] != (int)orig->a[i])
+                refuseLuaCall(mod, ls->name, REASONS[i], "%s=%d own=%d", NAMES[i], (int)a->a[i], (int)orig->a[i]);
+            a->a[i] = orig->a[i];
+        }
+        return;
+    }
     if (ls->site == SITE_UNIT_ARMOR || ls->site == SITE_UNIT_RETURNS || ls->site == SITE_AI_COUNT_CITADELS ||
-        ls->site == SITE_MOVE_INDEPENDENT_ARMY) {
+        ls->site == SITE_MOVE_INDEPENDENT_ARMY || luaSiteIsUnitStat(ls->site)) {
         typedef struct { const char *name, *reason; } KeptArg;
         static const KeptArg ARMY[3] = {{"player", "player_changed"}, {"x", "square_changed"}, {"y", "square_changed"}},
                              UNIT[3] = {{"unit", "unit_changed"}, {NULL, NULL}, {NULL, NULL}},
                              PLAYER[3] = {{"player", "player_changed"}, {NULL, NULL}, {NULL, NULL}};
-        const KeptArg *kept = ls->site == SITE_MOVE_INDEPENDENT_ARMY ? ARMY : ls->site == SITE_AI_COUNT_CITADELS ? PLAYER : UNIT;
+        static const KeptArg ATTACK[3] = {{"unit", "unit_changed"}, {"slot", "slot_changed"}, {"spell", "spell_changed"}},
+                             PATH[3] = {{"unit", "unit_changed"}, {"path", "path_changed"}, {NULL, NULL}},
+                             ADVANCE[3] = {{"unit", "unit_changed"}, {"ambush", "ambush_changed"}, {NULL, NULL}};
+        static const KeptArg CAUSE[3] = {{"unit", "unit_changed"}, {"weapon", "weapon_changed"}, {"attacker", "attacker_changed"}};
+        const KeptArg *kept = ls->site == SITE_MOVE_INDEPENDENT_ARMY ? ARMY : ls->site == SITE_AI_COUNT_CITADELS ? PLAYER
+                            : ls->site == SITE_DOATTACK ? ATTACK : ls->site == SITE_UNIT_PATH_BONUS ? PATH
+                            : ls->site == SITE_BATTLE_ADVANCE_UNIT ? ADVANCE
+                            : ls->site == SITE_UNIT_BANISHABLE || ls->site == SITE_BANISH_DESTINATION ? CAUSE : UNIT;
         for (int i = 0; i < 3 && kept[i].name; i++) {
             if ((int)a->a[i] != (int)orig->a[i])
                 refuseLuaCall(mod, ls->name, kept[i].reason, "%s=%d own=%d", kept[i].name, (int)a->a[i], (int)orig->a[i]);
@@ -620,6 +1041,16 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
         if (ls->site == SITE_AI_MAKE_GUARDS && (int)a->a[3] < 1) {
             refuseLuaCall(mod, ls->name, "out_of_range", "arg=n value=%d min=1", (int)a->a[3]);
             a->a[3] = orig->a[3];
+        }
+        return;
+    }
+    if (ls->kind == K_BATTLE_SQUARE) {
+        static const char *const NAMES[5] = {"unit", "spell", "weapon", "type", "value"},
+                          *const REASONS[5] = {"unit_changed", "spell_changed", "weapon_changed", "type_changed", "value_changed"};
+        for (int i = 0; i < 5; i++) {
+            if ((int)a->a[i] != (int)orig->a[i])
+                refuseLuaCall(mod, ls->name, REASONS[i], "%s=%d own=%d", NAMES[i], (int)a->a[i], (int)orig->a[i]);
+            a->a[i] = orig->a[i];
         }
         return;
     }
@@ -689,15 +1120,16 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
         checks[n++] = (NextArgCheck){0, "player", -1, PLAYER_SLOTS - 1};
     } else if (ls->site == SITE_SQUARE_INFO_SCREEN) {
         checks[n++] = (NextArgCheck){0, "player", 0, PLAYER_SLOTS - 1};
-    } else if (ls->site == SITE_UNIT_STRENGTH) {
+    } else if (ls->site == SITE_UNIT_BATTLE_STRENGTH) {
         checks[n++] = (NextArgCheck){0, "unit", -1, UNIT_TABLE_MAX - 1};
         checks[n++] = (NextArgCheck){1, "monster", -1, tableRecords(TABLE_MONSTER) - 1};
-    } else if (ls->site == SITE_SQUARE_STRENGTH) {
+    } else if (ls->site == SITE_SQUARE_BATTLE_STRENGTH) {
         checks[n++] = (NextArgCheck){0, "team", -1, playerSlotCount() - 1};
         checks[n++] = (NextArgCheck){1, "x", LLONG_MIN, MAP_COLUMNS_MAX - 1};
         checks[n++] = (NextArgCheck){2, "y", LLONG_MIN, MAP_COLUMN_SQUARES - 1};
     } else if (ls->site == SITE_PLAYER_ABILITY) {
         checks[n++] = (NextArgCheck){0, "player", 0, playerSlotCount() - 1};
+
     } else if (ls->site == SITE_UNIT_STATE_FLAGS || ls->site == SITE_UNIT_PATH_LEVEL || ls->site == SITE_UNIT_RESISTANCES ||
                ls->site == SITE_UNIT_FLAGS) {
         checks[n++] = (NextArgCheck){0, "unit", 0, UNIT_TABLE_MAX - 1};
@@ -734,7 +1166,7 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
                       (long long)checks[i].max);
         a->a[checks[i].index] = orig->a[checks[i].index];
     }
-    if (ls->site == SITE_UNIT_STRENGTH && (int)a->a[0] < 0 && (int)a->a[1] < 0 &&
+    if (ls->site == SITE_UNIT_BATTLE_STRENGTH && (int)a->a[0] < 0 && (int)a->a[1] < 0 &&
         ((int)a->a[0] != (int)orig->a[0] || (int)a->a[1] != (int)orig->a[1])) {
         refuseLuaCall(mod, ls->name, "out_of_range", "arg=unit value=%d monster=%d", (int)a->a[0], (int)a->a[1]);
         a->a[0] = orig->a[0];
@@ -842,6 +1274,11 @@ static u64 callLuaNext(const LuaSite *ls, void *next, const LuaArgs *a) {
     }
 }
 
+static int luaSiteWritesSquare(const LuaSite *ls) {
+    return ls->kind == K_TARGET_SQUARE || ls->kind == K_DESTINATION || ls->kind == K_BATTLE_SQUARE;
+}
+static int squarePointerAt(const LuaSite *ls) { return (int)strlen(siteArgs(ls)); }
+
 static int pushLuaResult(lua_State *L, const LuaSite *ls, const LuaArgs *a, u64 result) {
     if (ls->kind == K_VETO) {
         lua_pushboolean(L, (int)result == 0);
@@ -852,12 +1289,17 @@ static int pushLuaResult(lua_State *L, const LuaSite *ls, const LuaArgs *a, u64 
         return 1;
     }
     if (ls->kind == K_SEAL_EVENT) return 0;
+    if (ls->kind == K_REFORM) {
+        for (int i = 3; i < 7; i++) lua_pushinteger(L, *(const int *)(uintptr_t)a->a[i]);
+        return 4;
+    }
     char type = siteResult(ls);
     if (type == 'v') return 0;
     pushLuaValue(L, type, result);
-    if (ls->kind != K_TARGET_SQUARE) return 1;
-    lua_pushinteger(L, *(const int *)(uintptr_t)a->a[2]);
-    lua_pushinteger(L, *(const int *)(uintptr_t)a->a[3]);
+    if (!luaSiteWritesSquare(ls)) return 1;
+    int at = squarePointerAt(ls);
+    lua_pushinteger(L, *(const int *)(uintptr_t)a->a[at]);
+    lua_pushinteger(L, *(const int *)(uintptr_t)a->a[at + 1]);
     return 3;
 }
 
@@ -925,6 +1367,118 @@ static u64 takeTest(lua_State *L, const LuaSite *ls, const LuaFrame *f, const ch
     return 0;
 }
 
+static u64 takeZeroToTwo(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
+    *callNext = 0;
+    lua_Integer answer = 0;
+    if (lua_isnil(L, -1)) {
+        if (f->nextCalled) return f->result;
+        *callNext = 1;
+        return 0;
+    }
+    const char *reason = !luaWholeNumber(L, -1, &answer) ? "not_a_number" : answer < 0 || answer > 2 ? "out_of_range" : NULL;
+    if (!reason) return (u64)answer;
+    refuseLuaCall(mod, ls->name, reason, "type=%s answer=%lld unit=%d", luaL_typename(L, -1), (long long)answer, (int)a->a[0]);
+    if (f->nextCalled) return f->result;
+    *callNext = 1;
+    return 0;
+}
+
+static void drawBanishSquare(int plane, int *x, int *y);
+static u64 takeBanishDestination(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
+    *callNext = 0;
+    int *outX = (int *)(uintptr_t)a->a[3], *outY = (int *)(uintptr_t)a->a[4];
+    if (lua_isnil(L, -3) && lua_isnil(L, -2) && lua_isnil(L, -1)) {
+        if (f->nextCalled) return f->result;
+        *callNext = 1;
+        return 0;
+    }
+    lua_Integer plane = 0, x = -1, y = -1;
+    int square = !lua_isnil(L, -2) || !lua_isnil(L, -1);
+    const char *reason = NULL;
+    if (!luaWholeNumber(L, -3, &plane)) reason = "not_a_plane";
+    else if (plane < 0 || plane > G32(RVA_LAST_PLANE)) reason = "bad_plane";
+    else if (square && (!luaWholeNumber(L, -2, &x) || !luaWholeNumber(L, -1, &y))) reason = "not_a_square";
+    else if (square && (x < 0 || y < 0 || x >= G32(RVA_MAP_DEPTH) || y >= G32(RVA_MAP_H) || x >= MAP_COLUMNS_MAX || y >= MAP_COLUMN_SQUARES))
+        reason = "off_map";
+    else if (square && GAME_FN(int (*)(int, int), RVA_PLANE_AT)((int)x, (int)y) != plane) reason = "wrong_plane";
+    if (reason) {
+        refuseLuaCall(mod, ls->name, reason, "plane=%lld x=%lld y=%lld unit=%d", (long long)plane, (long long)x, (long long)y, (int)a->a[0]);
+        if (f->nextCalled) return f->result;
+        *callNext = 1;
+        return 0;
+    }
+    if (square) *outX = (int)x, *outY = (int)y;
+    else drawBanishSquare((int)plane, outX, outY);
+    return (u64)plane;
+}
+
+static int isUsedMonster(lua_Integer monster);
+static const char *immortalReformRefusal(lua_State *L, lua_Integer out[4]) {
+    out[0] = out[1] = out[2] = out[3] = -1;
+    if (lua_isnil(L, -4) || lua_isnil(L, -3) || !luaWholeNumber(L, -4, &out[0]) || !luaWholeNumber(L, -3, &out[1])) return "not_a_square";
+    if (out[0] != -1 || out[1] != -1) {
+        if (out[0] < 0 || out[1] < 0 || out[0] >= G32(RVA_MAP_DEPTH) || out[1] >= G32(RVA_MAP_H) || out[0] >= MAP_COLUMNS_MAX ||
+            out[1] >= MAP_COLUMN_SQUARES)
+            return "off_map";
+        if (GAME_FN(int (*)(int, int), RVA_PLANE_AT)((int)out[0], (int)out[1]) < 0) return "no_plane";
+    }
+    if (!lua_isnil(L, -2) && (!luaWholeNumber(L, -2, &out[2]) || (out[2] != -1 && !isUsedMonster(out[2])))) return "bad_monster";
+    if (!lua_isnil(L, -1) && (!luaWholeNumber(L, -1, &out[3]) || out[3] < -1 || out[3] >= playerSlotCount())) return "bad_player";
+    return NULL;
+}
+
+static u64 takeImmortalReform(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
+    *callNext = 0;
+    if (lua_isnil(L, -4) && lua_isnil(L, -3) && lua_isnil(L, -2) && lua_isnil(L, -1)) {
+        if (f->nextCalled) return 0;
+        *callNext = 1;
+        return 0;
+    }
+    lua_Integer out[4];
+    const char *reason = immortalReformRefusal(L, out);
+    if (reason) {
+        refuseLuaCall(mod, ls->name, reason, "x=%lld y=%lld monster=%lld owner=%lld unit=%d", (long long)out[0], (long long)out[1],
+                      (long long)out[2], (long long)out[3], (int)a->a[0]);
+        if (!f->nextCalled) *callNext = 1;
+        return 0;
+    }
+    for (int i = 0; i < 4; i++) *(int *)(uintptr_t)a->a[3 + i] = (int)out[i];
+    return 0;
+}
+
+static const char *battleSquareRefusal(lua_Integer useful, lua_Integer x, lua_Integer y, int width) {
+    if (useful < INT_MIN || useful > INT_MAX) return "out_of_range";
+    if (x == -1 && y == -1) return useful > 0 ? "no_square" : NULL;
+    if (x < 0 || y < 0 || x >= width || y >= BATTLE_ROWS) return "off_field";
+    return NULL;
+}
+
+static u64 takeBattleSquare(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
+    *callNext = 0;
+    int at = squarePointerAt(ls);
+    int *outX = (int *)(uintptr_t)a->a[at], *outY = (int *)(uintptr_t)a->a[at + 1];
+    if (lua_isnil(L, -3) && lua_isnil(L, -2) && lua_isnil(L, -1)) {
+        if (f->nextCalled) return f->result;
+        *callNext = 1;
+        return 0;
+    }
+    lua_Integer useful = 0, x = f->nextCalled ? *outX : -1, y = f->nextCalled ? *outY : -1;
+    const char *reason = NULL;
+    if (!luaWholeNumber(L, -3, &useful)) reason = "not_a_number";
+    else if ((!lua_isnil(L, -2) || !lua_isnil(L, -1)) && (!luaWholeNumber(L, -2, &x) || !luaWholeNumber(L, -1, &y))) reason = "not_a_square";
+    if (!reason) reason = battleSquareRefusal(useful, x, y, G32(RVA_BATTLE_WIDTH));
+    if (reason) {
+        refuseLuaCall(mod, ls->name, reason, "useful=%lld x=%lld y=%lld unit=%d", (long long)useful, (long long)x, (long long)y,
+                      (int)a->a[0]);
+        if (f->nextCalled) return f->result;
+        *callNext = 1;
+        return 0;
+    }
+    *outX = (int)x;
+    *outY = (int)y;
+    return (u64)(int)useful;
+}
+
 #define ROUTE_COMSTR_MAX 21474836
 static u64 takeComstr(lua_State *L, const LuaSite *ls, const LuaArgs *a, const LuaFrame *f, const char *mod, int *callNext) {
     *callNext = 0;
@@ -976,7 +1530,7 @@ static u64 runLuaWrap(LuaWrap *w, const LuaArgs *a) {
     if (!s || s->dead || !luaSiteOpenNow(s, ls->site)) return callLuaNext(ls, w->next, a);
     LuaFrame f = {luaFrames, w, a, 0, 0, ++luaFrameSerial, 0, 0, 0, luaChangeCount, 0};
     luaFrames = &f;
-    int results = ls->kind == K_TARGET_SQUARE ? 3 : 1;
+    int results = ls->kind == K_REFORM ? 4 : luaSiteWritesSquare(ls) ? 3 : 1;
     CallSite outerSite = luaRunningSite;
     luaRunningSite = ls->site;
     noteBattleScriptCall(s);
@@ -992,12 +1546,31 @@ static u64 runLuaWrap(LuaWrap *w, const LuaArgs *a) {
             squareChanged = f.nextCalled && (*(const int *)(uintptr_t)a->a[2] != nextX || *(const int *)(uintptr_t)a->a[3] != nextY);
         }
         else if (ls->kind == K_VETO) result = takeVeto(s->L, ls, a, &f, s->mod, &vetoNext);
+        else if (ls->kind == K_DESTINATION) {
+            int nextX = *(const int *)(uintptr_t)a->a[3], nextY = *(const int *)(uintptr_t)a->a[4];
+            result = takeBanishDestination(s->L, ls, a, &f, s->mod, &vetoNext);
+            squareChanged = f.nextCalled && (*(const int *)(uintptr_t)a->a[3] != nextX || *(const int *)(uintptr_t)a->a[4] != nextY);
+        }
+        else if (ls->kind == K_REFORM) {
+            int before[4];
+            for (int i = 0; i < 4; i++) before[i] = *(const int *)(uintptr_t)a->a[3 + i];
+            result = takeImmortalReform(s->L, ls, a, &f, s->mod, &vetoNext);
+            for (int i = 0; i < 4; i++) squareChanged |= f.nextCalled && *(const int *)(uintptr_t)a->a[3 + i] != before[i];
+        }
+        else if (ls->kind == K_BATTLE_SQUARE) {
+            int at = squarePointerAt(ls);
+            int nextX = *(const int *)(uintptr_t)a->a[at], nextY = *(const int *)(uintptr_t)a->a[at + 1];
+            result = takeBattleSquare(s->L, ls, a, &f, s->mod, &vetoNext);
+            squareChanged = f.nextCalled && (*(const int *)(uintptr_t)a->a[at] != nextX || *(const int *)(uintptr_t)a->a[at + 1] != nextY);
+        }
+        else if (ls->site == SITE_UNIT_BANISHABLE || ls->site == SITE_UNIT_HEAL_RATE) result = takeZeroToTwo(s->L, ls, a, &f, s->mod, &vetoNext);
         else if (ls->kind == K_TEST) result = takeTest(s->L, ls, &f, s->mod, &vetoNext);
         else if (ls->site == SITE_AI_MOVE_COMSTR) result = takeComstr(s->L, ls, a, &f, s->mod, &vetoNext);
         else if (ls->site == SITE_BATTLE_SPELL_PICK) result = takeSpellPick(s->L, ls, a, &f, s->mod, &vetoNext);
         else if (ls->kind == K_SEAL_EVENT) result = f.nextCalled ? f.result : 0;
         else if (ls->site == SITE_UNIT_RETURNS && lua_isboolean(s->L, -1)) result = (u64)lua_toboolean(s->L, -1);
         else result = lua_isinteger(s->L, -1) ? (u64)lua_tointeger(s->L, -1) : f.result;
+        if (ls->kind == K_OBSERVE) result = takeObservedResult(ls, &f, result, s->mod);
         lua_pop(s->L, results);
         closeDeadLuaScript(s);
         int answerChanged = !vetoNext && (!f.nextCalled || (ls->kind == K_TEST ? ((int)result != 0) != ((int)f.result != 0)
@@ -1222,10 +1795,24 @@ static void *luaWrapperFor(const LuaSite *ls) {
     }
 }
 
-static const LuaSite *luaSiteNamed(lua_State *L) {
-    const char *name = luaL_checkstring(L, 1);
+static const struct { const char *name, *now; } LUA_SITE_FIRST_NAMES[] = {
+    {"UNIT_STRENGTH", "UNIT_BATTLE_STRENGTH"},
+    {"SQUARE_STRENGTH", "SQUARE_BATTLE_STRENGTH"},
+    {"COMMANDER_STRENGTH", "COMMANDER_BATTLE_STRENGTH"},
+};
+
+static const LuaSite *luaSiteOfName(const char *name) {
+    for (size_t i = 0; i < sizeof LUA_SITE_FIRST_NAMES / sizeof LUA_SITE_FIRST_NAMES[0]; i++)
+        if (!strcmp(LUA_SITE_FIRST_NAMES[i].name, name)) name = LUA_SITE_FIRST_NAMES[i].now;
     for (int i = 0; i < LUA_SITE_COUNT; i++)
         if (!strcmp(luaSites[i].name, name)) return &luaSites[i];
+    return NULL;
+}
+
+static const LuaSite *luaSiteNamed(lua_State *L) {
+    const char *name = luaL_checkstring(L, 1);
+    const LuaSite *ls = luaSiteOfName(name);
+    if (ls) return ls;
     luaL_error(L, "no site named '%s' that a script can wrap or observe", name);
     return NULL;
 }
@@ -1270,7 +1857,6 @@ static int lWrap(lua_State *L) {
     int hasPriority = !lua_isnoneornil(L, 3);
     lua_Integer priority = hasPriority ? luaL_checkinteger(L, 3) : WRAP_PRIORITY_DEFAULT;
     luaL_argcheck(L, priority >= INT_MIN && priority <= INT_MAX, 3, "priority out of range");
-    if (ls->kind == K_OBSERVE) return luaL_error(L, "'%s' is observe-only: use coe5.observe", ls->name);
     checkLuaMainThread(L, "coe5.wrap");
     LuaScript *s = luaScriptOf(L);
     if (!s) return luaL_error(L, "not called from a mod's script");
@@ -1278,7 +1864,7 @@ static int lWrap(lua_State *L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    if (ls->kind == K_CALL && (int)strlen(siteArgs(ls)) > LUA_CALL_ARGS_EXACT && !luaCallIsTyped(ls)) {
+    if ((ls->kind == K_CALL || ls->kind == K_OBSERVE) && (int)strlen(siteArgs(ls)) > LUA_CALL_ARGS_EXACT && !luaCallIsTyped(ls)) {
         refuseLuaCall(s ? s->mod : "?", "coe5.wrap", "not_on_this_platform", "site=%s arguments=%d", ls->name,
                       (int)strlen(siteArgs(ls)));
         lua_pushboolean(L, 0);
@@ -1356,7 +1942,7 @@ static void runLuaObservers(CallSite site, const CallInfo *call, int after) {
     if (role == NET_ROLE_OFFICIAL) return;
     const LuaSite *ls = NULL;
     for (int i = 0; i < LUA_SITE_COUNT && !ls; i++)
-        if (luaSites[i].site == site && luaSites[i].kind == K_OBSERVE) ls = &luaSites[i];
+        if (luaSites[i].site == site && (luaSites[i].kind == K_OBSERVE || isObservedSite(site))) ls = &luaSites[i];
     if (!ls) return;
     const LuaSiteState *st = &luaSiteState[ls - luaSites];
     const CallInfo *outerCall = luaObserving[site];
@@ -1371,7 +1957,7 @@ static void runLuaObservers(CallSite site, const CallInfo *call, int after) {
         if (!o.s || o.s->dead) continue;
         int open = site == SITE_MODS_READ ? luaModsReadOpenFor(role, modClassNow(o.s->mod)) : luaObserverOpenNow(o.s, site);
         if (role != NET_ROLE_SINGLE && !open) continue;
-        if (role == NET_ROLE_CLIENT && modClassNow(o.s->mod) == LUA_CLASS_PERSONAL) {
+        if ((role == NET_ROLE_CLIENT || role == NET_ROLE_HOST) && modClassNow(o.s->mod) == LUA_CLASS_PERSONAL) {
             if (seen < 0) seen = personalObserverSees(site, call, after);
             if (!seen) continue;
         }
@@ -1386,12 +1972,12 @@ static void runLuaObservers(CallSite site, const CallInfo *call, int after) {
 #define LUA_OBSERVER_FNS(s) \
     static void luaBefore_##s(const CallInfo *call) { runLuaObservers(s, call, 0); } \
     static void luaAfter_##s(const CallInfo *call) { runLuaObservers(s, call, 1); }
-OBSERVE_ONLY_SITES(LUA_OBSERVER_FNS)
+OBSERVED_SITES(LUA_OBSERVER_FNS)
 #undef LUA_OBSERVER_FNS
 
 static int isScriptObserver(const void *fn) {
 #define LUA_OBSERVER_IS(s) if (fn == (const void *)luaBefore_##s || fn == (const void *)luaAfter_##s) return 1;
-    OBSERVE_ONLY_SITES(LUA_OBSERVER_IS)
+    OBSERVED_SITES(LUA_OBSERVER_IS)
 #undef LUA_OBSERVER_IS
     return 0;
 }
@@ -1399,7 +1985,7 @@ static int isScriptObserver(const void *fn) {
 static int observeForLua(CallSite site) {
 #define LUA_OBSERVER_CASE(s) case s: return luaApi->observe(s, luaBefore_##s, luaAfter_##s);
     switch (site) {
-    OBSERVE_ONLY_SITES(LUA_OBSERVER_CASE)
+    OBSERVED_SITES(LUA_OBSERVER_CASE)
     default:
         return luaApi->observe(site, NULL, NULL);
     }
@@ -1409,7 +1995,7 @@ static int observeForLua(CallSite site) {
 static int lObserve(lua_State *L) {
     const LuaSite *ls = luaSiteNamed(L);
     LuaSiteState *st = &luaSiteState[ls - luaSites];
-    if (ls->kind != K_OBSERVE) return luaL_error(L, "'%s' isn't observe-only: use coe5.wrap", ls->name);
+    if (ls->kind != K_OBSERVE && !isObservedSite(ls->site)) return luaL_error(L, "'%s' isn't observe-only: use coe5.wrap", ls->name);
     if (!lua_isnoneornil(L, 2)) luaL_checktype(L, 2, LUA_TFUNCTION);
     if (!lua_isnoneornil(L, 3)) luaL_checktype(L, 3, LUA_TFUNCTION);
     if (lua_isnoneornil(L, 2) && lua_isnoneornil(L, 3)) return luaL_error(L, "coe5.observe needs a before or an after function");

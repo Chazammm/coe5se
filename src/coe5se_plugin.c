@@ -184,6 +184,7 @@ static const char *battleMapLineHook(const char *line, size_t len, int mod, int 
 static int declinedBattleMapLine(const char *line, size_t len, int mod, int level);
 static void battleMapsBeforePass(int level);
 static void battleMapsAfterPass(int level);
+static void transportsAfterPass(int level);
 static int unitBattleCell(int unit, int *x, int *y);
 static unsigned char *battleCell(int x, int y);
 static const char *moveUnitBattleCell(int unit, int x, int y);
@@ -203,6 +204,10 @@ static void carryCopiedMonsterWords(int source, int mod);
 static int copystatsItemCarrySource(const char *line, int level);
 static void carryCopiedItemWords(int source, int mod);
 static int copyMonsterFactionRefs(int source, int target);
+static const char *growthLineHook(const char *line, size_t len, int mod, int level);
+static void growthWordsBeforePass(int level);
+static void clearMonsterGrowth(int monster);
+static int copyMonsterGrowth(int source, int target);
 static int copyritualCarrySource(const char *line, int level);
 static void carryCopiedRitualWords(int source, int mod);
 static void clearspecLineHook(const char *line, int level);
@@ -213,11 +218,28 @@ static void ritualWordsAfterPass(int level);
 static const char *corpseWordLineHook(const char *line, size_t len, int mod, int level);
 static int corpseEventLine(const char *line, int level);
 static void corpseWordsBeforePass(int level);
+static const char *afflictionWordLineHook(const char *line, size_t len, int mod, int level);
+static int afflictionEventLine(const char *line, int level, const char *mod);
+static void afflictionWordsBeforePass(int level);
+static int declinedAfflictionLine(const char *line, size_t len, int mod, int level);
+static int isNamedAfflictionEventLine(const char *line);
+static void copyAffresRules(int item, int source, int target);
+static void clearAffresRules(int item, int record);
+static void copyMonsterUniqueGroup(int source, int target);
+static void clearMonsterUniqueGroup(int monster);
+static void uniqueGroupsBeforePass(int level);
+static int countsAsNamedUnique(int monster, const unsigned char *record, const char *name);
 static void commanderCastsBeforePass(int level);
 static void itemSlotsBeforePass(int level);
 static void keepWeaponsBeforePass(int level);
 static void copyMonsterKeepsWeapons(int source, int target);
 static void clearMonsterKeepsWeapons(int monster);
+static void carryWordsBeforePass(int level);
+static void copyMonsterCarryWords(int source, int target);
+static void clearMonsterCarryWords(int monster);
+static void transportWordsBeforePass(int level);
+static void copyTransportWords(int source, int target);
+static void clearTransportWords(int monster);
 static void corpseWordsAfterPass(int level);
 static const char *killWordLineHook(const char *line, size_t len, int mod, int level);
 static void killWordsBeforePass(int level);
@@ -445,15 +467,20 @@ static void loadLuaCommandsFiles(void);
 static void logAllWrapOrders(void);
 static void moreButtonsScreen(int first);
 
+static int textLookedUp(const char *text);
+
 static int drawMenuButton(int id, float x, float y, float fade, const char *text) {
     static char label[TRANSLATED_SIZE];
-    translateText(text, label, sizeof label);
+    if (textLookedUp(text)) snprintf(label, sizeof label, "%s", text);
+    else translateText(text, label, sizeof label);
 #ifdef __APPLE__
     int hint = G32(RVA_GUI_NEXT_SLOT);
-    ((DrawButtonFn)(gameBase + RVA_DRAW_BUTTON))(id, x, y, MENU_LABEL_SIZE, 0.0f, 0.0f, 0.0f, fade, "%s", label);
+    CALL_WITH_TEXT_LOOKED_UP(((DrawButtonFn)(gameBase + RVA_DRAW_BUTTON))(id, x, y, MENU_LABEL_SIZE, 0.0f, 0.0f, 0.0f, fade, "%s", label));
     return G32(RVA_GUI_NEXT_SLOT) != hint ? G32(RVA_GUI_NEXT_SLOT) - 1 : -1;
 #else
-    return (int)(long long)((DrawButtonFn)(gameBase + RVA_DRAW_BUTTON))(id, x, y, MENU_LABEL_SIZE, 0.0f, 0.0f, 0.0f, fade, "%s", label);
+    int slot;
+    CALL_WITH_TEXT_LOOKED_UP(slot = (int)(long long)((DrawButtonFn)(gameBase + RVA_DRAW_BUTTON))(id, x, y, MENU_LABEL_SIZE, 0.0f, 0.0f, 0.0f, fade, "%s", label));
+    return slot;
 #endif
 }
 
@@ -522,6 +549,7 @@ static void drawMenuColumn(MenuColumn *col) {
 
 #ifdef __APPLE__
 static long paddingLeft(void);
+static long helperLeft(void);
 #endif
 static void takeStubLogTail(void) {
     char dir[MAX_PATH], gameLog[MAX_PATH];
@@ -548,7 +576,7 @@ static void finishStartup(void) {
     loadLuaScripts();
     logAllWrapOrders();
 #ifdef __APPLE__
-    writeLog("header_padding_left", "bytes=%ld", paddingLeft());
+    writeLog("header_padding_left", "bytes=%ld stub_helper=%ld", paddingLeft(), helperLeft());
 #endif
     logHeaderEnd();
     startupFinished = 1;
@@ -642,7 +670,7 @@ typedef struct {
 } StubData;
 #define STUB_PAGES_BYTES 0x8000
 #define STUB_DATA_BYTES  0x4000
-#define KEEP_THUNK_SITES 1
+#define KEEP_THUNK_SITES 2
 _Static_assert(SITE_COUNT * STUB_SIZE + KEEP_THUNK_SITES * KEEP_THUNK_SLOT <= STUB_PAGES_BYTES, "every site's stub and thunk must fit the pages allocNearBytes gives");
 _Static_assert(SITE_COUNT * sizeof(StubData) <= STUB_DATA_BYTES, "every site's data must fit the data page");
 static unsigned char *stubPage;
@@ -651,11 +679,10 @@ static int setupIsAutomated;
 
 static unsigned char *siteStub(CallSite site) { return stubPage + site * STUB_SIZE; }
 
-// @platform-split keep_registers: Windows' calls of SQUARE_WATERLIKE go to a thunk that keeps the volatile registers; Mac's bl goes to the site's stub
-static int siteKeepsRegisters(CallSite site) { return site == SITE_SQUARE_WATERLIKE; }
+// @platform-split keep_registers: Windows' calls of SQUARE_WATERLIKE and UNIT_INCAPACITATED go to a thunk that keeps the volatile registers; Mac's bl goes to the site's stub
+static int siteKeepsRegisters(CallSite site) { return site == SITE_SQUARE_WATERLIKE || site == SITE_UNIT_INCAPACITATED; }
 static unsigned char *siteKeepThunk(CallSite site) {
-    (void)site;
-    return stubPage + (size_t)SITE_COUNT * STUB_SIZE;
+    return stubPage + (size_t)SITE_COUNT * STUB_SIZE + (site == SITE_UNIT_INCAPACITATED ? KEEP_THUNK_SLOT : 0);
 }
 static StubData *siteStubData(CallSite site) { return (StubData *)(stubPage + STUB_PAGES_BYTES) + site; }
 
@@ -692,7 +719,12 @@ static int squarePanelWrapAsGame(int right, int limit, int line);
 static int weaponHitDamageAsGame(int attacker, int target, int weapon, int damage, int value, int dmgtype);
 static int targetCheckAsGame(int unit, int type, int weapon, int value, int target);
 static unsigned long long unitResistancesAsGame(int unit), unitFlagsAsGame(int unit);
+static int unitMaxHpAsGame(int unit);
+static int unitBanishableAsGame(int unit, int weapon, int attacker);
+static int banishDestinationAsGame(int unit, int weapon, int attacker, int *x, int *y);
+static void immortalReformAsGame(int unit, int plane, int apply, int *x, int *y, int *monster, int *owner);
 static int ritualCanCastAsGame(int commander, int ritual);
+static int unitHealRateAsGame(int unit);
 static unsigned char *siteCallTarget(CallSite site) {
     unsigned char *generated = generatedSiteTarget(site);
     if (generated) return generated;
@@ -702,6 +734,11 @@ static unsigned char *siteCallTarget(CallSite site) {
     if (site == SITE_BATTLE_TARGET_CHECK) return (unsigned char *)targetCheckAsGame;
     if (site == SITE_UNIT_RESISTANCES) return (unsigned char *)unitResistancesAsGame;
     if (site == SITE_UNIT_FLAGS) return (unsigned char *)unitFlagsAsGame;
+    if (site == SITE_UNIT_MAX_HP) return (unsigned char *)unitMaxHpAsGame;
+    if (site == SITE_UNIT_BANISHABLE) return (unsigned char *)unitBanishableAsGame;
+    if (site == SITE_BANISH_DESTINATION) return (unsigned char *)banishDestinationAsGame;
+    if (site == SITE_IMMORTAL_REFORM) return (unsigned char *)immortalReformAsGame;
+    if (site == SITE_UNIT_HEAL_RATE) return (unsigned char *)unitHealRateAsGame;
     if (site == SITE_MODS_READ) return (unsigned char *)modsReadAsGame;
     if (site == SITE_RITUAL_CAN_CAST) return (unsigned char *)ritualCanCastAsGame;
     if (!SITES[site].targetRva) return NULL;
@@ -722,7 +759,8 @@ static int isSiteCall(const unsigned char *call, const unsigned char *target, co
 static int siteRunByCoe5se(CallSite site) {
     return site == SITE_MAP_DRAW || site == SITE_BATTLE_DRAW || site == SITE_TOP_BAR_INCOME || site == SITE_WEAPON_HIT ||
            site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP || site == SITE_UNIT_RESISTANCES ||
-           site == SITE_UNIT_FLAGS || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST;
+           site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST ||
+           site == SITE_UNIT_BANISHABLE || site == SITE_BANISH_DESTINATION || site == SITE_IMMORTAL_REFORM || site == SITE_UNIT_HEAL_RATE;
 }
 
 static int installKeepThunk(CallSite site, const unsigned char *stub) {
@@ -904,9 +942,9 @@ static void *makeGate(void *hook, void *next, GateKind kind) {
     X(SITE_GAME_START) X(SITE_MONTH_START) X(SITE_PLAYER_TURN_START) X(SITE_HUMAN_TURN) X(SITE_AI_TURN) \
     X(SITE_PLAYER_TURN_END) X(SITE_GAME_OVER) X(SITE_GAME_SAVE) X(SITE_GAME_LOAD) \
     X(SITE_AFTER_GAME_TURN) X(SITE_DO_ALL_FIGHTS) X(SITE_MOVE_ALL_INDEPENDENTS) X(SITE_CONQUER_SQUARE) \
-    X(SITE_FIGHT_THE_FIGHT) X(SITE_BATTLE_ROUND) X(SITE_DAMAGE_UNIT) X(SITE_DOATTACK) X(SITE_EXECUTE_RITUAL) \
+    X(SITE_FIGHT_THE_FIGHT) X(SITE_BATTLE_ROUND) X(SITE_DAMAGE_UNIT) X(SITE_EXECUTE_RITUAL) \
     X(SITE_NEW_UNIT) X(SITE_REMOVE_UNIT) X(SITE_TURN_UNIT_UPKEEP) X(SITE_SQUARE_UPKEEP) X(SITE_RECRUIT_BUY) X(SITE_PROMOTE_UNIT) \
-    X(SITE_MASTERY_TRANSFORM) X(SITE_BATTLE_SETUP) X(SITE_BATTLE_SETUP_SIDE) X(SITE_BATTLE_SETUP_AMBUSH) X(SITE_BATTLE_ADVANCE_UNIT) X(SITE_BATTLE_TURN_EFFECTS) \
+    X(SITE_MASTERY_TRANSFORM) X(SITE_BATTLE_SETUP) X(SITE_BATTLE_SETUP_SIDE) X(SITE_BATTLE_SETUP_AMBUSH) X(SITE_BATTLE_TURN_EFFECTS) \
     X(SITE_BATTLE_TRANSFORM) X(SITE_FOUND_ITEM) X(SITE_REMOVE_DEAD_PLAYERS) X(SITE_CREATE_CITADEL) X(SITE_INQUISITION_SPAWN) X(SITE_ANIMAL_SUMMONING) X(SITE_ORDER_SLAVE_HUNT) X(SITE_ORDER_EAT_VILLAGE) \
     X(SITE_UPDATE_VOID) X(SITE_VOID_SHUFFLE) X(SITE_PLANESHIFT_UNIT) X(SITE_NEW_PORTAL_PAIR) X(SITE_PLANE_DISCOVERED_PASS) X(SITE_MOVE_INFERNO_PLAYER) X(SITE_MOVE_HADES_PLAYER) X(SITE_MOVE_CELESTIAL_PLAYER) X(SITE_POPULATE_CELESTIAL) X(SITE_POPULATE_SKY) X(SITE_POPULATE_AGARTHA) X(SITE_POPULATE_INFERNO) X(SITE_POPULATE_HADES) X(SITE_POPULATE_AZTLAN) X(SITE_POPULATE_PRIMAL) X(SITE_POPULATE_ELEMENTAL) X(SITE_PLANE_RISE_TO_ELYSIUM) X(SITE_ENLARGE_PLANE) X(SITE_GEN_FLOOD_PLANE) X(SITE_ADDPLANE) X(SITE_LOAD_MAP_PLANE) X(SITE_UNIT_ADD_XP) X(SITE_USE_SPECIAL_SITE) X(SITE_LONER_STEP) X(SITE_REMOVE_TEMP_MEN) X(SITE_MOVE_WANDERING_MONSTERS) X(SITE_MOVE_PLAYER_STUPIDS) X(SITE_OVERRUN_CHECK) X(SITE_KILL_UNIT_999) X(SITE_DAMAGE_UNIT_PLAIN) X(SITE_CONTINUE_MOVE_ORDERS) X(SITE_HUMAN_MULTI_MOVE) X(SITE_GROUP_MOVE) X(SITE_MOVE_ORDER_ROUTE) X(SITE_UNIT_REMOVE_ITEM) X(SITE_MEMORIZE_SPELL) X(SITE_LEARN_RANDOM_SPELL) X(SITE_GET_START_RITUALS) X(SITE_COMMANDER_LEARN_RITUAL) X(SITE_BOLSTER_BLESSING) X(SITE_ADD_PLAYER_BLESSING) X(SITE_REMOVE_ENCHANT) X(SITE_RITUAL_PAY_COSTS) X(SITE_RITUAL_FAR_SUMMON_UNITS) X(SITE_PRIEST_FREESPAWN) X(SITE_EVENT_KILL_SQUARE) X(SITE_GIVE_ITEM_BY_NAME) X(SITE_TAKE_ITEM_BY_NAME) X(SITE_GIVE_RANDOM_ITEM) X(SITE_SQUAREEVENT_START) X(SITE_TERRAIN_PRESENT_RESCAN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_EVENT_VAR_CHANGED) X(SITE_CONSCRIPTION) X(SITE_GAME_STATISTICS) X(SITE_ALTER_TERRAIN) X(SITE_RUIN_SQUARE) X(SITE_DESTROY_GATEWAY) X(SITE_DIG_TUNNEL_SQUARE) X(SITE_MONTH_SQUARE_RESET) X(SITE_ROLL_CLASS) X(SITE_RESET_INCOME_CACHES) \
     X(SITE_TEAM_START_LOCATIONS) X(SITE_TRIM_TEAM_LOCATIONS) X(SITE_SWAP_TEAM_LOCATIONS) X(SITE_CREATE_CITADELS_STEP) X(SITE_FIX_PORTALS) X(SITE_VOID_FLUCTUATIONS) X(SITE_PLANESHIFT_COMMANDER) X(SITE_MIST_SPREAD) X(SITE_TEMPERATURE_CHANGE) X(SITE_SPECIAL_SITE_POPULATE) X(SITE_UNIT_SWALLOW) X(SITE_UNIT_UNSWALLOW) X(SITE_LIFEFORCE_DRAIN_UNIT) X(SITE_UNIT_CATCH_FIRE) X(SITE_UNIT_CRUSH) X(SITE_REMOVE_BAD_FOLLOWERS) X(SITE_OVERPOP_CULL) X(SITE_MONKEY_CLOAK) X(SITE_RECYCLE_UNITS) X(SITE_RANDOM_TELEPORT) X(SITE_POP_HORRORS) X(SITE_KILL_TERRAIN_UNITS) X(SITE_KILL_SUNKEN_SHIPS) X(SITE_CREATE_BOATS) X(SITE_BATTLE_TRAPS) X(SITE_BATTLE_ENCHANT_TRAPS) X(SITE_BATTLE_SUMMON_STRING) X(SITE_PAY_SPELL_LIFEFORCE) X(SITE_WORLD_NEWS) X(SITE_SEASON_NEWS) X(SITE_CHECK_GAME_WON) X(SITE_SPY_CAUGHT) X(SITE_TOGGLE_AUTO_RECRUIT) X(SITE_CHANGE_LOYALTY) \
@@ -916,7 +954,14 @@ static void *makeGate(void *hook, void *next, GateKind kind) {
     X(SITE_CREATE_RANDOM_MAP) X(SITE_WORLD_PART_TERRAIN) X(SITE_MAPGEN_REMOVE_SMALL_ISLANDS) X(SITE_MAPGEN_RIVER_CROSSINGS) X(SITE_MAPGEN_ANCIENT_FOREST) X(SITE_MAPGEN_CLEAR_AREA) X(SITE_MAPGEN_ADJUST_TEMPERATURE) X(SITE_MARK_RIVER) X(SITE_GEN_DIAGONAL_FIX) X(SITE_GEN_UPDATE_MOIST_WALLS) X(SITE_GEN_TERRAIN_BLOB) X(SITE_CREATE_CELESTIAL_PLANE) X(SITE_CREATE_SKY_PLANE) X(SITE_CREATE_AGARTHA_PLANE) X(SITE_CREATE_INFERNO_PLANE) X(SITE_CREATE_HADES_PLANE) X(SITE_CREATE_ELEMENTAL_PLANE) X(SITE_LOAD_AZTLAN_PLANE) X(SITE_LOAD_PRIMAL_PLANE) X(SITE_AUTO_RECRUIT) X(SITE_USE_LIBRARY) X(SITE_ADD_GROUND_ITEMS) X(SITE_VOID_INSANITY) X(SITE_WANDERER_PICK_TARGET) X(SITE_WANDERER_PICK_UP) X(SITE_SET_HOLDIT) \
     X(SITE_LIBRARY_SCREEN) X(SITE_CHOP_BURN_SCREEN) X(SITE_SLAVE_HUNT_SCREEN) X(SITE_UNIT_STATS_SCREEN) X(SITE_ITEM_INFO_SCREEN) X(SITE_WEAPON_INFO_WINDOW) X(SITE_PLANE_INFO_SCREEN) X(SITE_BATTLE_INTRO_SCREEN) X(SITE_COMMANDER_SET_DONE) X(SITE_SELECT_NEXT_COMMANDER) X(SITE_SELECT_PREV_COMMANDER) \
     X(SITE_RUN_HATREDS) X(SITE_SANDSTORM_CLOUD_UPDATE) X(SITE_TAINTED_MAGIC_PASS) X(SITE_HERO_ARRIVAL) X(SITE_CLEAN_SQUARE) X(SITE_ADJUST_FOR_SNOW) X(SITE_START_TUNE) X(SITE_SQUARE_SET_OWNER) X(SITE_TEAMLESS_OWN_TEAM) X(SITE_ADD_BENEFIT) X(SITE_SOCIETY_PRESETS) X(SITE_MOVE_STEP_AFTER) X(SITE_NUMBER_BOX) \
-    X(SITE_ENCHANTS_DESTROYED_AT) X(SITE_STORM_SPAWN) X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_CLIENT_TURN) X(SITE_MODS_READ)
+    X(SITE_ENCHANTS_DESTROYED_AT) X(SITE_STORM_SPAWN) X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_CLIENT_TURN) X(SITE_MODS_READ) \
+    X(SITE_PLAYER_GOLD_INCOME) X(SITE_PLAYER_IRON_INCOME) X(SITE_PLAYER_HERBS_INCOME) X(SITE_PLAYER_FUNGUS_INCOME) \
+    X(SITE_PLAYER_SACRIFICES_INCOME) X(SITE_PLAYER_HANDS_INCOME) X(SITE_PLAYER_WEED_INCOME) X(SITE_PLAYER_TRADE_INCOME) \
+    X(SITE_PLAYER_RELICS_INCOME) X(SITE_PLAYER_LIFEFORCE_INCOME) X(SITE_PLAYER_GEM_INCOME) X(SITE_TRADE_INCOME_APPLY) \
+    X(SITE_RITUAL_COST_PERCENT)
+
+#define OBSERVABLE_WRAP_SITES(X) X(SITE_DOATTACK) X(SITE_BATTLE_ADVANCE_UNIT)
+#define OBSERVED_SITES(X) OBSERVE_ONLY_SITES(X) OBSERVABLE_WRAP_SITES(X)
 
 static int isInternalSite(CallSite site) {
     return site == SITE_MODS_RUN || site == SITE_MOD_COMMAND || site == SITE_TEXT_FORMAT || site == SITE_TEXT_BUILD ||
@@ -926,13 +971,25 @@ static int isInternalSite(CallSite site) {
            site == SITE_RUN_ONE_MOD_PATH || site == SITE_GAME_MENU_SETTINGS_SECTION_END || site == SITE_ELIMINATED_WARN ||
            site == SITE_TURN_MESSAGES ||
            site == SITE_MAP_EDITOR_TOOLBOX_LINE || site == SITE_RUN_ONE_MOD_LINE_READ || site == SITE_TOP_BAR ||
-           site == SITE_TOP_BAR_INCOME_DRAW || site == SITE_SETUP_SERVER || site == SITE_SQUARE_PANEL_ICON || site == SITE_SQUARE_PANEL_LAYOUT;
+           site == SITE_TOP_BAR_INCOME_DRAW || site == SITE_SETUP_SERVER || site == SITE_SQUARE_PANEL_ICON || site == SITE_SQUARE_PANEL_LAYOUT ||
+           site == SITE_ELIMINATED_TEXT || site == SITE_STORED_FORMAT;
 }
 
 static int isObserveOnlySite(CallSite site) {
 #define OBSERVE_CASE(s) case s:
     switch (site) {
     OBSERVE_ONLY_SITES(OBSERVE_CASE)
+        return 1;
+    default:
+        return 0;
+    }
+#undef OBSERVE_CASE
+}
+
+static int isObservedSite(CallSite site) {
+#define OBSERVE_CASE(s) case s:
+    switch (site) {
+    OBSERVED_SITES(OBSERVE_CASE)
         return 1;
     default:
         return 0;
@@ -1126,12 +1183,12 @@ static int wrapFor(void *caller, const char *call, CallSite site, void *hook, vo
         refuseApiCall(caller, call, "unknown_site", "site=%d", (int)site);
         return 0;
     }
+    const char *luaMod = isCoe5seCode(caller) ? runningLuaMod() : NULL;
     if (isInternalSite(site)) reason = "internal_site";
-    else if (isObserveOnlySite(site)) reason = "observe_only_site";
+    else if (isObserveOnlySite(site) && !luaMod) reason = "observe_only_site";
     else if (!hook) reason = "no_callback";
     else if (!next) reason = "no_next";
     if (!reason) {
-        const char *luaMod = isCoe5seCode(caller) ? runningLuaMod() : NULL;
         char owner[64];
         HMODULE m = callingPlugin(caller);
         if (luaMod) snprintf(owner, sizeof owner, "%.59s.lua", luaMod);
@@ -1245,13 +1302,13 @@ static u64 runObserved(CallSite site, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u6
     static u64 observe_##s(u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u64 a6, u64 a7, u64 a8) { \
         return runObserved(s, a1, a2, a3, a4, a5, a6, a7, a8); \
     }
-OBSERVE_ONLY_SITES(OBSERVE_WRAPPER)
+OBSERVED_SITES(OBSERVE_WRAPPER)
 #undef OBSERVE_WRAPPER
 
 static void *observeWrapperFor(CallSite site) {
 #define OBSERVE_CASE(s) case s: return (void *)observe_##s;
     switch (site) {
-    OBSERVE_ONLY_SITES(OBSERVE_CASE)
+    OBSERVED_SITES(OBSERVE_CASE)
     default:
         return NULL;
     }
@@ -1260,10 +1317,13 @@ static void *observeWrapperFor(CallSite site) {
 
 static int apiObserve(CallSite site, ObserverFn before, ObserverFn after) {
     if ((unsigned)site >= SITE_COUNT) return REFUSE_API(0, "observe", "unknown_site", "site=%d", (int)site);
-    if (!isObserveOnlySite(site)) return REFUSE_API(0, "observe", "not_observe_only", "site=%s", SITES[site].name);
+    if (!isObservedSite(site)) return REFUSE_API(0, "observe", "not_observe_only", "site=%s", SITES[site].name);
     if (!before && !after) return REFUSE_API(0, "observe", "no_callback", "site=%s", SITES[site].name);
     if (siteNameOffForBuild(SITES[site].name)) return REFUSE_API(0, "observe", "off_for_game_build", "site=%s", SITES[site].name);
-    if (!nextObserved[site] && !wrapSite(site, observeWrapperFor(site), (void **)&nextObserved[site]))
+    char owner[64];
+    moduleFileName((const void *)observeWrapperFor(site), owner, sizeof owner);
+    WrapPlace place = isObserveOnlySite(site) ? (WrapPlace){.priority = INT_MIN + 1, .gated = GATE_NONE} : (WrapPlace){.layer = WRAP_LAYER_OUTERMOST};
+    if (!nextObserved[site] && !insertWrap(site, observeWrapperFor(site), (void **)&nextObserved[site], place, owner, NULL))
         return REFUSE_API(0, "observe", "site_unavailable", "site=%s", SITES[site].name);
     if (!growList((void **)&observers[site].list, &observers[site].capacity, observers[site].count + 1, sizeof(Observer)))
         return REFUSE_API(0, "observe", "out_of_memory", "site=%s", SITES[site].name);
@@ -1328,6 +1388,8 @@ static void modDisplayName(const char *mod, char *out, size_t size) {
 // ---- Messages --------------------------------------------------------------------------------
 typedef unsigned long long (*AddMessageFn)(int, int, int, int, int, int, const char *, const char *, ...);
 
+static void noteSendMessageText(const char *text);
+
 static int apiSendMessage(int player, const char *title, const char *text) {
     if (!title) return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "no_title", "player=%d", player);
     if (!text) return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "no_text", "player=%d title=%s", player, title);
@@ -1335,10 +1397,15 @@ static int apiSendMessage(int player, const char *title, const char *text) {
         return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "bad_player", "player=%d title=%s", player, title);
     if (netShutsGameCalls()) return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "network_game", "player=%d title=%s", player, title);
     char shortTitle[100];
-    snprintf(shortTitle, sizeof shortTitle, "%s", title);
+    size_t titleLength = textCutLength(title, sizeof shortTitle - 1);
+    memcpy(shortTitle, title, titleLength);
+    shortTitle[titleLength] = '\0';
     char cut[ADD_MESSAGE_TEXT_SIZE];
+    const char *whole = text;
     text = fitGameText(__builtin_return_address(0), "sendMessage", text, cut, sizeof cut);
+    noteSendMessageText(strlen(whole) < TRANSLATED_SIZE - 1 ? whole : NULL);
     int index = (int)((AddMessageFn)(gameBase + RVA_ADD_MESSAGE))(-1, player, -1, -1, 0, 0, shortTitle, "%s", text);
+    noteSendMessageText(NULL);
     writeLog("message_sent", "player=%d title=%s index=%d", player, shortTitle, index);
     return index;
 }
@@ -1648,6 +1715,7 @@ static int apiSettingsPluginClick(int id) {
 }
 
 #include "mod_settings.h"
+#include "mod_languages.h"
 #include "mod_settings_declare.h"
 #include "mod_settings_ini_sidecar.h"
 #include "mod_settings_reading.h"
@@ -1757,6 +1825,7 @@ static void coe5sePageScreen(void) {
         finishReading();
         int settingCount = settingsOfModPage(COE5SE_MOD, &page, &pageCapacity);
         drawIniSettings(page, settingCount);
+        drawLanguagePick();
 
         buttonRow();
         textButton(ID_EXIT, "Back");
@@ -1765,8 +1834,12 @@ static void coe5sePageScreen(void) {
         settingsPageWaiting++;
         int id = screenWait();
         settingsPageWaiting--;
-        if (id == ID_EXIT) return;
+        if (id == ID_EXIT) {
+            applyLanguagePick();
+            return;
+        }
         clickIniSetting(id, page, settingCount);
+        clickLanguagePick(id);
         if (id >= ID_APPROVE_FIRST && id < ID_APPROVE_FIRST + n) {
             PluginEntry *p = &plugins[id - ID_APPROVE_FIRST];
             if (p->found.hash[0] && approveHash(p->found.hash, p->found.name)) p->approvedNow = 1;
@@ -1775,10 +1848,7 @@ static void coe5sePageScreen(void) {
     }
 }
 
-#ifndef __APPLE__
 #include "text_translation.h"
-
-#endif
 
 typedef u64 (*MessageBoxFn)(u64, u64, u64, u64, u64, u64, u64, u64);
 static MessageBoxFn nextModErrorDialog;
@@ -1819,6 +1889,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "host_settings.h"
 #include "network_versions.h"
 #include "personal_mod_lists.h"
+#include "steam_relay.h"
 #include "plane_layout.h"
 #include "custom_planes.h"
 #include "faction_sight.h"
@@ -1835,6 +1906,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_stats.h"
 #include "kill_transforms.h"
 #include "weapon_traits.h"
+#include "unique_groups.h"
 #include "heal_army.h"
 #include "look_color.h"
 #include "beam_width.h"
@@ -1860,6 +1932,10 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "mac_copy_hooks.h"
 #include "lua_coe5_table.h"
 #include "game_code_claims.h"
+#include "font_fallback.h"
+#include "drawn_text.h"
+#include "stored_text.h"
+#include "text_wrap.h"
 #include "random_events.h"
 #include "mod_events.h"
 #include "trait_lines.h"
@@ -1878,11 +1954,14 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_battle_view.h"
 #include "lua_test_field_preview.h"
 #include "lua_ui.h"
+#include "translation_templates.h"
 #include "lua_test_field_input.h"
 #include "lua_test_field_final.h"
 #include "lua_test_field_inspect.h"
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
+#include "lua_battle_banish.h"
+#include "lua_battle_summon.h"
 #include "read_filter.h"
 #include "preview_world.h"
 #include "lua_loading.h"
@@ -1890,15 +1969,20 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "content_travel.h"
 #include "plane_words.h"
 #include "class_names.h"
+#include "language_records.h"
 #include "ai_class.h"
 #include "plane_pieces.h"
 #include "preview_lines.h"
 #include "terrain_looks.h"
 #include "battle_maps.h"
+#include "lua_transport.h"
+#include "transport_deck.h"
+#include "transport_site.h"
 #include "event_finders.h"
 #include "drown_search.h"
 #include "battle_snapshot.h"
 #include "fanpatch/fanpatch_host.h"
+#include "transport_carry.h"
 #include "item_slot_hooks.h"
 #include "item_slot_card.h"
 #include "item_slot_battle.h"
@@ -1907,6 +1991,10 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "item_slot_net.h"
 #include "item_slot_replay.h"
 #include "battle_replays.h"
+#include "monster_growth.h"
+#include "custom_afflictions.h"
+#include "affliction_words.h"
+#include "affliction_effects.h"
 #include "lan_join_notice.h"
 #include "faction_words.h"
 #include "faction_movers.h"
@@ -1983,12 +2071,8 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_MAIN_MENU)) installMenuHook();
     int modErrorHook = wrapSite(SITE_MOD_ERROR_DIALOG, (void *)modErrorDialogWrapper, (void **)&nextModErrorDialog);
     writeResultLog(modErrorHook, "mod_error_hook_installed", "ok=%d", modErrorHook);
-#ifdef __APPLE__
-    int textFormat = 0, textBuild = 0;
-#else
     int textFormat = wrapSite(SITE_TEXT_FORMAT, (void *)textFormatHook, (void **)&nextTextFormat);
     int textBuild = wrapSite(SITE_TEXT_BUILD, (void *)textBuildHook, (void **)&nextTextBuild);
-#endif
     int modCommand = wrapSite(SITE_MOD_COMMAND, (void *)modCommandHook, (void **)&nextModCommand);
     int modsScreen = wrapSite(SITE_MAIN_MENU_MODS_SCREEN, (void *)modsScreenWrapper, (void **)&nextModsScreen);
     writeResultLog(modsScreen, "restart_prompt_installed", "ok=%d", modsScreen);
@@ -2004,12 +2088,18 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_GAME_SAVE)) gameSaveInit();
 #endif
     if (featureOn(FEATURE_KEY_ACTIONS)) keyRebindInit();
+    if (featureOn(FEATURE_FONT_FALLBACK)) fontFallbackInit();
+    int textWrapIn = featureOn(FEATURE_TEXT_WRAP) && textWrapInit();
+    if (featureOn(FEATURE_DRAWN_TEXT)) drawnTextInit(textWrapIn);
+    if (drawnText.installed) storedTextInit();
     if (featureOn(FEATURE_NEEDS_WORD)) needsCoe5seInit();
+    fallbackFontWordInit();
     if (featureOn(FEATURE_RITUAL_EXPANSION)) ritualExpansionInit();
     if (featureOn(FEATURE_SPELL_TABLE_MOVE)) spellTableMoveInit();
     if (featureOn(FEATURE_TABLE_MOVES)) tableMovesInit();
     if (featureOn(FEATURE_SPELL_PATH_EXPANSION)) spellPathExpansionInit();
     if (featureOn(FEATURE_FANPATCH)) fanpatchInstall();
+    installMessageBoxOneButton();
     installOfficialBlock();
     saveTailInit();
     if (featureOn(FEATURE_MISSING_MODS)) missingModsInit();
@@ -2023,13 +2113,18 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_BATTLE_MAPS)) battleMapWordsInit();
     if (featureOn(FEATURE_MONSTER_FLAGS)) monsterFlagWordsInit();
     if (featureOn(FEATURE_HATES)) hatesWordsInit();
+    if (featureOn(FEATURE_UNIQUE_GROUPS)) uniqueGroupsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) ritualWordsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) corpseKindsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) killTransformsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) commanderCastsInit();
     if (featureOn(FEATURE_ITEM_SLOTS)) itemSlotsInit();
+    carrierWordsInit();
+    transportWordsInit();
+    if (featureOn(FEATURE_CUSTOM_AFFLICTIONS)) customAfflictionsInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) weaponTraitsInit();
     if (featureOn(FEATURE_SPELL_WORDS)) healArmyInit();
+    if (featureOn(FEATURE_GROWTH)) growthInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) beamWidthInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) lookColorInit();
     if (featureOn(FEATURE_WEAPON_TRAITS)) traitLinesInit();
@@ -2050,6 +2145,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_MAP_RENDERING)) coe5seGraphicsMacHost(&graphicsHost);
 #endif
     if (featureOn(FEATURE_MAP_RENDERING)) { applySavedGraphicsVendor(); coe5seGraphicsInit(&API, userDir()); }
+    if (featureOn(FEATURE_STEAM_RELAY)) steamRelayInit();
 #ifdef COE5SE_EXTRA_START
     COE5SE_EXTRA_START();
 #endif

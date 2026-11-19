@@ -103,11 +103,40 @@ static int layoutPageBoxes(ModSetting **page, int count, int subPages, int scree
     return n;
 }
 
+#define SETTING_SHOWN_TEXT_MAX 256
+
 static void keySettingLine(const ModSetting *s, int value, char *out, size_t size) {
-    char key[24];
-    if (value == KEY_NONE) snprintf(key, sizeof key, "(none)");
-    else keyValueName(value, key, sizeof key);
-    snprintf(out, size, "%s: %s", s->label, key);
+    char label[SETTING_SHOWN_TEXT_MAX], key[KEY_SHOWN_NAME_SIZE];
+    keyValueShownName(value, key, sizeof key);
+    formatLookedUp(out, size, "%s: %s", translateText(s->label, label, sizeof label), key);
+}
+
+static void continuedTitle(const char *head, char *out, size_t size) {
+    char shown[SETTING_SHOWN_TEXT_MAX];
+    formatLookedUp(out, size, "%s (continued)", translateText(head, shown, sizeof shown));
+}
+
+static void modPageTitle(const char *mod, const char *page, int pageNumber, int pages, char *out, size_t size) {
+    char modShown[SETTING_SHOWN_TEXT_MAX], pageShown[SETTING_SHOWN_TEXT_MAX], head[2 * SETTING_SHOWN_TEXT_MAX];
+    translateText(mod, modShown, sizeof modShown);
+    if (page) formatLookedUp(head, sizeof head, "%s: %s", modShown, translateText(page, pageShown, sizeof pageShown));
+    else snprintf(head, sizeof head, "%s", modShown);
+    size_t n = 0;
+    out[0] = '\0';
+    if (pages > 1) formatLookedUp(out, size, "%s, page %d of %d", head, pageNumber + 1, pages);
+    else appendText(out, size, &n, "%s", head);
+    endAtWholeLetter(out, size);
+    noteTextLookedUp(out, size);
+}
+
+static void screenBeginLookedUp(const char *title) {
+    char cut[SCREEN_TITLE_TEXT_SIZE];
+    screenBegin();
+    size_t n = textCutLength(title, SCREEN_TITLE_TEXT_SIZE - 1);
+    memcpy(cut, title, n);
+    cut[n] = '\0';
+    CALL_WITH_TEXT_LOOKED_UP(GAME_FN(void (*)(FMT_ARGS), RVA_SCREEN_TITLE)("%s", cut));
+    screenWidth(setupScreenWidth());
 }
 
 #ifdef __APPLE__
@@ -123,6 +152,7 @@ static void gridColumn(float x) { GAME_FN(void (*)(float), RVA_COLUMN_X)(x); }
 static void greyedButton(int id, const char *text) {
     GAME_FN(void (*)(int, float, float, float, float, FMT_ARGS), RVA_BUTTON_CORE)(id, -1.0f, -1.0f, -1.0f, 0.5f, "%s", text);
 }
+static void greyedButtonAsIs(int id, const char *text) { CALL_WITH_TEXT_LOOKED_UP(greyedButton(id, text)); }
 
 #define TREE_DIM_ALPHA 0.42f
 
@@ -146,7 +176,7 @@ typedef struct {
     int last;
     const int *value;
     int id;
-    char text[SETTING_TEXT_MAX + 32];
+    char text[SETTING_SHOWN_TEXT_MAX];
 } TreeRow;
 static TreeRow treeRows[TREE_ROWS_MAX];
 static int treeRowCount;
@@ -251,7 +281,7 @@ static void drawSettingsTrees(void) {
 
 static void drawPageBoxes(ModSetting **page, const ModPage *const *subPages, const PageBox *boxes, int boxCount, int pageNumber,
                           int plugin) {
-    char title[SETTING_TEXT_MAX + 16], line[SETTING_TEXT_MAX + 32];
+    char title[SETTING_SHOWN_TEXT_MAX], line[SETTING_SHOWN_TEXT_MAX];
     treeRowCount = 0;
     for (int i = 0; i < boxCount; i++) {
         const PageBox *b = &boxes[i];
@@ -278,8 +308,8 @@ static void drawPageBoxes(ModSetting **page, const ModPage *const *subPages, con
             continue;
         }
         const char *head = page[b->titleFrom]->header[0] ? page[b->titleFrom]->header : "Settings";
-        snprintf(title, sizeof title, b->continued ? "%s (continued)" : "%s", head);
-        api->ui->sectionBegin(title);
+        if (b->continued) continuedTitle(head, title, sizeof title);
+        api->ui->sectionBegin(b->continued ? title : head);
         for (int j = b->first; j < b->first + b->count; j++) {
             ModSetting *s = page[j];
             int greyed = settingGreyed(s);
@@ -290,8 +320,8 @@ static void drawPageBoxes(ModSetting **page, const ModPage *const *subPages, con
             line[0] = '\0';
             if (s->isKey) {
                 keySettingLine(s, s->value, line, sizeof line);
-                if (s->fixed || greyed) greyedButton(0, line);
-                else api->ui->text(ID_KEY + j, line);
+                if (s->fixed || greyed) greyedButtonAsIs(0, line);
+                else textButtonAsIs(ID_KEY + j, line);
             } else if (greyed) {
                 greyedCheckbox(&s->value, s->label);
             } else {
@@ -322,21 +352,22 @@ static void drawIniSettings(ModSetting **page, int count) {
 #define PICK_ID_KEY      100
 #define PICK_KEYS_MAX    160
 
-typedef struct { int id; char text[24]; int selected; const char *tip; } PickItem;
+typedef struct { int id; char text[KEY_SHOWN_NAME_SIZE]; int selected; const char *tip; } PickItem;
 
 static void drawPickGrid(const PickItem *items, int count, int columns, float width) {
-    char text[32];
+    char text[KEY_SHOWN_NAME_SIZE + 2];
     for (int i = 0; i < count; i += columns) {
         gridRowOpen();
         for (int c = 0; c < columns && i + c < count; c++) {
             const PickItem *item = &items[i + c];
             snprintf(text, sizeof text, item->selected ? "[%s]" : "%s", item->text);
+            noteTextLookedUp(text, sizeof text);
             gridColumn(width * (float)c);
             if (item->tip) {
-                greyedButton(item->id, text);
-                tooltip(item->tip);
+                greyedButtonAsIs(item->id, text);
+                tooltipAsIs(item->tip);
             } else {
-                textButton(item->id, text);
+                textButtonAsIs(item->id, text);
             }
         }
         gridRowClose();
@@ -361,20 +392,24 @@ static int pickKeyList(int modifier, int *keys, int groupEnd[3]) {
 }
 
 static void keyHeldTip(const ModSetting *holder, char *out, size_t size) {
-    snprintf(out, size, holder->fixed ? "Used by %s, which can't change" : "Used by %s", holder->label);
+    char label[SETTING_SHOWN_TEXT_MAX];
+    translateText(holder->label, label, sizeof label);
+    if (holder->fixed) formatLookedUp(out, size, "Used by %s, which can't change", label);
+    else formatLookedUp(out, size, "Used by %s", label);
 }
 
 static int askKeyMove(ModSetting *holder, const ModSetting *s, int key) {
-    char name[24], text[400];
-    keyValueName(key, name, sizeof name);
+    char name[KEY_SHOWN_NAME_SIZE], text[1200], held[SETTING_SHOWN_TEXT_MAX], wanted[SETTING_SHOWN_TEXT_MAX];
+    keyValueShownName(key, name, sizeof name);
+    translateText(holder->label, held, sizeof held);
     writeLog("setting_key_held", "mod=%s name=%s key=%d fixed=%d", holder->mod, holder->name, key, holder->fixed);
     if (holder->fixed) {
-        snprintf(text, sizeof text, "%s reserved for %s.", name, holder->label);
+        formatLookedUp(text, sizeof text, "%s reserved for %s.", name, held);
         messageBox("CoE5SE: Key in use", text, "Back", "", 0, ESCAPE_KEY(), 0);
         return 0;
     }
-    snprintf(text, sizeof text, "This is assigned to \"%s\".\nReassign it to \"%s\" now?\nThis could break your hotkeys.", holder->label,
-             s->label);
+    formatLookedUp(text, sizeof text, "This is assigned to \"%s\".\nReassign it to \"%s\" now?\nThis could break your hotkeys.", held,
+                   translateText(s->label, wanted, sizeof wanted));
     if (messageBox("CoE5SE: Key in use", text, "Reassign key", "Back", 0, 0, ESCAPE_KEY()) != 1) return 0;
     holder->value = KEY_NONE;
     saveValue(holder);
@@ -391,27 +426,24 @@ static int keyPickerScreen(const ModSetting *s) {
     for (int t = 0; t < 4; t++)
         if (s->value != KEY_NONE && keyModifier(s->value) == MODIFIERS[t]) tab = t;
     PickItem items[PICK_KEYS_MAX];
-    static char tips[PICK_KEYS_MAX][SETTING_TEXT_MAX + 32];
-    char now[24], line[120], defaultTip[SETTING_TEXT_MAX + 32];
+    static char tips[PICK_KEYS_MAX][SETTING_SHOWN_TEXT_MAX];
+    char now[KEY_SHOWN_NAME_SIZE], line[SETTING_SHOWN_TEXT_MAX], defaultTip[SETTING_SHOWN_TEXT_MAX];
     for (;;) {
         int count = pickKeyList(MODIFIERS[tab], keys, groupEnd);
         uiScreenBegin(s->label);
         screenWidth(PICK_WIDTH);
-        if (s->value == KEY_NONE) snprintf(now, sizeof now, "(none)");
-        else keyValueName(s->value, now, sizeof now);
-        snprintf(line, sizeof line, "Now: %s", now);
-        api->ui->sectionBegin(line);
-        char defaultName[24];
-        keyValueName(s->defaultValue, defaultName, sizeof defaultName);
-        snprintf(line, sizeof line, "The mod's default is %s. Pick a key, or Back to keep this one.", defaultName);
-        api->ui->text(0, line);
+        keyValueShownName(s->value, now, sizeof now);
+        api->ui->sectionBegin(formatLookedUp(line, sizeof line, "Now: %s", now));
+        char defaultName[KEY_SHOWN_NAME_SIZE];
+        keyValueShownName(s->defaultValue, defaultName, sizeof defaultName);
+        textButtonAsIs(0, formatLookedUp(line, sizeof line, "The mod's default is %s. Pick a key, or Back to keep this one.", defaultName));
         api->ui->text(0, "A greyed key is used by another line. Point at it to see which.");
         PickItem tabs[4];
         for (int t = 0; t < 4; t++) {
             tabs[t].id = PICK_ID_TAB + t;
             tabs[t].selected = t == tab;
             tabs[t].tip = NULL;
-            snprintf(tabs[t].text, sizeof tabs[t].text, "%s", TAB_NAMES[t]);
+            translateText(TAB_NAMES[t], tabs[t].text, sizeof tabs[t].text);
         }
         drawPickGrid(tabs, 4, 4, 100.0f);
         api->ui->sectionEnd();
@@ -423,7 +455,7 @@ static int keyPickerScreen(const ModSetting *s) {
                 const ModSetting *holder = keyHolder(s, keys[i]);
                 if (holder) keyHeldTip(holder, tips[i], sizeof tips[i]);
                 items[i].tip = holder ? tips[i] : NULL;
-                keyValueName(MODIFIERS[tab] ? keyBase(keys[i]) : keys[i], items[i].text, sizeof items[i].text);
+                keyValueShownName(MODIFIERS[tab] ? keyBase(keys[i]) : keys[i], items[i].text, sizeof items[i].text);
             }
             api->ui->sectionBegin(GROUP_TITLES[g]);
             drawPickGrid(items + from, groupEnd[g] - from, GROUP_GRID[g].columns, GROUP_GRID[g].width);
@@ -436,7 +468,7 @@ static int keyPickerScreen(const ModSetting *s) {
         if (defaultHolder) {
             keyHeldTip(defaultHolder, defaultTip, sizeof defaultTip);
             greyedButton(PICK_ID_DEFAULT, "Default");
-            api->ui->tooltip(defaultTip);
+            tooltipAsIs(defaultTip);
         } else {
             api->ui->text(PICK_ID_DEFAULT, "Default");
             api->ui->tooltip("The mod's default key.");
@@ -535,8 +567,8 @@ static void drawResetButton(const char *mod) {
 static void clickResetButton(const ListedMod *m) {
     int count;
     if (!resettableSettings(m->mod, &count)) return;
-    char text[160];
-    snprintf(text, sizeof text, "Reset to defaults: %.79s?", m->label);
+    char text[2 * SETTING_SHOWN_TEXT_MAX], label[SETTING_SHOWN_TEXT_MAX];
+    formatLookedUp(text, sizeof text, "Reset to defaults: %s?", translateText(m->label, label, sizeof label));
     if (messageBox("CoE5SE: Reset to defaults", text, "Yes", "No", 0, 0, 0) == 1) resetModToDefaults(m->mod);
 }
 
@@ -546,7 +578,7 @@ static void modScreen(const ListedMod *m, const char *subPage) {
     static int pageCapacity, boxCapacity;
     const ModPage *subPages[SETTING_PAGES_MAX];
     int pageNumber = 0;
-    char title[200];
+    char title[SCREEN_TITLE_TEXT_SIZE * 4];
     for (;;) {
         finishReading();
         const ModPage *open = subPage ? findModPage(m->mod, subPage) : NULL;
@@ -557,10 +589,8 @@ static void modScreen(const ListedMod *m, const char *subPage) {
         int boxCount = layoutPageBoxes(page, count, subCount, screenLines, &boxes, &boxCapacity);
         int pages = boxCount ? boxes[boxCount - 1].page + 1 : 1;
         if (pageNumber >= pages) pageNumber = pages - 1;
-        int n = open ? snprintf(title, sizeof title, "%.79s: %.56s", m->label, open->label)
-                     : snprintf(title, sizeof title, "%.79s", m->label);
-        if (pages > 1) snprintf(title + n, sizeof title - (size_t)n, ", page %d of %d", pageNumber + 1, pages);
-        api->ui->screenBegin(title);
+        modPageTitle(m->label, open ? open->label : NULL, pageNumber, pages, title, sizeof title);
+        screenBeginLookedUp(title);
         if (pageNumber == 0 && !subPage) drawLeftOut(m->mod);
         drawPageBoxes(page, subPages, boxes, boxCount, pageNumber, subPage ? -1 : m->plugin);
         api->ui->buttonRow();
@@ -738,6 +768,11 @@ static void finishStartupWithoutMenu(int level);
 static void modEventsBeforePass(int level);
 static void contentWritesBeforePass(int level);
 static void beginContentPass(void), endContentPass(void);
+static void languagesBeforePass(int level);
+static void translatorsBeforePass(int level), translatorsAfterPass(int level);
+static void fallbackFontsBeforePass(int level), fallbackFontsAfterPass(int level);
+static void drawnTextAroundPass(int level);
+static void modDescriptionsAfterPass(int level);
 static void modsRunHook(int level) {
     if (level == 2) beginContentPass();
     loadLuaCommandsFiles();
@@ -750,6 +785,7 @@ static void modsRunHook(int level) {
     terrainLooksBeforePass(level);
     battleMapsBeforePass(level);
     weaponTraitsBeforePass(level);
+    uniqueGroupsBeforePass(level);
     noExplodeBeforePass(level);
     beamWidthBeforePass(level);
     lookColorBeforePass(level);
@@ -757,12 +793,20 @@ static void modsRunHook(int level) {
     corpseWordsBeforePass(level);
     commanderCastsBeforePass(level);
     itemSlotsBeforePass(level);
+    afflictionWordsBeforePass(level);
     keepWeaponsBeforePass(level);
+    carryWordsBeforePass(level);
+    transportWordsBeforePass(level);
     killWordsBeforePass(level);
+    growthWordsBeforePass(level);
     aiClassBeforePass(level);
     modEventsBeforePass(level);
     contentWritesBeforePass(level);
     contentOriginsBeforePass(level);
+    languagesBeforePass(level);
+    drawnTextAroundPass(level);
+    fallbackFontsBeforePass(level);
+    translatorsBeforePass(level);
     nextModsRun(level);
     finishReading();
     spellsAfterPass(level, spellPasses);
@@ -779,7 +823,12 @@ static void modsRunHook(int level) {
     noExplodeAfterPass(level);
     terrainLooksAfterPass(level);
     battleMapsAfterPass(level);
+    transportsAfterPass(level);
     syncLuaScriptsAfterPass(level);
+    fallbackFontsAfterPass(level);
+    drawnTextAroundPass(level);
+    modDescriptionsAfterPass(level);
+    translatorsAfterPass(level);
     finishStartupWithoutMenu(level);
     if (level == 2) endContentPass();
     if (level != 3) popupSettingErrors();

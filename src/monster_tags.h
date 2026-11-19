@@ -221,6 +221,11 @@ static void carryCopiedMonsterWords(int source, int mod) {
     if (!copyMonsterFactionRefs(source, target)) ok = 0;
     copyMonsterItemSlots(source, target);
     copyMonsterKeepsWeapons(source, target);
+    copyMonsterCarryWords(source, target);
+    copyTransportWords(source, target);
+    copyAffresRules(0, source, target);
+    if (featureOn(FEATURE_GROWTH) && !copyMonsterGrowth(source, target)) ok = 0;
+    copyMonsterUniqueGroup(source, target);
     if (!ok) refuseC5mLine("copystats", spellModName(mod), "out_of_memory", "line=%d", G32(RVA_MOD_LINE));
 }
 
@@ -241,12 +246,18 @@ static void carryCopiedItemWords(int source, int mod) {
     int target = G32(RVA_ITEM_CURRENT), bits = itemResBits(source);
     if (bits && !growItemRes()) refuseC5mLine("copystats", spellModName(mod), "out_of_memory", "line=%d", G32(RVA_MOD_LINE));
     if (target < monsterTags.itemResSize) monsterTags.itemRes[target] = (unsigned char)bits;
+    copyAffresRules(1, source, target);
 }
 
 static void clearspecLineHook(const char *line, int level) {
     if (level != 2 || !spellWordIs(line, strcspn(line, " \t\r\n"), "clearspec")) return;
     clearMonsterItemSlots(G32(RVA_MONSTER_CURRENT));
     clearMonsterKeepsWeapons(G32(RVA_MONSTER_CURRENT));
+    clearMonsterCarryWords(G32(RVA_MONSTER_CURRENT));
+    clearTransportWords(G32(RVA_MONSTER_CURRENT));
+    clearAffresRules(0, G32(RVA_MONSTER_CURRENT));
+    if (featureOn(FEATURE_GROWTH)) clearMonsterGrowth(G32(RVA_MONSTER_CURRENT));
+    clearMonsterUniqueGroup(G32(RVA_MONSTER_CURRENT));
     if (!featureOn(FEATURE_WEAPON_TRAITS) && !featureOn(FEATURE_CORPSE_KINDS)) return;
     int monster = G32(RVA_MONSTER_CURRENT);
     if (!monsterRecord(monster)) return;
@@ -320,6 +331,7 @@ static int itemWordLineHook(const char *line, size_t len, int mod, int level) {
         memset(record + ITEM_ABILITIES, 0, sizeof(int));
         memset(record + ITEM_COMBAT_WORDS, 0, ITEM_COMBAT_WORDS_SIZE);
         if (item < monsterTags.itemResSize) monsterTags.itemRes[item] = 0;
+        clearAffresRules(1, item);
     }
     writeLog("item_words_cleared", "word=%.*s item=%d mod=%d", (int)len, line, item, mod);
     return 1;

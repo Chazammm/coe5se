@@ -145,6 +145,12 @@ static void redistributeItemsAt(int player, int x, int y) {
         }
     }
 }
+#if defined(__APPLE__) || defined(COE5SE_COPY_SELFCHECK)
+static void aiRedistributeItemsCopy(int player, int x, int y) {
+    GAME_FN(void (*)(const char *, ...), RVA_TRACE_C)("ai: redistributing at %d,%d\n", x, y);
+    redistributeItemsAt(player, x, y);
+}
+#endif
 
 // ---- Wands: RVA_ITEM_CASTABLE_SPELL --------------------------------------------------------------------------------
 typedef int (*ItemCastableSpellFn)(int unit);

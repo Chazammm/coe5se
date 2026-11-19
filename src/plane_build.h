@@ -870,7 +870,7 @@ static int livingUnitsNamed(const char *name) {
     for (int u = 0; u <= last && u < UNIT_TABLE_MAX; u++) {
         int monster = G16(RVA_UNIT_MONSTER + (size_t)u * UNIT_SIZE);
         if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) <= 0 || monster < 0 || monster >= MONSTER_TABLE_MAX) continue;
-        n += !strcmp((const char *)GAME_PTR(RVA_MONSTER_TABLE) + (size_t)monster * MONSTER_SIZE, name);
+        n += countsAsNamedUnique(monster, GAME_PTR(RVA_MONSTER_TABLE) + (size_t)monster * MONSTER_SIZE, name);
     }
     return n;
 }

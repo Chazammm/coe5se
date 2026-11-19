@@ -1,6 +1,12 @@
 // @platform-split item_slot_net: Windows hooks the record's writer and reader at their entries, redirects the writer's last check and jumps to a stub at the reader's index test; Mac inlines both into their callers, so step hooks there
 #pragma once
 
+#define AFFLICTION_NET_FIRST_INDEX  ITEM_POSITION_MAX
+#define AFFLICTION_NET_LAST_INDEX   (ITEM_POSITION_MAX + 5)
+static int putUnitAfflictionEntries(int unit);
+static void getUnitAfflictionEntry(int unit, int index, unsigned half);
+static void clearUnitAfflictionsForRecord(int unit);
+
 // ---- The record's entries, both builds ------------------------------------------------------------------------
 static void gameNetPutByte(int byte) { GAME_FN(void (*)(int), RVA_NET_PUT_BYTE)(byte); }
 static int gameNetGetByte(void) { return GAME_FN(char (*)(void), RVA_NET_GET_BYTE)(); }
@@ -41,6 +47,11 @@ static void getUnitExtraItem(int unit, int position) {
     writeLog("item_slots_net_read", "unit=%d items=%s", unit, held);
 }
 
+static void readUnitAfflictionEntry(int unit, int index) {
+    unsigned low = (unsigned)itemNetGetByte() & 0xff, high = (unsigned)itemNetGetByte() & 0xff;
+    getUnitAfflictionEntry(unit, index, low | high << 8);
+}
+
 static __attribute__((unused)) int netItemsUnit(const void *items) {
     long long offset = (const unsigned char *)items - GAME_PTR(RVA_UNIT_ITEMS);
     if (offset < 0 || offset % UNIT_SIZE || offset / UNIT_SIZE >= UNIT_TABLE_MAX) return -1;
@@ -63,7 +74,7 @@ static void netPutUnitRecordHook(int unit) {
 }
 
 static void netPutItemsEndHook(int failed, const char *text, long long cap) {
-    if (netPutUnit >= 0) putUnitExtraItems(netPutUnit);
+    if (netPutUnit >= 0) putUnitExtraItems(netPutUnit), putUnitAfflictionEntries(netPutUnit);
     GAME_FN(void (*)(int, const char *, ...), RVA_FATAL_IF)(failed, text, cap);
 }
 
@@ -71,10 +82,14 @@ typedef void (*NetGetUnitItemsFn)(short *items);
 static NetGetUnitItemsFn gameNetGetUnitItems;
 static void netGetUnitItemsHook(short *items) {
     clearUnitExtraItems(netItemsUnit(items));
+    clearUnitAfflictionsForRecord(netItemsUnit(items));
     gameNetGetUnitItems(items);
 }
 
-static void netGetExtraItemHook(const short *items, int position) { getUnitExtraItem(netItemsUnit(items), position); }
+static void netGetExtraItemHook(const short *items, int position) {
+    if (position < ITEM_POSITION_MAX) getUnitExtraItem(netItemsUnit(items), position);
+    else readUnitAfflictionEntry(netItemsUnit(items), position);
+}
 
 #define ITEM_NET_MOVED       3
 #define ITEM_NET_JUMP        5
@@ -92,7 +107,7 @@ static int installItemNetIndexStub(void) {
     void *handler = (void *)netGetExtraItemHook;
     memcpy(page + ITEM_CARD_STUB_SIZE, &handler, 8);
     RUNTIME_FUNCTION *function = (RUNTIME_FUNCTION *)(page + ITEM_NET_FUNCTIONS);
-    size_t n = buildItemNetIndexStub(page, page, page + ITEM_CARD_STUB_SIZE, at, ITEM_NET_MOVED, ITEM_POSITION_MAX - 1,
+    size_t n = buildItemNetIndexStub(page, page, page + ITEM_CARD_STUB_SIZE, at, ITEM_NET_MOVED, AFFLICTION_NET_LAST_INDEX,
                                      GAME_PTR(RVA_NET_GET_UNIT_ITEMS_STORE), GAME_PTR(RVA_NET_GET_UNIT_ITEMS_BAD),
                                      GAME_PTR(RVA_NET_GET_UNIT_ITEMS_NEXT));
     if (!n || !copyItemStatUnwind(at, page + ITEM_NET_UNWIND)) {
@@ -140,19 +155,23 @@ static StepHook itemNetNextHook;
 
 static void itemNetPutEndMac(StepContext *ctx, const StepHook *hook) {
     (void)hook;
-    putUnitExtraItems((int)*(const long long *)(uintptr_t)(ctx->sp + NET_PUT_FRAME_UNIT));
+    int unit = (int)*(const long long *)(uintptr_t)(ctx->sp + NET_PUT_FRAME_UNIT);
+    putUnitExtraItems(unit);
+    putUnitAfflictionEntries(unit);
 }
 
 static void itemNetGetClearMac(StepContext *ctx, const StepHook *hook) {
     (void)hook;
     clearUnitExtraItems((int)(unsigned)ctx->x[25]);
+    clearUnitAfflictionsForRecord((int)(unsigned)ctx->x[25]);
 }
 
 static void itemNetGetBadMac(StepContext *ctx, const StepHook *hook) {
     (void)hook;
     int position = (int)(unsigned)ctx->x[21];
-    if (position < UNIT_ITEM_SLOTS || position >= ITEM_POSITION_MAX) return;
-    getUnitExtraItem((int)(unsigned)ctx->x[25], position);
+    if (position < UNIT_ITEM_SLOTS || position > AFFLICTION_NET_LAST_INDEX) return;
+    if (position < ITEM_POSITION_MAX) getUnitExtraItem((int)(unsigned)ctx->x[25], position);
+    else readUnitAfflictionEntry((int)(unsigned)ctx->x[25], position);
     ctx->pc = itemNetNextHook.resume;
 }
 

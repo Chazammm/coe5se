@@ -1,8 +1,8 @@
-// @platform-split copy_hooks_mac: Mac hooks the copies of three sites' functions (Windows calls the functions)
+// @platform-split copy_hooks_mac: Mac hooks the copies of five sites' functions (Windows calls the functions)
 #pragma once
 #ifdef __APPLE__
 
-enum { COPY_COUNT, COPY_LIBRARY, COPY_TEST };
+enum { COPY_COUNT, COPY_LIBRARY, COPY_TEST, COPY_UNIT_TEST };
 typedef struct {
     CallSite site;
     int kind;
@@ -27,9 +27,21 @@ static const CopyHookMac COPY_HOOKS_MAC[] = {
     {SITE_SQUARE_OPEN_LAND, COPY_TEST, RVA_OPEN_LAND_RITUAL_1_START, {RVA_OPEN_LAND_RITUAL_1_CLOSED, RVA_OPEN_LAND_RITUAL_1_OPEN}, {19, 28}, 0},
     {SITE_SQUARE_OPEN_LAND, COPY_TEST, RVA_OPEN_LAND_RITUAL_2_START, {RVA_OPEN_LAND_RITUAL_2_CLOSED, RVA_OPEN_LAND_RITUAL_2_OPEN}, {27, 20}, 0},
     {SITE_SQUARE_OPEN_LAND, COPY_TEST, RVA_OPEN_LAND_RITUAL_3_START, {RVA_OPEN_LAND_RITUAL_3_CLOSED, RVA_OPEN_LAND_RITUAL_3_OPEN}, {19, 20}, 0},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_ADVANCE_TEST, {RVA_INCAP_ADVANCE_ACTS, RVA_INCAP_ADVANCE_HELD}, {19}, 0},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_DOATTACK_TEST, {RVA_INCAP_DOATTACK_ACTS, RVA_INCAP_DOATTACK_HELD}, {23}, 0},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_WEAPON_ATTACK_A_TEST, {RVA_INCAP_WEAPON_ATTACK_A_ACTS, RVA_INCAP_WEAPON_ATTACK_A_HELD}, {19}, 0},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_WEAPON_ATTACK_B_TEST, {RVA_INCAP_WEAPON_ATTACK_B_ACTS, RVA_INCAP_WEAPON_ATTACK_B_HELD}, {19}, 0},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_WEAPON_HIT_TEST, {RVA_INCAP_WEAPON_HIT_RESUME}, {20}, 8},
+    {SITE_UNIT_INCAPACITATED, COPY_UNIT_TEST, RVA_INCAP_TOKEN_DRAW, {RVA_INCAP_TOKEN_DRAW_ACTS, RVA_INCAP_TOKEN_DRAW_HELD}, {9}, 0},
 };
+static const unsigned FIRE_COPY_CALLS_MAC[] = {
+    RVA_FIRE_COPY_1_CALL, RVA_FIRE_COPY_2_CALL, RVA_FIRE_COPY_3_CALL, RVA_FIRE_COPY_4_CALL, RVA_FIRE_COPY_5_CALL, RVA_FIRE_COPY_6_CALL,
+    RVA_FIRE_COPY_7_CALL, RVA_FIRE_COPY_8_CALL, RVA_FIRE_COPY_9_CALL, RVA_FIRE_COPY_10_CALL, RVA_FIRE_COPY_11_CALL, RVA_FIRE_COPY_12_CALL,
+    RVA_FIRE_COPY_13_CALL,
+};
+#define FIRE_COPY_CALL_COUNT ((int)(sizeof FIRE_COPY_CALLS_MAC / sizeof FIRE_COPY_CALLS_MAC[0]))
 #define COPY_HOOK_COUNT ((int)(sizeof COPY_HOOKS_MAC / sizeof COPY_HOOKS_MAC[0]))
-#define COPY_EXITS_MAX 24
+#define COPY_EXITS_MAX 40
 
 typedef struct {
     StepHook step;
@@ -61,10 +73,55 @@ static void copyHookRun(StepContext *ctx, const StepHook *hook) {
         uint32_t enchant = (uint32_t)libraryEnchantOf(a, b, c), own = (uint32_t)libraryLevelOf(a, b, c);
         uint32_t level = (uint32_t)((int (*)(int, int, int))head)(a, b, c);
         ctx->x[0] = (uint32_t)(enchant + (level - own));
+    } else if (m->kind == COPY_UNIT_TEST) {
+        int held = ((int (*)(int))head)(a) != 0;
+        if (m->result) ctx->x[m->result] = (uint64_t)held;
+        else exit = held;
     } else {
         exit = ((int (*)(int, int))head)(a, (int)ctx->x[m->args[1]]) != 0;
     }
     ctx->pc = h->exit[exit];
+}
+
+#define INCAPACITATED_STATE_MASK 0x11100081758ULL
+static int unitIncapacitatedStateMac(int unit) {
+    if (unit < 0 || unit >= UNIT_TABLE_MAX) return 1;
+    unsigned long long state = *(const unsigned long long *)GAME_PTR(RVA_UNITS + (size_t)unit * UNIT_SIZE);
+    return (state & INCAPACITATED_STATE_MASK) != 0;
+}
+
+typedef int (*AbilityTotalFn)(int unit, int ability, int add, char *out, int outIf, int *last);
+static int fireCopyAbilityTotalMac(int unit, int ability, int add, char *out, int outIf, int *last) {
+    int total = GAME_FN(AbilityTotalFn, RVA_UNIT_ABILITY_TOTAL)(unit, ability, add, out, outIf, last);
+    void *head = *siteHead(SITE_UNIT_FIRE_RESISTANCE);
+    if (head == siteGameFunction(SITE_UNIT_FIRE_RESISTANCE)) return total;
+    int game = GAME_FN(int (*)(int), RVA_UNIT_RESISTANCE_1D1280)(unit);
+    return total + ((int (*)(int))head)(unit) - game;
+}
+
+static int installFireCopiesMac(void) {
+    static int done;
+    if (done) return done > 0;
+    done = -1;
+    for (int i = 0; i < FIRE_COPY_CALL_COUNT; i++)
+        if (blTarget(gameBase + FIRE_COPY_CALLS_MAC[i]) != gameBase + RVA_UNIT_ABILITY_TOTAL) {
+            writeLog("copy_hook_skipped", "site=unit_fire_resistance reason=not_the_expected_call address=%p", (void *)(gameBase + FIRE_COPY_CALLS_MAC[i]));
+            return 0;
+        }
+    unsigned char *trampoline = newTrampoline((void *)fireCopyAbilityTotalMac);
+    if (!trampoline) {
+        writeLog("copy_hook_skipped", "site=unit_fire_resistance reason=no_padding");
+        return 0;
+    }
+    for (int i = 0; i < FIRE_COPY_CALL_COUNT; i++) {
+        uint32_t word = blTo(gameBase + FIRE_COPY_CALLS_MAC[i], trampoline);
+        if (!writeGameCode(gameBase + FIRE_COPY_CALLS_MAC[i], &word, 4)) {
+            writeLogError("site_failed", "site=unit_fire_resistance reason=write address=%p", (void *)(gameBase + FIRE_COPY_CALLS_MAC[i]));
+            return 0;
+        }
+    }
+    done = 1;
+    return 1;
 }
 
 static uint64_t copyExitJumpMac(unsigned rva) {
@@ -78,32 +135,29 @@ static uint64_t copyExitJumpMac(unsigned rva) {
     return (uint64_t)(uintptr_t)jump;
 }
 
+static int copyHookExitCountMac(const CopyHookMac *m) {
+    return m->kind == COPY_TEST || (m->kind == COPY_UNIT_TEST && !m->result) ? 2 : 1;
+}
+
 static int putCopyHookMac(CopyHookState *h, const CopyHookMac *m) {
     const char *name = SITES[m->site].name;
     h->row = m;
     h->step.handler = copyHookRun;
     h->step.site = m->site;
     h->step.resume = 0;
-    for (int i = 0; i < (m->kind == COPY_TEST ? 2 : 1); i++) {
+    for (int i = 0; i < copyHookExitCountMac(m); i++) {
         h->exit[i] = copyExitJumpMac(m->exits[i]);
         if (!h->exit[i]) {
             writeLog("copy_hook_skipped", "site=%s reason=no_padding address=%p", name, (void *)(gameBase + m->start));
             return 0;
         }
     }
-    unsigned char *stub = takePadding(sizeof(uint32_t) * STEP_STUB_WORDS);
-    if (!stub) {
+    unsigned char *entry = takePadding(sizeof(uint32_t) * STEP_ENTRY_WORDS);
+    if (!entry) {
         writeLog("copy_hook_skipped", "site=%s reason=no_padding address=%p", name, (void *)(gameBase + m->start));
         return 0;
     }
-    unsigned char *at = gameBase + m->start;
-    uint32_t code[STEP_STUB_WORDS], branch = 0x14000000u | ((uint32_t)((stub - at) >> 2) & 0x3ffffffu);
-    writeStepStubMac(code, (uint64_t)(uintptr_t)&h->step, (uint64_t)(uintptr_t)coe5seStepHookCall);
-    if (!writeGameCode(stub, code, sizeof code) || !writeGameCode(at, &branch, 4)) {
-        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
-        return 0;
-    }
-    return 1;
+    return putStepEntryMac(gameBase + m->start, entry, &h->step, name);
 }
 
 static int installCopyHooksMac(CallSite site) {
@@ -112,6 +166,11 @@ static int installCopyHooksMac(CallSite site) {
         return 0;
     }
     *siteHead(site) = siteGameFunction(site);
+    if (site == SITE_UNIT_FIRE_RESISTANCE) {
+        int ok = installFireCopiesMac();
+        if (ok) writeLog("copy_hooks_installed", "site=%s hooks=%d", SITES[site].name, FIRE_COPY_CALL_COUNT);
+        return ok;
+    }
     int made = 0;
     for (int i = 0; i < COPY_HOOK_COUNT; i++) {
         if (COPY_HOOKS_MAC[i].site != site) continue;

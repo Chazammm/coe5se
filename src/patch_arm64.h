@@ -83,6 +83,27 @@ static uint32_t blTo(const unsigned char *at, const unsigned char *target) {
 }
 
 static unsigned char *paddingNext, *paddingEnd;
+static unsigned char *helperNext, *helperEnd;
+static int helperChecked;
+
+static int lazyPointersBound(void *const *lazy, size_t count, const unsigned char *helper, size_t helperSize) {
+    for (size_t i = 0; i < count; i++)
+        if ((const unsigned char *)lazy[i] >= helper && (const unsigned char *)lazy[i] < helper + helperSize) return 0;
+    return 1;
+}
+static void openStubHelperMac(void) {
+    helperChecked = 1;
+    const struct mach_header_64 *mh = (const struct mach_header_64 *)gameBase;
+    unsigned long helperSize = 0, lazySize = 0;
+    unsigned char *helper = getsectiondata(mh, "__TEXT", "__stub_helper", &helperSize);
+    void **lazy = (void **)getsectiondata(mh, "__DATA", "__la_symbol_ptr", &lazySize);
+    if (!helper || !lazy || !lazyPointersBound(lazy, lazySize / sizeof(void *), helper, helperSize)) {
+        writeLog("stub_helper_kept", "reason=%s", helper && lazy ? "lazy_pointer_unbound" : "no_section");
+        return;
+    }
+    helperNext = (unsigned char *)(((uintptr_t)helper + 7) & ~(uintptr_t)7);
+    helperEnd = helper + helperSize;
+}
 
 static unsigned char *takePadding(size_t size) {
     if (!paddingNext) {
@@ -93,17 +114,28 @@ static unsigned char *takePadding(size_t size) {
         paddingEnd = text ? text : paddingNext;
     }
     size = (size + 7) & ~(size_t)7;
-    if (paddingNext + size > paddingEnd) return NULL;
-    for (size_t i = 0; i < size; i++)
-        if (paddingNext[i]) return NULL;
-    unsigned char *spot = paddingNext;
-    paddingNext += size;
+    int fits = paddingNext + size <= paddingEnd;
+    for (size_t i = 0; fits && i < size; i++)
+        if (paddingNext[i]) fits = 0;
+    if (fits) {
+        unsigned char *spot = paddingNext;
+        paddingNext += size;
+        return spot;
+    }
+    if (!helperChecked) openStubHelperMac();
+    if (!size || !helperNext || helperNext + size > helperEnd) return NULL;
+    unsigned char *spot = helperNext;
+    helperNext += size;
     return spot;
 }
 
 static long paddingLeft(void) {
     if (!paddingNext) takePadding(0);
     return (long)(paddingEnd - paddingNext);
+}
+static long helperLeft(void) {
+    if (!helperChecked) openStubHelperMac();
+    return helperNext ? (long)(helperEnd - helperNext) : -1;
 }
 
 static unsigned char *newTrampoline(void *target) {
@@ -131,37 +163,40 @@ static int sealEventStandInMac(int slot, int seal);
 static void initParticipantsMac(int mode);
 static u64 splitStepGame(void);
 static int installSplitSiteMac(CallSite site);
-static int isSplitSite(CallSite site) {
-    switch (site) {
-    case SITE_AI_GATHER_TROOPS:
-    case SITE_AI_SPLIT_ARMY:
-    case SITE_AI_RECRUIT:
-    case SITE_AI_EXPLORE:
-    case SITE_AI_RALLY:
-    case SITE_AI_FRIENDLY_MOVE:
-    case SITE_AI_CONQUER: return 1;
-    default: return 0;
-    }
-}
+static int isSplitSite(CallSite site);
 static int weaponHitDamageAsGame(int attacker, int target, int weapon, int damage, int value, int dmgtype);
 static int targetCheckAsGame(int unit, int type, int weapon, int value, int target);
 static unsigned long long unitResistancesAsGame(int unit), unitFlagsAsGame(int unit);
+static int unitMaxHpAsGame(int unit);
+static int unitBanishableAsGame(int unit, int weapon, int attacker);
+static int banishDestinationAsGame(int unit, int weapon, int attacker, int *x, int *y);
+static void immortalReformAsGame(int unit, int plane, int apply, int *x, int *y, int *monster, int *owner);
 static int ritualCanCastAsGame(int commander, int ritual);
 static int installComputedHook(CallSite site);
+static int unitHealRateAsGame(int unit);
+static int healRateHooksIn;
 static int siteHasCopyHooksMac(CallSite site) {
-    return site == SITE_AI_COUNT_CITADELS || site == SITE_SQUARE_OPEN_LAND || site == SITE_SQUARE_LIBRARY_LEVEL;
+    return site == SITE_AI_COUNT_CITADELS || site == SITE_SQUARE_OPEN_LAND || site == SITE_SQUARE_LIBRARY_LEVEL ||
+           site == SITE_UNIT_INCAPACITATED || site == SITE_UNIT_FIRE_RESISTANCE;
 }
 static int openLandOf(int x, int y);
 static int libraryLevelOf(int owner, int x, int y);
 static int installCopyHooksMac(CallSite site);
+static int unitIncapacitatedStateMac(int unit);
 static void *siteGameFunction(CallSite site) {
-    if (isSplitSite(site)) return (void *)splitStepGame;
+    if (isSplitSite(site)) return SITES[site].rvas[0] ? (void *)(gameBase + SITES[site].targetRva) : (void *)splitStepGame;
     if (site == SITE_SQUARE_OPEN_LAND) return (void *)openLandOf;
     if (site == SITE_SQUARE_LIBRARY_LEVEL) return (void *)libraryLevelOf;
+    if (site == SITE_UNIT_INCAPACITATED) return (void *)unitIncapacitatedStateMac;
     if (site == SITE_WEAPON_HIT) return (void *)weaponHitDamageAsGame;
     if (site == SITE_BATTLE_TARGET_CHECK) return (void *)targetCheckAsGame;
     if (site == SITE_UNIT_RESISTANCES) return (void *)unitResistancesAsGame;
     if (site == SITE_UNIT_FLAGS) return (void *)unitFlagsAsGame;
+    if (site == SITE_UNIT_MAX_HP) return (void *)unitMaxHpAsGame;
+    if (site == SITE_UNIT_BANISHABLE) return (void *)unitBanishableAsGame;
+    if (site == SITE_BANISH_DESTINATION) return (void *)banishDestinationAsGame;
+    if (site == SITE_IMMORTAL_REFORM) return (void *)immortalReformAsGame;
+    if (site == SITE_UNIT_HEAL_RATE) return (void *)unitHealRateAsGame;
     if (site == SITE_MODS_READ) return (void *)modsReadAsGame;
     if (site == SITE_RITUAL_CAN_CAST) return (void *)ritualCanCastAsGame;
     if (isInlinedButtonRowSite(site)) return (void *)buttonRowMac;
@@ -227,45 +262,95 @@ __asm__(
     "  br x16\n");
 extern const unsigned char coe5seStepHookCall[];
 
-#define STEP_STUB_WORDS 8
-#define STEP_TRAMPOLINE_WORDS 6
+#define STEP_ENTRY_WORDS 3
+#define STEP_TRAMPOLINE_WORDS 3
+#define STEP_HOOK_WORDS (STEP_ENTRY_WORDS + STEP_TRAMPOLINE_WORDS)
+#define STEP_HOOKS_MAX 4096
 #define STEP_LOAD_X16 0xf85f83f0u
 #define STEP_NOP 0xd503201fu
 
-static void writeStepStubMac(uint32_t code[STEP_STUB_WORDS], uint64_t hook, uint64_t routine) {
+__attribute__((used)) const StepHook *coe5seStepHooks[STEP_HOOKS_MAX];
+static int stepHookCount;
+static unsigned char *stepJump;
+__asm__(
+    ".text\n.p2align 2\n.globl _coe5seStepHookIndexed\n_coe5seStepHookIndexed:\n"
+    "  adrp x17, _coe5seStepHooks@PAGE\n"
+    "  add x17, x17, _coe5seStepHooks@PAGEOFF\n"
+    "  ldr x16, [x17, w16, uxtw #3]\n"
+    "  b _coe5seStepHookCall\n");
+extern const unsigned char coe5seStepHookIndexed[];
+
+static void writeStepEntryMac(uint32_t code[STEP_ENTRY_WORDS], const unsigned char *entry, const unsigned char *jump, int index) {
     code[0] = 0xa9bf47f0u;
-    code[1] = 0x58000070u;
-    code[2] = 0x58000091u;
-    code[3] = 0xd61f0220u;
-    memcpy(&code[4], &hook, 8);
-    memcpy(&code[6], &routine, 8);
+    code[1] = 0x52800010u | ((uint32_t)index << 5);
+    code[2] = 0x14000000u | ((uint32_t)((jump - (entry + 8)) >> 2) & 0x3ffffffu);
 }
+static int addStepHook(const StepHook *hook) {
+    if (stepHookCount == STEP_HOOKS_MAX) return -1;
+    coe5seStepHooks[stepHookCount] = hook;
+    return stepHookCount++;
+}
+static unsigned char *stepJumpMac(void) {
+    if (stepJump) return stepJump;
+    unsigned char *jump = takePadding(16);
+    uint32_t code[4] = {0x58000051u, 0xd61f0220u};
+    const void *to = coe5seStepHookIndexed;
+    memcpy(&code[2], &to, 8);
+    if (!jump || !writeGameCode(jump, code, sizeof code)) return NULL;
+    return stepJump = jump;
+}
+static int isBl(uint32_t insn) { return (insn & 0xfc000000u) == 0x94000000u; }
 static int isAdrp(uint32_t insn) { return (insn & 0x9f000000u) == 0x90000000u; }
 static uint64_t adrpPage(uint32_t insn, const unsigned char *at) {
     int64_t imm = (int64_t)((((insn >> 5) & 0x7ffffu) << 2) | ((insn >> 29) & 3u));
     if (imm & (1 << 20)) imm -= 1 << 21;
     return ((uint64_t)(uintptr_t)at & ~(uint64_t)0xfff) + (uint64_t)(imm << 12);
 }
-static void writeStepTrampolineMac(uint32_t code[STEP_TRAMPOLINE_WORDS], const unsigned char *tramp, const unsigned char *at, uint32_t moved) {
-    uint64_t page = 0;
-    code[0] = STEP_LOAD_X16;
-    code[1] = moved;
+static uint32_t movedInstructionMac(uint32_t moved, const unsigned char *at, const unsigned char *to) {
     if (isAdrp(moved)) {
-        page = adrpPage(moved, at);
-        code[1] = 0x58000060u | (moved & 0x1fu);
+        int64_t pages = (int64_t)((adrpPage(moved, at) >> 12) - (((uint64_t)(uintptr_t)to) >> 12));
+        if (pages < -(1 << 20) || pages >= (1 << 20)) return 0;
+        return 0x90000000u | ((uint32_t)(pages & 3) << 29) | ((uint32_t)((pages >> 2) & 0x7ffff) << 5) | (moved & 0x1fu);
     }
+    if (isBl(moved)) {
+        int64_t imm = (int64_t)(moved & 0x3ffffffu);
+        if (imm & (1 << 25)) imm -= 1 << 26;
+        int64_t words = ((int64_t)(uintptr_t)at + imm * 4 - (int64_t)(uintptr_t)to) / 4;
+        if (words < -(1 << 25) || words >= (1 << 25)) return 0;
+        return 0x94000000u | ((uint32_t)words & 0x3ffffffu);
+    }
+    return moved;
+}
+static int writeStepTrampolineMac(uint32_t code[STEP_TRAMPOLINE_WORDS], const unsigned char *tramp, const unsigned char *at, uint32_t moved) {
+    code[0] = STEP_LOAD_X16;
+    code[1] = movedInstructionMac(moved, at, tramp + 4);
     code[2] = 0x14000000u | ((uint32_t)(((at + 4) - (tramp + 8)) >> 2) & 0x3ffffffu);
-    code[3] = STEP_NOP;
-    memcpy(&code[4], &page, 8);
+    return code[1] != 0;
 }
 static int stepInstructionMovable(uint32_t insn) {
-    if (isAdrp(insn)) return 1;
+    if (isAdrp(insn) || isBl(insn)) return 1;
     if ((insn & 0x9f000000u) == 0x10000000u) return 0;
     if ((insn & 0x7c000000u) == 0x14000000u) return 0;
     if ((insn & 0x7e000000u) == 0x34000000u) return 0;
     if ((insn & 0x7e000000u) == 0x36000000u) return 0;
     if ((insn & 0xff000010u) == 0x54000000u) return 0;
     if ((insn & 0x3b000000u) == 0x18000000u) return 0;
+    return 1;
+}
+
+static int putStepEntryMac(unsigned char *at, unsigned char *entry, const StepHook *hook, const char *name) {
+    int index = addStepHook(hook);
+    unsigned char *jump = stepJumpMac();
+    if (index < 0 || !jump) {
+        writeLog("site_skipped", "site=%s reason=%s", name, index < 0 ? "no_hook_slot" : "no_padding");
+        return 0;
+    }
+    uint32_t code[STEP_ENTRY_WORDS], branch = 0x14000000u | ((uint32_t)((entry - at) >> 2) & 0x3ffffffu);
+    writeStepEntryMac(code, entry, jump, index);
+    if (!writeGameCode(entry, code, sizeof code) || !writeGameCode(at, &branch, 4)) {
+        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
+        return 0;
+    }
     return 1;
 }
 
@@ -278,22 +363,48 @@ static int putStepHookMac(unsigned int rva, StepHook *hook, const char *name, in
         writeLog("site_skipped", "site=%s reason=not_the_expected_code address=%p", name, (void *)at);
         return 0;
     }
-    unsigned char *stub = takePadding(sizeof(uint32_t) * STEP_STUB_WORDS);
-    unsigned char *tramp = stub ? takePadding(sizeof(uint32_t) * STEP_TRAMPOLINE_WORDS) : NULL;
+    unsigned char *entry = takePadding(sizeof(uint32_t) * STEP_HOOK_WORDS);
+    if (!entry) {
+        writeLog("site_skipped", "site=%s reason=no_padding", name);
+        return 0;
+    }
+    unsigned char *tramp = entry + sizeof(uint32_t) * STEP_ENTRY_WORDS;
+    uint32_t trampCode[STEP_TRAMPOLINE_WORDS];
+    if (!writeStepTrampolineMac(trampCode, tramp, at, moved)) {
+        writeLog("site_skipped", "site=%s reason=out_of_reach address=%p", name, (void *)at);
+        return 0;
+    }
+    hook->resume = (uint64_t)(uintptr_t)tramp;
+    if (!writeGameCode(tramp, trampCode, sizeof trampCode)) {
+        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
+        return 0;
+    }
+    return putStepEntryMac(at, entry, hook, name);
+}
+
+static int putStepResumeMac(unsigned int rva, StepHook *hook, const char *name) {
+    unsigned char *at = gameBase + rva;
+    uint32_t moved;
+    memcpy(&moved, at, 4);
+    if (!stepInstructionMovable(moved)) {
+        writeLog("site_skipped", "site=%s reason=not_the_expected_code address=%p", name, (void *)at);
+        return 0;
+    }
+    unsigned char *tramp = takePadding(sizeof(uint32_t) * STEP_TRAMPOLINE_WORDS);
     if (!tramp) {
         writeLog("site_skipped", "site=%s reason=no_padding", name);
         return 0;
     }
-    uint32_t stubCode[STEP_STUB_WORDS], trampCode[STEP_TRAMPOLINE_WORDS];
-    writeStepStubMac(stubCode, (uint64_t)(uintptr_t)hook, (uint64_t)(uintptr_t)coe5seStepHookCall);
-    writeStepTrampolineMac(trampCode, tramp, at, moved);
-    hook->resume = (uint64_t)(uintptr_t)tramp;
-    uint32_t branch = 0x14000000u | ((uint32_t)((stub - at) >> 2) & 0x3ffffffu);
-    if (!writeGameCode(tramp, trampCode, sizeof trampCode) || !writeGameCode(stub, stubCode, sizeof stubCode) ||
-        !writeGameCode(at, &branch, 4)) {
+    uint32_t trampCode[STEP_TRAMPOLINE_WORDS];
+    if (!writeStepTrampolineMac(trampCode, tramp, at, moved)) {
+        writeLog("site_skipped", "site=%s reason=out_of_reach address=%p", name, (void *)at);
+        return 0;
+    }
+    if (!writeGameCode(tramp, trampCode, sizeof trampCode)) {
         writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
         return 0;
     }
+    hook->resume = (uint64_t)(uintptr_t)tramp;
     return 1;
 }
 
@@ -634,16 +745,26 @@ static int installSite(CallSite site) {
     const SiteInfo *info = &SITES[site];
     if (site == SITE_SEAL_EVENT) return installSealEventMac();
     if (site == SITE_NEW_WORLD_INIT_PARTICIPANTS) return installParticipantsMac();
-    if (isSplitSite(site)) return installSplitSiteMac(site);
+    int split = isSplitSite(site);
+    if (split && !info->rvas[0]) return installSplitSiteMac(site);
     if (siteHasCopyHooksMac(site) && !info->rvas[0]) {
         if (!installCopyHooksMac(site)) return 0;
         siteInstalled[site] = 1;
         return 1;
     }
     if (site == SITE_SQUARE_PANEL_WRAP && !installSquarePanelIcons()) return 0;
-    if ((site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS) && !installComputedHook(site)) return 0;
+    if ((site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_UNIT_BANISHABLE ||
+         site == SITE_IMMORTAL_REFORM) &&
+        !installComputedHook(site))
+        return 0;
+    if (site == SITE_UNIT_HEAL_RATE && !healRateHooksIn) {
+        writeLog("site_skipped", "site=%s reason=upkeep_hooks_missing", info->name);
+        return 0;
+    }
     if (site == SITE_BATTLE_DRAW || site == SITE_WEAPON_HIT || site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP ||
-        site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST) {
+        site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_MODS_READ ||
+        site == SITE_RITUAL_CAN_CAST || site == SITE_UNIT_BANISHABLE || site == SITE_BANISH_DESTINATION || site == SITE_IMMORTAL_REFORM ||
+        site == SITE_UNIT_HEAL_RATE) {
         *siteHead(site) = siteGameFunction(site);
         siteInstalled[site] = 1;
         return 1;
@@ -659,6 +780,7 @@ static int installSite(CallSite site) {
             return 0;
         }
     }
+    if (split && !installSplitSiteMac(site)) return 0;
     if (site == SITE_CEREMONY_COSTS && !installCeremonyCostsMac()) return 0;
     if (site >= MAX_STUBS) {
         writeLog("site_skipped", "site=%s reason=no_stub", info->name);

@@ -261,6 +261,7 @@ static void readSidecarSettingsText(IniParse *r, const char *text, int in) {
     if (!strncmp(text, "\xEF\xBB\xBF", 3)) text += 3;
     char raw[INI_LINE_MAX + 1], word[24];
     SettingProblem p;
+    int inLanguage = 0;
     for (int line = 1; *text; line++) {
         int tooLong;
         text = copySettingsLine(text, raw, &tooLong);
@@ -279,6 +280,13 @@ static void readSidecarSettingsText(IniParse *r, const char *text, int in) {
         const char *at = raw;
         skipSpaces(&at);
         if (!*at) continue;
+        const char *first = at;
+        readWord(&first, word, sizeof word);
+        if (!strcmp(word, LANGUAGE_WORD) || inLanguage) {
+            finishSidecarBlock(r);
+            inLanguage = 1;
+            continue;
+        }
         char file[INCLUDE_FILE_MAX + 2];
         if (in < SETTINGS_IN_INCLUDED && readIncludeLine(at, file, sizeof file) > 0) {
             readIncludedSettings(r, file, in);

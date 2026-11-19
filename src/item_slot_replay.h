@@ -4,6 +4,10 @@
 #define REPLAY_ITEMS_TAG      SAVE_TAG('C', '5', 'R', 'I')
 #define REPLAY_STORE_TAG      SAVE_TAG('C', '5', 'L', 'S')
 #define REPLAY_END_TAG        SAVE_TAG('C', '5', 'R', 'E')
+#define REPLAY_AFFLICTIONS_TAG SAVE_TAG('C', '5', 'R', 'A')
+static int anyCustomAfflictions(void);
+static int writeReplayAfflictions(FILE *file);
+static void readReplayAfflictions(const unsigned char *file, size_t size);
 #define REPLAY_ITEMS_VERSION  1
 #define REPLAY_ITEMS_TRAILER  8
 #define REPLAY_HEADER_BYTES   22
@@ -83,7 +87,7 @@ static int findReplayChunk(const unsigned char *file, size_t size, int tag, cons
     while (end >= REPLAY_HEADER_BYTES + REPLAY_ITEMS_TRAILER) {
         SaveCursor c = {file + end - REPLAY_ITEMS_TRAILER, file + end, 0};
         int bytes = saveCursorInt(&c), found = saveCursorInt(&c);
-        if (found != REPLAY_ITEMS_TAG && found != REPLAY_STORE_TAG && found != REPLAY_END_TAG) return 0;
+        if (found != REPLAY_ITEMS_TAG && found != REPLAY_STORE_TAG && found != REPLAY_END_TAG && found != REPLAY_AFFLICTIONS_TAG) return 0;
         if (bytes < 0 || (size_t)bytes > end - REPLAY_HEADER_BYTES - REPLAY_ITEMS_TRAILER) {
             writeLogWarning("replay_trailer_read", "reason=bad_size bytes=%d file=%zu", bytes, size);
             return -1;
@@ -196,6 +200,7 @@ static void readReplayFileItems(void) {
     size_t size;
     if (!readReplayFileBytes("item_slots_replay_read", &bytes, &size)) return;
     readReplayItems(bytes, size);
+    readReplayAfflictions(bytes, size);
     free(bytes);
 }
 
@@ -239,14 +244,15 @@ static BattleReplayFileFn gameSaveBattleReplay, gameLoadBattleReplay;
 static void saveBattleReplayHook(const char *path) {
     gameSaveBattleReplay(path);
     noteBattleReplayWritten(path);
-    int items = anyExtraItems(), store = replayCarriesScripts();
-    if (!items && !store) return;
+    int items = anyExtraItems(), store = replayCarriesScripts(), afflictions = anyCustomAfflictions();
+    if (!items && !store && !afflictions) return;
     FILE *file = fopen(path, "ab");
     if (!file) {
         writeLogError("item_slots_replay_written", "ok=0 reason=no_file");
         return;
     }
     if (items) writeReplayItems(file);
+    if (afflictions) writeReplayAfflictions(file);
     if (store) writeReplayScriptStore(file);
     fclose(file);
 }
@@ -273,6 +279,7 @@ static int installItemSlotReplaySites(void) {
 // ---- Mac: the writer is inline in RVA_DO_ALL_FIGHTS ------------------------------------------------------------
 static int closeBattleReplayWritten(FILE *file) {
     writeReplayItems(file);
+    writeReplayAfflictions(file);
     if (replayCarriesScripts()) writeReplayScriptStore(file);
     int closed = fclose(file);
     char path[2600];

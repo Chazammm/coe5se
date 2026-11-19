@@ -56,7 +56,7 @@ static int isPersonalSite(CallSite site) {
     X(SITE_UNIT_CLEAR_BENEFITS, "u", '-') X(SITE_GAME_MENU, "", '-') X(SITE_ARMY_COMMANDS_MENU, "c", '-') \
     X(SITE_CEREMONY_SCREEN, "c", '-') X(SITE_INCOME_DETAIL_SCREEN, "--", '-') X(SITE_BATTLE_CREATE_TREES, "xy", '-') \
     X(SITE_BATTLE_DEPLOY, "---", '-') X(SITE_BATTLE_FIGHT_MOVE, "u----", '-') X(SITE_BATTLE_FLY_MOVE, "u", '-') \
-    X(SITE_BATTLE_FLEE, "u", '-') X(SITE_BATTLE_FEAR_CHECK, "u", '-') X(SITE_BATTLE_CLOUD_STEP, "u", '-') \
+    X(SITE_BATTLE_FLEE, "u", '-') X(SITE_BATTLE_FEAR_CHECK, "", '-') X(SITE_BATTLE_CLOUD_STEP, "u", '-') \
     X(SITE_BATTLE_ENSNARE_CHECK, "u", '-') X(SITE_BATTLE_ENSNARE_RELEASE, "u", '-') X(SITE_BATTLE_WALL_ENCHANTS, "", '-') \
     X(SITE_BATTLE_WALL_EFFECTS, "", '-') X(SITE_BATTLE_START_SETUP, "", '-') X(SITE_BATTLE_TUNNEL_MOVE, "u", '-') \
     X(SITE_BATTLE_BANISH, "u", '-') X(SITE_BATTLE_DEPLOY_UNIT, "u--", '-') X(SITE_BATTLE_AFTER_FIGHT_UPKEEP, "xy", '-') \
@@ -106,10 +106,15 @@ static int isPersonalSite(CallSite site) {
     X(SITE_LOAD_AZTLAN_PLANE) X(SITE_LOAD_PRIMAL_PLANE) X(SITE_AUTO_RECRUIT) X(SITE_ADD_GROUND_ITEMS) X(SITE_WANDERER_PICK_TARGET) \
     X(SITE_WANDERER_PICK_UP) X(SITE_SET_HOLDIT) X(SITE_BATTLE_INTRO_SCREEN) X(SITE_RUN_HATREDS) X(SITE_SANDSTORM_CLOUD_UPDATE) \
     X(SITE_TAINTED_MAGIC_PASS) X(SITE_HERO_ARRIVAL) X(SITE_TEAMLESS_OWN_TEAM) X(SITE_SOCIETY_PRESETS) X(SITE_STORM_SPAWN) \
-    X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_UNIT_STRENGTH) X(SITE_SQUARE_STRENGTH) \
-    X(SITE_COMMANDER_STRENGTH) X(SITE_PLAYER_ABILITY) X(SITE_UNIT_STATE_FLAGS) X(SITE_ARMY_MOVE_FLAGS) X(SITE_UNIT_PATH_LEVEL) \
+    X(SITE_WILD_SPAWN) X(SITE_REVELS_SPAWN) X(SITE_HORROR_LORD_PICK) X(SITE_UNIT_BATTLE_STRENGTH) X(SITE_SQUARE_BATTLE_STRENGTH) \
+    X(SITE_COMMANDER_BATTLE_STRENGTH) X(SITE_PLAYER_ABILITY) X(SITE_UNIT_STATE_FLAGS) X(SITE_ARMY_MOVE_FLAGS) X(SITE_UNIT_PATH_LEVEL) \
     X(SITE_UNIT_VISIBLE_TO) X(SITE_RESOURCE_AVAILABLE) X(SITE_UNIT_RESISTANCES) X(SITE_UNIT_FLAGS) \
-    X(SITE_RITUAL_CAN_CAST) X(SITE_RITUAL_LOCATION_CHECK)
+    X(SITE_RITUAL_CAN_CAST) X(SITE_RITUAL_LOCATION_CHECK) X(SITE_PLAYER_GOLD_INCOME) X(SITE_PLAYER_IRON_INCOME) \
+    X(SITE_PLAYER_HERBS_INCOME) X(SITE_PLAYER_FUNGUS_INCOME) X(SITE_PLAYER_SACRIFICES_INCOME) X(SITE_PLAYER_HANDS_INCOME) \
+    X(SITE_PLAYER_WEED_INCOME) X(SITE_PLAYER_TRADE_INCOME) X(SITE_PLAYER_RELICS_INCOME) X(SITE_PLAYER_LIFEFORCE_INCOME) \
+    X(SITE_PLAYER_GEM_INCOME) X(SITE_TRADE_INCOME_APPLY) X(SITE_UNIT_DAMAGE_BONUS) X(SITE_UNIT_MORALE) X(SITE_UNIT_MR) \
+    X(SITE_UNIT_BATTLE_RANK) X(SITE_UNIT_MAX_HP) X(SITE_UNIT_PATH_BONUS) X(SITE_UNIT_BLINDNESS) X(SITE_UNIT_INCAPACITATED) \
+    X(SITE_UNIT_FIRE_RESISTANCE) X(SITE_UNIT_BANISHABLE) X(SITE_BANISH_DESTINATION) X(SITE_IMMORTAL_REFORM) X(SITE_UNIT_HEAL_RATE) X(SITE_BATTLE_TARGET_SQUARE) X(SITE_RITUAL_COST_PERCENT)
 
 static const char *personalObserveKinds(CallSite site, char *result) {
 #define PERSONAL_OBSERVE_CASE(s, kinds, res) \
@@ -164,10 +169,10 @@ static const char *const PERSONAL_CALLS[] = {
     "coe5.spellInfo", "coe5.spellPathWeight", "coe5.spellUseful", "coe5.squareDefaultGround",
     "coe5.squareEffectiveTemp", "coe5.squareGoldIncome", "coe5.squareHasSeenUnit", "coe5.squareIncome",
     "coe5.squareIsCoast", "coe5.squareIsNorth", "coe5.squareIsSky", "coe5.squareIsSouth", "coe5.squareIsWet",
-    "coe5.squareLifeforce", "coe5.squareMoveCost", "coe5.squareShownName", "coe5.squareSideStrength",
+    "coe5.squareLifeforce", "coe5.squareMoveCost", "coe5.squareShownName", "coe5.squareSideBattleStrength", "coe5.squareSideStrength",
     "coe5.squareSideWater", "coe5.squareTeamAbilitySum", "coe5.squareUnits", "coe5.squareUnitsAbility",
     "coe5.startLikesFilter", "coe5.startPlacementScore", "coe5.startTune", "coe5.terrainBurnableAt",
-    "coe5.terrainMatch", "coe5.terrainRuinForm", "coe5.tradeBonusPercent", "coe5.turn", "coe5.ui.bindEscape",
+    "coe5.terrainMatch", "coe5.terrainRuinForm", "coe5.tradeBonusPercent", "coe5.translate", "coe5.turn", "coe5.ui.bindEscape",
     "coe5.ui.bindKey", "coe5.ui.button", "coe5.ui.buttonRow", "coe5.ui.checkbox", "coe5.ui.choice", "coe5.ui.columnX",
     "coe5.ui.drawItemSprite", "coe5.ui.drawLine", "coe5.ui.drawMonsterSprite", "coe5.ui.drawRect", "coe5.ui.drawResourceIcon", "coe5.ui.drawText", "coe5.ui.listBegin",
     "coe5.ui.listEnd", "coe5.ui.listRow", "coe5.ui.monsterRow", "coe5.ui.nameBox", "coe5.ui.resourceIcon",
@@ -186,46 +191,56 @@ static const char *const PERSONAL_CALLS[] = {
 };
 #define PERSONAL_CALL_COUNT ((int)(sizeof PERSONAL_CALLS / sizeof PERSONAL_CALLS[0]))
 static const char *const PERSONAL_CLOSED_CALLS[] = {
-    "coe5.addAffliction", "coe5.addBattleMap", "coe5.addBenefit", "coe5.addFaction", "coe5.addMapEditorLine", "coe5.addPlane",
-    "coe5.addPlayerBlessing", "coe5.addShopOffer", "coe5.addTestFieldUnits", "coe5.aiBuyOffer", "coe5.aiConquerStep",
-    "coe5.aiExploreStep", "coe5.aiFarExploreStep", "coe5.aiFriendlyMoveStep", "coe5.aiMakeDefenders", "coe5.aiMakeGuardsAt",
-    "coe5.aiRallyStep", "coe5.aiRandomEnemy", "coe5.aiRedistributeItems", "coe5.aiShipDropCrew", "coe5.aiShipTakeBoat",
-    "coe5.aiShipTakeCrew", "coe5.aiShips", "coe5.aiUpdateStrengthMemory", "coe5.alterTerrain", "coe5.autoName",
-    "coe5.battleCellToScreen", "coe5.battleScreenToCell", "coe5.battleView", "coe5.bolsterBlessing", "coe5.changeLoyalty", "coe5.checkFollowerLinks", "coe5.chooseMemorized", "coe5.cleanSquare",
-    "coe5.clearPlaneTint", "coe5.closeTestField", "coe5.commanderLearnRitual", "coe5.commanderUseItems", "coe5.conscription",
-    "coe5.damageUnitPlain", "coe5.declaredPlanes", "coe5.destroyEnchantsAt", "coe5.destroyGateway", "coe5.digTunnelSquare",
-    "coe5.drawTestField", "coe5.endPreviewWorld", "coe5.fightTestField", "coe5.fireTestField", "coe5.fixPortals",
-    "coe5.forestShepherdSpawn", "coe5.gen.addGroundItems", "coe5.gen.decorateSquare", "coe5.gen.drawRiver",
-    "coe5.gen.findCaveSpot", "coe5.gen.findSpotByNeighbours", "coe5.gen.fixDiagonals", "coe5.gen.floodPlane",
-    "coe5.gen.heatBlob", "coe5.gen.linkNewPortal", "coe5.gen.markAt", "coe5.gen.markBlob", "coe5.gen.markNearTerrain",
-    "coe5.gen.markRect", "coe5.gen.markRiver", "coe5.gen.markVoidNear", "coe5.gen.markWalk", "coe5.gen.marksToTerrain",
-    "coe5.gen.marksToTerrainChance", "coe5.gen.random", "coe5.gen.randomMarkedSquare", "coe5.gen.randomSquareOfTerrain",
-    "coe5.gen.reachesElysium", "coe5.gen.refuseSmallPlane", "coe5.gen.setFixedTemperature", "coe5.gen.setGround",
-    "coe5.gen.setMark", "coe5.gen.setPortalPair", "coe5.gen.setTemperatures", "coe5.gen.setTerrain", "coe5.gen.specBlob",
-    "coe5.gen.spreadTerrain", "coe5.gen.stampPiece", "coe5.gen.terrainBlob", "coe5.gen.terrainFlags", "coe5.gen.terrainNear",
-    "coe5.gen.updateMoistWalls", "coe5.getStartRituals", "coe5.giveItem", "coe5.giveRandomItem", "coe5.groveReversion",
-    "coe5.heroArrival", "coe5.initSquareCorpses", "coe5.initSquareGems", "coe5.inquisitionSpawn", "coe5.inspectTestFieldFinalUnit", "coe5.inspectTestFieldItem", "coe5.inspectTestFieldUnit", "coe5.keepTraceLines",
+    "coe5.addAffliction", "coe5.addBattleMap", "coe5.addBenefit", "coe5.addFaction", "coe5.addMapEditorLine",
+    "coe5.addPlane", "coe5.addPlayerBlessing", "coe5.addShopOffer", "coe5.addTestFieldUnits", "coe5.addTransport", "coe5.afflictedUnits", "coe5.afflictionEffect",
+    "coe5.afflictionTurn", "coe5.afflictionValue", "coe5.aiBuyOffer", "coe5.aiConquerStep", "coe5.aiExploreStep",
+    "coe5.aiFarExploreStep", "coe5.aiFriendlyMoveStep", "coe5.aiMakeDefenders", "coe5.aiMakeGuardsAt", "coe5.aiRallyStep",
+    "coe5.aiRandomEnemy", "coe5.aiRedistributeItems", "coe5.aiShipDropCrew", "coe5.aiShipTakeBoat", "coe5.aiShipTakeCrew",
+    "coe5.aiShips", "coe5.aiUpdateBattleStrengthMemory", "coe5.aiUpdateStrengthMemory", "coe5.alterTerrain", "coe5.autoName", "coe5.battleBanishUnit", "coe5.battleCellToScreen",
+    "coe5.battleScreenToCell", "coe5.battleSummon", "coe5.battleView", "coe5.bolsterBlessing", "coe5.changeLoyalty", "coe5.checkFollowerLinks",
+    "coe5.chooseMemorized", "coe5.cleanSquare", "coe5.clearPlaneTint", "coe5.closeTestField", "coe5.commanderLearnRitual",
+    "coe5.commanderUseItems", "coe5.conscription", "coe5.cureAffliction", "coe5.damageUnitPlain", "coe5.declaredPlanes",
+    "coe5.destroyEnchantsAt", "coe5.destroyGateway", "coe5.digTunnelSquare", "coe5.drawTestField", "coe5.endPreviewWorld",
+    "coe5.fightTestField", "coe5.fireTestField", "coe5.fixPortals", "coe5.forestShepherdSpawn", "coe5.gen.addGroundItems",
+    "coe5.gen.decorateSquare", "coe5.gen.drawRiver", "coe5.gen.findCaveSpot", "coe5.gen.findSpotByNeighbours",
+    "coe5.gen.fixDiagonals", "coe5.gen.floodPlane", "coe5.gen.heatBlob", "coe5.gen.linkNewPortal", "coe5.gen.markAt",
+    "coe5.gen.markBlob", "coe5.gen.markNearTerrain", "coe5.gen.markRect", "coe5.gen.markRiver", "coe5.gen.markVoidNear",
+    "coe5.gen.markWalk", "coe5.gen.marksToTerrain", "coe5.gen.marksToTerrainChance", "coe5.gen.random",
+    "coe5.gen.randomMarkedSquare", "coe5.gen.randomSquareOfTerrain", "coe5.gen.reachesElysium", "coe5.gen.refuseSmallPlane",
+    "coe5.gen.setFixedTemperature", "coe5.gen.setGround", "coe5.gen.setMark", "coe5.gen.setPortalPair",
+    "coe5.gen.setTemperatures", "coe5.gen.setTerrain", "coe5.gen.specBlob", "coe5.gen.spreadTerrain", "coe5.gen.stampPiece",
+    "coe5.gen.terrainBlob", "coe5.gen.terrainFlags", "coe5.gen.terrainNear", "coe5.gen.updateMoistWalls",
+    "coe5.getStartRituals", "coe5.giveAffliction", "coe5.giveItem", "coe5.giveRandomItem", "coe5.groveReversion",
+    "coe5.hasAffliction", "coe5.heroArrival", "coe5.initSquareCorpses", "coe5.initSquareGems", "coe5.inquisitionSpawn",
+    "coe5.inspectTestFieldFinalUnit", "coe5.inspectTestFieldItem", "coe5.inspectTestFieldUnit", "coe5.keepTraceLines",
     "coe5.killSquare", "coe5.killUnit", "coe5.learnLevelRituals", "coe5.learnRandomSpell", "coe5.learnStartSpells",
-    "coe5.loadGame", "coe5.memorizeSpell", "coe5.memorizeTestFieldSpell", "coe5.modEvents", "coe5.moveEnchants", "coe5.moveGems", "coe5.moveTestFieldUnit",
-    "coe5.newPortalPair", "coe5.newUnits", "coe5.onPortalCrossing", "coe5.openTestField", "coe5.orderBurnForest",
-    "coe5.orderChopForest", "coe5.orderEatVillage", "coe5.orderSlaveHunt", "coe5.planRitual", "coe5.planeRiseToElysium",
-    "coe5.planeShiftUnit", "coe5.popHorrors", "coe5.previewArmySource", "coe5.previewEventResults", "coe5.previewLineIndex",
-    "coe5.previewLineResults", "coe5.previewScriptResults", "coe5.previewSquareSource", "coe5.previewWorldActive",
-    "coe5.priestFreespawn", "coe5.putRareSquare", "coe5.randomMemorizedSpell", "coe5.randomRitual", "coe5.randomSpell",
-    "coe5.randomSpellNotKnown", "coe5.randomSquareOfTerrain", "coe5.randomTeleport", "coe5.recruitScreen",
-    "coe5.releaseFollower", "coe5.removeBadFollowers", "coe5.removeEnchant", "coe5.removeTestFieldUnit", "coe5.repickMemorized", "coe5.replaceBuiltinOffer",
-    "coe5.reportBattlesTo", "coe5.restartGame", "coe5.restartPhase", "coe5.restoreSight", "coe5.revealDisc", "coe5.revealMap",
-    "coe5.revealPortalExits", "coe5.revealTerrainOnPlane", "coe5.revelsSpawn", "coe5.ruinSquare", "coe5.runAiTurn",
-    "coe5.runHatreds", "coe5.runModEvent", "coe5.sandstormCloudUpdate", "coe5.saveNewMod",
-    "coe5.scrapRitualPlan", "coe5.selectedCommanderDone", "coe5.sendMessage", "coe5.setBattleScatter", "coe5.setPlaneShape",
+    "coe5.loadGame", "coe5.memorizeSpell", "coe5.memorizeTestFieldSpell", "coe5.modEvents", "coe5.moveEnchants",
+    "coe5.moveGems", "coe5.moveTestFieldUnit", "coe5.newPortalPair", "coe5.newUnits", "coe5.onPortalCrossing",
+    "coe5.openTestField", "coe5.orderBurnForest", "coe5.orderChopForest", "coe5.orderEatVillage", "coe5.orderSlaveHunt",
+    "coe5.planRitual", "coe5.planeRiseToElysium", "coe5.planeShiftUnit", "coe5.popHorrors", "coe5.previewArmySource",
+    "coe5.previewEventResults", "coe5.previewLineIndex", "coe5.previewLineResults", "coe5.previewScriptResults",
+    "coe5.previewSquareSource", "coe5.previewWorldActive", "coe5.priestFreespawn", "coe5.putRareSquare",
+    "coe5.randomMemorizedSpell", "coe5.randomRitual", "coe5.randomSpell", "coe5.randomSpellNotKnown",
+    "coe5.randomSquareOfTerrain", "coe5.randomTeleport", "coe5.recruitScreen", "coe5.releaseFollower",
+    "coe5.removeAffliction", "coe5.removeBadFollowers", "coe5.removeEnchant", "coe5.removeTestFieldUnit",
+    "coe5.repickMemorized", "coe5.replaceBuiltinOffer", "coe5.reportBattlesTo", "coe5.restartGame", "coe5.restartPhase",
+    "coe5.restoreSight", "coe5.revealDisc", "coe5.revealMap", "coe5.revealPortalExits", "coe5.revealTerrainOnPlane",
+    "coe5.revelsSpawn", "coe5.ruinSquare", "coe5.runAiTurn", "coe5.runHatreds", "coe5.runModEvent",
+    "coe5.sandstormCloudUpdate", "coe5.saveNewMod", "coe5.scrapRitualPlan", "coe5.selectedCommanderDone",
+    "coe5.sendMessage", "coe5.setAfflictionTurn", "coe5.setAfflictionValue", "coe5.setBattleScatter", "coe5.setPlaneShape",
     "coe5.setPlaneTint", "coe5.setPreviewDocks", "coe5.setPreviewHoverText", "coe5.setPreviewKeyField",
-    "coe5.setPreviewLineEdits", "coe5.setRandomEventsOff", "coe5.setSeenDisc", "coe5.setSetupAutomated", "coe5.setSquareOwner",
-    "coe5.setTerrainLooks", "coe5.setTestFieldConfiguration", "coe5.setTestFieldTextFocus", "coe5.setupAutomated", "coe5.showSight", "coe5.spawnCommander", "coe5.spawnUnit",
-    "coe5.spendAllApAt", "coe5.squareHold", "coe5.startPreviewWorld", "coe5.stopTestFight", "coe5.stormSpawn",
-    "coe5.swapLocations", "coe5.swapSquares", "coe5.takeItem", "coe5.takePreviewFieldKeys", "coe5.takeTestFieldTextEvents", "coe5.teleportCommander",
-    "coe5.teleportSquare", "coe5.teleportUnit", "coe5.testBattle", "coe5.testFieldEditorCapabilities", "coe5.testFieldFinalState", "coe5.testFieldFootprint", "coe5.testFieldLifecycle", "coe5.testFieldLoadoutState", "coe5.testFieldPlacementPreflight", "coe5.testFieldPointerButtons", "coe5.testFieldSpellState", "coe5.testFieldState", "coe5.testFieldTerrains", "coe5.testFieldUnitState", "coe5.toggleAutoRecruit", "coe5.transferFollower",
-    "coe5.trollForestSpawn", "coe5.unitAddXp", "coe5.unitRandomAffliction", "coe5.unitRemoveItem", "coe5.unitRemoveTempAbility",
-    "coe5.unmemorizeSpell", "coe5.useSpecialSite", "coe5.wildSpawn", "coe5.worldNews",
+    "coe5.setPreviewLineEdits", "coe5.setRandomEventsOff", "coe5.setSeenDisc", "coe5.setSetupAutomated",
+    "coe5.setSquareOwner", "coe5.setTerrainLooks", "coe5.setTestFieldConfiguration", "coe5.setTestFieldTextFocus",
+    "coe5.setupAutomated", "coe5.showSight", "coe5.spawnCommander", "coe5.spawnUnit", "coe5.spendAllApAt",
+    "coe5.squareHold", "coe5.startPreviewWorld", "coe5.stopTestFight", "coe5.stormSpawn", "coe5.swapLocations",
+    "coe5.swapSquares", "coe5.takeItem", "coe5.takePreviewFieldKeys", "coe5.takeTestFieldTextEvents",
+    "coe5.teleportCommander", "coe5.teleportSquare", "coe5.teleportUnit", "coe5.testBattle",
+    "coe5.testFieldEditorCapabilities", "coe5.testFieldFinalState", "coe5.testFieldFootprint", "coe5.testFieldLifecycle",
+    "coe5.testFieldLoadoutState", "coe5.testFieldPlacementPreflight", "coe5.testFieldPointerButtons",
+    "coe5.testFieldSpellState", "coe5.testFieldState", "coe5.testFieldTerrains", "coe5.testFieldUnitState",
+    "coe5.toggleAutoRecruit", "coe5.transferFollower", "coe5.trollForestSpawn", "coe5.unitAddXp", "coe5.unitAfflictions",
+    "coe5.unitRandomAffliction", "coe5.unitRemoveItem", "coe5.unitRemoveTempAbility", "coe5.unmemorizeSpell",
+    "coe5.useSpecialSite", "coe5.wildSpawn", "coe5.worldNews",
 };
 #define PERSONAL_CLOSED_CALL_COUNT ((int)(sizeof PERSONAL_CLOSED_CALLS / sizeof PERSONAL_CLOSED_CALLS[0]))
 
@@ -273,7 +288,7 @@ static int luaCallWaitsForPlayer(const char *name) {
 static int luaStartsFor(NetRole role, LuaClass cls) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
-    case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT;
+    case NET_ROLE_HOST:
     case NET_ROLE_CLIENT: return cls != LUA_CLASS_OFF;
     default: return 0;
     }
@@ -282,7 +297,7 @@ static int luaStartsFor(NetRole role, LuaClass cls) {
 static int luaSiteOpenFor(NetRole role, LuaClass cls, CallSite site, int loading) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
-    case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT;
+    case NET_ROLE_HOST: return cls == LUA_CLASS_PERSONAL ? isPersonalSite(site) : cls == LUA_CLASS_CONTENT;
     case NET_ROLE_CLIENT:
         if (loading) return 0;
         return cls == LUA_CLASS_PERSONAL ? isPersonalSite(site) : cls == LUA_CLASS_CONTENT;
@@ -293,14 +308,14 @@ static int luaSiteOpenFor(NetRole role, LuaClass cls, CallSite site, int loading
 static int luaCallbackOpenFor(NetRole role, LuaClass cls, int loading) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
-    case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT;
+    case NET_ROLE_HOST: return cls == LUA_CLASS_CONTENT || cls == LUA_CLASS_PERSONAL;
     case NET_ROLE_CLIENT: return !loading && (cls == LUA_CLASS_PERSONAL || cls == LUA_CLASS_CONTENT);
     default: return 0;
     }
 }
 
 static int luaObserverOpenFor(NetRole role, LuaClass cls, CallSite site, int loading) {
-    if (role == NET_ROLE_CLIENT && cls == LUA_CLASS_PERSONAL && !personalObserveKinds(site, NULL)) return 0;
+    if ((role == NET_ROLE_CLIENT || role == NET_ROLE_HOST) && cls == LUA_CLASS_PERSONAL && !personalObserveKinds(site, NULL)) return 0;
     return luaCallbackOpenFor(role, cls, loading);
 }
 
@@ -327,8 +342,8 @@ static const char *luaCallRefusalFor(NetRole role, LuaClass cls, const char *nam
     if (role == NET_ROLE_OFFICIAL) return "official_game";
     if (cls == LUA_CLASS_OFF) return "nomultiplayer";
     if (cls == LUA_CLASS_PERSONAL) {
-        if (role == NET_ROLE_HOST) return "personal_on_host";
         if (!isPersonalCall(name)) return "personal_mod";
+        if (role == NET_ROLE_HOST) return luaCallWaitsForPlayer(name) ? "lan_host" : NULL;
         return !inTurn && luaCallWaitsForPlayer(name) ? "wait_screen" : NULL;
     }
     if (isDataFileRead(name)) return "lan_local_data";
@@ -347,27 +362,31 @@ typedef struct { const char *name; ClientWriteKind kind; ClientWriteOwner owner;
 #define WRITE_STAYS(name) {name, CLIENT_WRITE_STAYS, WRITE_OWNER_NONE, 0}
 static const ClientWrite CLIENT_WRITE_CALLS[] = {
     WRITE_TRAVELS("coe5.addAffliction", UNIT, 1), WRITE_TRAVELS("coe5.addBenefit", UNIT, 1), WRITE_LOST("coe5.addPlayerBlessing"),
-    WRITE_TRAVELS("coe5.alterTerrain", NONE, 0), WRITE_LOST("coe5.bolsterBlessing"), WRITE_LOST("coe5.changeLoyalty"),
+    WRITE_TRAVELS("coe5.alterTerrain", NONE, 0), WRITE_TRAVELS("coe5.battleBanishUnit", UNIT, 1), WRITE_TRAVELS("coe5.battleSummon", PLAYER, 2), WRITE_LOST("coe5.bolsterBlessing"), WRITE_LOST("coe5.changeLoyalty"),
     WRITE_TRAVELS("coe5.checkFollowerLinks", COMMANDER, 1), WRITE_TRAVELS("coe5.chooseMemorized", UNIT, 1), WRITE_LOST("coe5.cleanSquare"),
     WRITE_TRAVELS("coe5.commanderLearnRitual", COMMANDER, 1), WRITE_TRAVELS("coe5.commanderUseItems", COMMANDER, 1),
-    WRITE_TRAVELS("coe5.damageUnitPlain", UNIT, 1), WRITE_LOST("coe5.destroyEnchantsAt"), WRITE_TRAVELS("coe5.destroyGateway", NONE, 0),
-    WRITE_TRAVELS("coe5.digTunnelSquare", NONE, 0), WRITE_LOST("coe5.fixPortals"), WRITE_TRAVELS("coe5.getStartRituals", COMMANDER, 1),
+    WRITE_TRAVELS("coe5.cureAffliction", NONE, 0), WRITE_TRAVELS("coe5.damageUnitPlain", UNIT, 1), WRITE_LOST("coe5.destroyEnchantsAt"),
+    WRITE_TRAVELS("coe5.destroyGateway", NONE, 0), WRITE_TRAVELS("coe5.digTunnelSquare", NONE, 0), WRITE_LOST("coe5.fixPortals"),
+    WRITE_TRAVELS("coe5.getStartRituals", COMMANDER, 1), WRITE_TRAVELS("coe5.giveAffliction", NONE, 0),
     WRITE_TRAVELS("coe5.giveItem", UNIT, 1), WRITE_TRAVELS("coe5.giveRandomItem", UNIT, 1), WRITE_LOST("coe5.initSquareCorpses"),
-    WRITE_LOST("coe5.initSquareGems"), WRITE_LOST("coe5.killSquare"), WRITE_LOST("coe5.killUnit"),
+    WRITE_LOST("coe5.initSquareGems"), WRITE_LOST("coe5.killSquare"), WRITE_TRAVELS("coe5.killUnit", NONE, 0),
     WRITE_TRAVELS("coe5.learnLevelRituals", COMMANDER, 1), WRITE_TRAVELS("coe5.learnRandomSpell", UNIT, 1),
     WRITE_TRAVELS("coe5.learnStartSpells", UNIT, 1), WRITE_TRAVELS("coe5.memorizeSpell", UNIT, 1), WRITE_LOST("coe5.moveEnchants"),
     WRITE_LOST("coe5.moveGems"), WRITE_LOST("coe5.newPortalPair"), WRITE_TRAVELS("coe5.newUnits", PLAYER, 1),
     WRITE_TRAVELS("coe5.orderBurnForest", COMMANDER, 1), WRITE_TRAVELS("coe5.orderChopForest", COMMANDER, 1),
     WRITE_TRAVELS("coe5.orderEatVillage", COMMANDER, 1), WRITE_TRAVELS("coe5.orderSlaveHunt", COMMANDER, 1),
     WRITE_TRAVELS("coe5.planeShiftUnit", UNIT, 1), WRITE_LOST("coe5.putRareSquare"), WRITE_TRAVELS("coe5.randomTeleport", UNIT, 1),
-    WRITE_TRAVELS("coe5.removeBadFollowers", NONE, 0), WRITE_TRAVELS("coe5.removeEnchant", NONE, 0),
-    WRITE_TRAVELS("coe5.repickMemorized", UNIT, 1), WRITE_TRAVELS("coe5.revealDisc", NONE, 0), WRITE_LOST("coe5.revealMap"),
-    WRITE_LOST("coe5.revealPortalExits"), WRITE_TRAVELS("coe5.revealTerrainOnPlane", NONE, 0), WRITE_TRAVELS("coe5.ruinSquare", NONE, 0), WRITE_LOST("coe5.runModEvent"),
-    WRITE_TRAVELS("coe5.selectedCommanderDone", NONE, 0), WRITE_LOST("coe5.sendMessage"), WRITE_LOST("coe5.setRandomEventsOff"), WRITE_LOST("coe5.setSeenDisc"),
-    WRITE_LOST("coe5.setSquareOwner"), WRITE_TRAVELS("coe5.spawnCommander", PLAYER, 1), WRITE_TRAVELS("coe5.spawnUnit", PLAYER, 1),
-    WRITE_TRAVELS("coe5.spendAllApAt", PLAYER, 1), WRITE_TRAVELS("coe5.squareHold", PLAYER, 1), WRITE_TRAVELS("coe5.swapLocations", NONE, 0),
-    WRITE_LOST("coe5.swapSquares"), WRITE_TRAVELS("coe5.takeItem", UNIT, 1), WRITE_TRAVELS("coe5.teleportCommander", COMMANDER, 1),
-    WRITE_TRAVELS("coe5.teleportSquare", NONE, 0), WRITE_TRAVELS("coe5.teleportUnit", UNIT, 1), WRITE_TRAVELS("coe5.unitAddXp", UNIT, 1),
+    WRITE_TRAVELS("coe5.removeAffliction", UNIT, 1), WRITE_TRAVELS("coe5.removeBadFollowers", NONE, 0),
+    WRITE_TRAVELS("coe5.removeEnchant", NONE, 0), WRITE_TRAVELS("coe5.repickMemorized", UNIT, 1), WRITE_TRAVELS("coe5.revealDisc", NONE, 0),
+    WRITE_LOST("coe5.revealMap"), WRITE_LOST("coe5.revealPortalExits"), WRITE_TRAVELS("coe5.revealTerrainOnPlane", NONE, 0),
+    WRITE_TRAVELS("coe5.ruinSquare", NONE, 0), WRITE_LOST("coe5.runModEvent"), WRITE_TRAVELS("coe5.selectedCommanderDone", NONE, 0),
+    WRITE_LOST("coe5.sendMessage"), WRITE_TRAVELS("coe5.setAfflictionTurn", NONE, 0), WRITE_TRAVELS("coe5.setAfflictionValue", NONE, 0),
+    WRITE_LOST("coe5.setRandomEventsOff"), WRITE_LOST("coe5.setSeenDisc"), WRITE_LOST("coe5.setSquareOwner"),
+    WRITE_TRAVELS("coe5.spawnCommander", PLAYER, 1), WRITE_TRAVELS("coe5.spawnUnit", PLAYER, 1),
+    WRITE_TRAVELS("coe5.spendAllApAt", PLAYER, 1), WRITE_TRAVELS("coe5.squareHold", PLAYER, 1),
+    WRITE_TRAVELS("coe5.swapLocations", NONE, 0), WRITE_LOST("coe5.swapSquares"), WRITE_TRAVELS("coe5.takeItem", UNIT, 1),
+    WRITE_TRAVELS("coe5.teleportCommander", COMMANDER, 1), WRITE_TRAVELS("coe5.teleportSquare", NONE, 0),
+    WRITE_TRAVELS("coe5.teleportUnit", UNIT, 1), WRITE_TRAVELS("coe5.unitAddXp", UNIT, 1),
     WRITE_TRAVELS("coe5.unitRandomAffliction", UNIT, 1), WRITE_TRAVELS("coe5.unitRemoveItem", UNIT, 1),
     WRITE_TRAVELS("coe5.unitRemoveTempAbility", UNIT, 1), WRITE_TRAVELS("coe5.unmemorizeSpell", UNIT, 1),
     WRITE_TRAVELS("coe5.useSpecialSite", COMMANDER, 3), WRITE_LOST("coe5.worldNews"),
@@ -404,6 +423,16 @@ static ClientWrite clientWriteOf(const char *name, const char *setValue) {
     }
     const ClientWrite *w = findClientWrite(CLIENT_WRITE_CALLS, CLIENT_WRITE_CALL_COUNT, name);
     return w ? *w : (ClientWrite){name, CLIENT_WRITE_STAYS, WRITE_OWNER_NONE, 0};
+}
+
+static const char *const REPLAY_UNDONE_WRITES[] = {"coe5.battleBanishUnit", "coe5.battleSummon", "coe5.cureAffliction", "coe5.giveAffliction", "coe5.setAfflictionTurn",
+                                                   "coe5.setAfflictionValue"};
+#define REPLAY_UNDONE_WRITE_COUNT ((int)(sizeof REPLAY_UNDONE_WRITES / sizeof REPLAY_UNDONE_WRITES[0]))
+
+static int writeUndoneInReplay(const char *name) {
+    for (int i = 0; i < REPLAY_UNDONE_WRITE_COUNT; i++)
+        if (!strcmp(name, REPLAY_UNDONE_WRITES[i])) return 1;
+    return 0;
 }
 
 static const char *clientWriteRefusalFor(ClientWriteKind kind, int inTurn, int own, int replay) {

@@ -32,7 +32,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"log", lLog}, {"addMainMenuButton", lAddMainMenuButton}, {"addGameMenuLine", lAddGameMenuLine},
     {"turn", lTurn}, {"sendMessage", lSendMessage}, {"showMessageBox", lShowMessageBox}, {"get", lGet}, {"set", lSet}, {"wrap", lWrap},
     {"observe", lObserve}, {"setSetupAutomated", lSetSetupAutomated}, {"setupAutomated", lSetupAutomated},
-    {"setting", lSetting}, {"restartGame", lRestartGame}, {"loadGame", lLoadGame}, {"restartPhase", lRestartPhase},
+    {"setting", lSetting}, {"translate", lTranslate}, {"restartGame", lRestartGame}, {"loadGame", lLoadGame}, {"restartPhase", lRestartPhase},
     {"hideMainMenuButton", lHideMainMenuButton}, {"addScreen", lAddScreen}, {"rebindKey", lRebindKey},
     {"addActionKey", lAddActionKey}, {"actionKey", lActionKey}, {"findMonster", lFindMonster},
     {"dataFolder", lDataFolder}, {"readIni", lReadIni}, {"writeIni", lWriteIni}, {"listIni", lListIni},
@@ -48,8 +48,12 @@ static const luaL_Reg LUA_COE5[] = {
     {"keepTraceLines", lKeepTraceLines}, {"addPlane", lAddPlane}, {"setPlaneShape", lSetPlaneShape}, {"planeIndex", lPlaneIndex}, {"factionSlot", lFactionSlot}, {"addFaction", lAddFaction},
     {"setPlaneTint", lSetPlaneTint}, {"clearPlaneTint", lClearPlaneTint}, {"setTerrainLooks", lSetTerrainLooks},
     {"setRandomEventsOff", lSetRandomEventsOff}, {"randomEventsOff", lRandomEventsOff},
-    {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter},
-    {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
+    {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter}, {"addTransport", lAddTransport},
+    {"giveAffliction", lGiveAffliction}, {"cureAffliction", lCureAffliction}, {"hasAffliction", lHasAffliction},
+    {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
+    {"afflictionValue", lAfflictionValue}, {"setAfflictionTurn", lSetAfflictionTurn}, {"setAfflictionValue", lSetAfflictionValue},
+    {"removeAffliction", lRemoveAffliction}, {"afflictionEffect", lAfflictionEffect},
+    {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 static const luaL_Reg LUA_UI[] = {
     {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
@@ -116,6 +120,9 @@ static const struct { const char *table, *name; int value; } GAME_NUMBERS[] = {
     {"screen", "fileBrowserRowFirst", FILE_BROWSER_ROW_FIRST}, {"screen", "fileBrowserDelete", FILE_BROWSER_DELETE},
     {"screen", "squareInfoOk", SQUARE_INFO_OK},
     {"target", "useful", TARGET_USEFUL}, {"target", "notAffected", TARGET_NOT_AFFECTED},
+    {"banish", "noEffect", BANISH_NO_EFFECT}, {"banish", "banished", BANISH_AWAY}, {"banish", "damage", BANISH_DAMAGE},
+    {"banish", "planeAbility", BANISH_PLANE_ABILITY},
+    {"healRate", "never", HEAL_RATE_NEVER}, {"healRate", "usual", HEAL_RATE_USUAL}, {"healRate", "fast", HEAL_RATE_FAST},
     {"aiMove", "none", AI_MOVE_NONE}, {"aiMove", "target", AI_MOVE_TARGET}, {"aiMove", "explore", AI_MOVE_EXPLORE},
     {"aiMove", "noSquare", AI_NO_SQUARE}, {"aiMove", "exploreBelow", AI_EXPLORE_BELOW},
     {"aiMove", "farExploreBelow", AI_FAR_EXPLORE_BELOW},
@@ -256,6 +263,7 @@ static const char *clientWriteRefusalNow(lua_State *L, const char *name, int inT
         if (v->type == T_RECORD_WORD || contentValueRow(v) >= 0) return clientContentWriteRefusalFor(contentModsReading());
     }
     ClientWrite w = clientWriteOf(name, value);
+    if (netReplayRunning() && writeUndoneInReplay(name)) w.kind = CLIENT_WRITE_STAYS;
     int own = -1;
     if (w.kind == CLIENT_WRITE_TRAVELS && w.owner != WRITE_OWNER_NONE) own = clientWriteOwnerNow(L, &w) == G32(RVA_ACTIVE_PLAYER);
     if (w.kind == CLIENT_WRITE_TRAVELS && !strcmp(name, "coe5.damageUnitPlain") && lua_isinteger(L, 1) && lua_isinteger(L, 2) &&
@@ -605,6 +613,8 @@ static LuaScript *newLuaScript(const char *mod, const char *folder, const char *
     luaScripts[luaScriptCount++] = s;
     fillNewScriptGameData(s);
     installBattleReplayScripts();
+    installBattleBanish();
+    installBattleSummon();
     return s;
 }
 
@@ -753,6 +763,7 @@ static void markScriptPlanesRestarting(const char *mod);
 static void markScriptFactionsRestarting(const char *mod);
 static void markScriptLooksRestarting(const char *mod);
 static void markScriptBattleMapsRestarting(const char *mod);
+static void markScriptTransportsRestarting(const char *mod);
 static void dropScriptPlanes(const char *mod);
 static void dropScriptFactions(const char *mod);
 
@@ -779,6 +790,7 @@ static void retireContentScripts(const char *reason) {
         markScriptFactionsRestarting(s->mod);
         markScriptLooksRestarting(s->mod);
         markScriptBattleMapsRestarting(s->mod);
+        markScriptTransportsRestarting(s->mod);
         dropScriptMenuRows(s);
         retireLuaScript(s, reason);
     }
@@ -789,6 +801,7 @@ static void retireNoMultiplayerScript(LuaScript *s) {
     dropScriptFactions(s->mod);
     markScriptLooksRestarting(s->mod);
     markScriptBattleMapsRestarting(s->mod);
+    markScriptTransportsRestarting(s->mod);
     dropScriptMenuRows(s);
     retireLuaScript(s, "nomultiplayer");
 }
@@ -925,6 +938,16 @@ static void takeClientScriptStop(const char *report) {
         writeLogWarning("script_stop_dropped", "reason=bad_report");
         return;
     }
+    int runs = 0;
+    for (int i = 0; i < luaScriptCount && !runs; i++) runs = !luaScripts[i]->retired && !strcmp(luaScripts[i]->mod, mod + 1) && modClassNow(mod + 1) == LUA_CLASS_CONTENT;
+    if (!runs) {
+        static int dropsLogged;
+        if (dropsLogged < 8) {
+            dropsLogged++;
+            writeLogWarning("script_stop_dropped", "reason=no_content_script mod=%.80s", mod + 1);
+        }
+        return;
+    }
     noteScriptStopOnHost(mod + 1, knownScriptStopReason(report, (size_t)(mod - report)), 1);
 }
 
@@ -948,8 +971,10 @@ static void restartLuaScript(LuaScript *s, const char *reason) {
     markScriptFactionsRestarting(mod);
     markScriptLooksRestarting(mod);
     markScriptBattleMapsRestarting(mod);
+    markScriptTransportsRestarting(mod);
     dropScriptMenuRows(s);
     dropLuaScriptWraps(s);
+    dropAfflictionEffects(s);
     retireLuaScript(s, reason);
     if (!luaModEnabledNow(mod, folder)) return;
     loadLuaCommandsFile(mod, folder);
