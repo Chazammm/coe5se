@@ -1,9 +1,13 @@
 static int monsterRowIndex;
 static int uiButtonCount;
 static int uiButtonsWaiting;
+static LuaScript *uiFrameScript;
+static LuaScript *uiWaitScript;
+static int screenTextFocusOf(const LuaScript *script);
 static void closeLuaRow(lua_State *L, const char *call);
 static int lScreenBegin(lua_State *L) {
     closeLuaRow(L, "coe5.ui.screenBegin");
+    uiFrameScript = luaScriptOf(L);
     monsterRowIndex = 0;
     uiButtonCount = 0;
     luaApi->ui->screenBegin(luaL_checkstring(L, 1));
@@ -64,13 +68,30 @@ static int lBindKey(lua_State *L) {
     luaApi->ui->bindKey((int)id, key == KEY_ESC ? UI_KEY_ESCAPE : (int)key);
     return 0;
 }
+static int screenWaitOneFrame(void) {
+#ifdef __APPLE__
+    GAME_FN(void (*)(int, float, float), RVA_LAYOUT_PASS)(-1, -1.0f, -1.0f);
+    return GAME_FN(WaitForClickFn, RVA_WAIT_FOR_CLICK)(0, WAIT_MODE_MENU);
+#else
+    GAME_FN(void (*)(float, float), RVA_SCREEN_LAYOUT)(-1.0f, -1.0f);
+    int id = GAME_FN(WaitForClickFn, RVA_WAIT_FOR_CLICK)(0, WAIT_MODE_MENU);
+    GAME_FN(void (*)(int), RVA_CLICK_SOUND)(id);
+    return id;
+#endif
+}
+
 static int lWait(lua_State *L) {
     checkLuaMainThread(L, "coe5.ui.wait");
-    resetTestFieldText();
+    LuaScript *script = luaScriptOf(L), *outerWait = uiWaitScript;
+    int focused = screenTextFocusOf(script);
+    if (!focused) resetTestFieldText();
     closeLuaRow(L, "coe5.ui.wait");
     luaCodeRunning--;
     uiButtonsWaiting++;
-    int id = luaApi->ui->wait();
+    uiWaitScript = script;
+    int id = focused ? screenWaitOneFrame() : luaApi->ui->wait();
+    uiWaitScript = outerWait;
+    uiFrameScript = NULL;
     uiButtonsWaiting--;
     uiButtonCount = 0;
     luaCodeRunning++;

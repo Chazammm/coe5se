@@ -8,15 +8,26 @@
 typedef enum {
     CODE_TOGGLE_JCC8_ALWAYS, CODE_TOGGLE_JCC32_ALWAYS, CODE_TOGGLE_JCC8_RETARGET, CODE_TOGGLE_MOV_IMM32_ZERO, CODE_TOGGLE_CMP_IMM8_ZERO,
     CODE_TOGGLE_BCOND_ALWAYS, CODE_TOGGLE_BCOND_NOP, CODE_TOGGLE_BCOND_RETARGET, CODE_TOGGLE_MOVZ_ZERO, CODE_TOGGLE_CMP_ZERO_TO_CMN_ONE,
+    CODE_TOGGLE_JCC8_NEVER, CODE_TOGGLE_JCC32_NEVER, CODE_TOGGLE_JCC32_JMP_TO, CODE_TOGGLE_CALL_TO,
+    CODE_TOGGLE_BRANCH_NOP, CODE_TOGGLE_BRANCH_ALWAYS, CODE_TOGGLE_BRANCH_TO, CODE_TOGGLE_BL_TO, CODE_TOGGLE_STR_NOP,
 } CodeToggleKind;
 
 static size_t codeToggleSize(CodeToggleKind kind) {
     switch (kind) {
     case CODE_TOGGLE_JCC8_ALWAYS:
+    case CODE_TOGGLE_JCC8_NEVER:
     case CODE_TOGGLE_JCC8_RETARGET: return 2;
     case CODE_TOGGLE_CMP_IMM8_ZERO: return 3;
+    case CODE_TOGGLE_CALL_TO: return 5;
     case CODE_TOGGLE_JCC32_ALWAYS:
+    case CODE_TOGGLE_JCC32_NEVER:
+    case CODE_TOGGLE_JCC32_JMP_TO:
     case CODE_TOGGLE_MOV_IMM32_ZERO: return 6;
+    case CODE_TOGGLE_BRANCH_NOP:
+    case CODE_TOGGLE_BRANCH_ALWAYS:
+    case CODE_TOGGLE_BRANCH_TO:
+    case CODE_TOGGLE_BL_TO:
+    case CODE_TOGGLE_STR_NOP:
     case CODE_TOGGLE_BCOND_ALWAYS:
     case CODE_TOGGLE_BCOND_NOP:
     case CODE_TOGGLE_BCOND_RETARGET:
@@ -29,6 +40,22 @@ static size_t codeToggleSize(CodeToggleKind kind) {
 static uint32_t codeWordAt(const unsigned char *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static void putCodeWord(unsigned char *p, uint32_t w) {
     for (int i = 0; i < 4; i++) p[i] = (unsigned char)(w >> (8 * i));
+}
+
+static int a64CondTarget(uint32_t w, uint64_t at, uint64_t *target) {
+    int32_t words;
+    if ((w & 0xff000010u) == 0x54000000u || (w & 0x7e000000u) == 0x34000000u) words = (int32_t)(w << 8) >> 13;
+    else if ((w & 0x7e000000u) == 0x36000000u) words = (int32_t)(w << 13) >> 18;
+    else return 0;
+    *target = at + (uint64_t)(int64_t)words * 4;
+    return 1;
+}
+
+static int a64BranchTo(uint32_t op, uint64_t at, uint64_t target, uint32_t *w) {
+    long long bytes = (long long)target - (long long)at, words = bytes / 4;
+    if (bytes % 4 || words < -(1 << 25) || words >= (1 << 25)) return 0;
+    *w = op | ((uint32_t)words & 0x3ffffffu);
+    return 1;
 }
 
 static int buildCodeToggle(CodeToggleKind kind, const unsigned char *live, uint64_t at, uint64_t target, unsigned char out[CODE_TOGGLE_BYTES_MAX]) {
@@ -85,6 +112,50 @@ static int buildCodeToggle(CodeToggleKind kind, const unsigned char *live, uint6
         if ((w & 0xfffffc1fu) != 0x7100001fu) return 0;
         putCodeWord(out, 0x3100001fu | 1u << 10 | (w & 0x3e0u));
         return 1;
+    case CODE_TOGGLE_JCC8_NEVER:
+        if ((live[0] & 0xf0) != 0x70) return 0;
+        out[0] = 0x66, out[1] = 0x90;
+        return 1;
+    case CODE_TOGGLE_JCC32_NEVER:
+        if (live[0] != 0x0f || (live[1] & 0xf0) != 0x80) return 0;
+        memset(out, 0x90, 6);
+        return 1;
+    case CODE_TOGGLE_JCC32_JMP_TO:
+    case CODE_TOGGLE_CALL_TO: {
+        int call = kind == CODE_TOGGLE_CALL_TO;
+        if (call ? live[0] != 0xe8 : live[0] != 0x0f || (live[1] & 0xf0) != 0x80) return 0;
+        long long rel = (long long)target - (long long)(at + 5);
+        if (rel < INT32_MIN || rel > INT32_MAX) return 0;
+        int32_t rel32 = (int32_t)rel;
+        out[0] = call ? 0xe8 : 0xe9;
+        memcpy(out + 1, &rel32, 4);
+        if (!call) out[5] = 0x90;
+        return 1;
+    }
+    case CODE_TOGGLE_BRANCH_NOP:
+    case CODE_TOGGLE_BRANCH_ALWAYS:
+    case CODE_TOGGLE_BRANCH_TO: {
+        uint64_t own;
+        if (!a64CondTarget(w, at, &own)) return 0;
+        if (kind == CODE_TOGGLE_BRANCH_NOP) {
+            putCodeWord(out, 0xd503201fu);
+            return 1;
+        }
+        uint32_t b;
+        if (!a64BranchTo(0x14000000u, at, kind == CODE_TOGGLE_BRANCH_TO ? target : own, &b)) return 0;
+        putCodeWord(out, b);
+        return 1;
+    }
+    case CODE_TOGGLE_BL_TO: {
+        uint32_t bl;
+        if ((w & 0xfc000000u) != 0x94000000u || !a64BranchTo(0x94000000u, at, target, &bl)) return 0;
+        putCodeWord(out, bl);
+        return 1;
+    }
+    case CODE_TOGGLE_STR_NOP:
+        if ((w & 0xffc00000u) != 0xb9000000u) return 0;
+        putCodeWord(out, 0xd503201fu);
+        return 1;
     }
     return 0;
 }
@@ -93,6 +164,7 @@ static int buildCodeToggle(CodeToggleKind kind, const unsigned char *live, uint6
 typedef struct {
     const char *owner;
     unsigned rva, target;
+    const void *to;
     CodeToggleKind kind;
     unsigned char game[CODE_TOGGLE_BYTES_MAX], ours[CODE_TOGGLE_BYTES_MAX];
     int available, read, applied;
@@ -121,7 +193,8 @@ static const char *switchCodeToggle(CodeToggle *t, int want) {
     } else if (want && !t->applied) {
         if (!t->read) memcpy(t->game, at, size), t->read = 1;
         else if (memcmp(at, t->game, size)) reason = "changed_by_other";
-        if (!reason && !buildCodeToggle(t->kind, at, (uint64_t)(uintptr_t)at, (uint64_t)(uintptr_t)GAME_PTR(t->target), t->ours))
+        uint64_t to = (uint64_t)(uintptr_t)(t->to ? t->to : GAME_PTR(t->target));
+        if (!reason && !buildCodeToggle(t->kind, at, (uint64_t)(uintptr_t)at, to, t->ours))
             reason = "unexpected_instruction";
         if (!reason && !codeToggleWrite(at, t->ours, size)) reason = "code_unwritable";
         if (!reason) t->applied = 1;
@@ -238,7 +311,18 @@ static int syncRandomEventGates(void) {
     return on;
 }
 
+static void (*dropGameEventQueue)(const char *why);
+static int randomEventsHeld, randomEventsHeldSet;
+static unsigned randomEventsHeldMask;
+static char randomEventsHeldBy[MOD_NAME_MAX];
+
 static int setRandomEventsOff(unsigned mask, const char *by) {
+    if (randomEventsHeld) {
+        randomEventsHeldSet = 1, randomEventsHeldMask = mask;
+        snprintf(randomEventsHeldBy, sizeof randomEventsHeldBy, "%s", by);
+        writeLog("random_events_set_held", "by=%s reason=forced_event_running", by);
+        return 1;
+    }
     randomEventsOff = mask & ((1u << RANDOM_EVENT_COUNT) - 1);
     int on = syncRandomEventGates(), want = 0;
     for (int e = 0; e < RANDOM_EVENT_COUNT; e++) want += randomEventsOff >> e & 1;
@@ -263,6 +347,7 @@ static void addRandomEventsChunk(SaveList *list) {
 }
 
 static void useRandomEventsChunk(const SaveChunk *chunk, SaveFile kind) {
+    if (kind == SAVE_FILE_SAVE && dropGameEventQueue) dropGameEventQueue("save_read");
     if (kind != SAVE_FILE_SAVE || netRoleNow() == NET_ROLE_OFFICIAL) return;
     unsigned mask = 0;
     int dropped = 0, count = 0;
@@ -336,6 +421,7 @@ static int lRandomEventsOff(lua_State *L) {
 // ---- Install ------------------------------------------------------------------------------------
 static u64 (*nextRandomEventsNewWorld)(u64);
 static u64 randomEventsNewWorldHook(u64 mode) {
+    if (dropGameEventQueue) dropGameEventQueue("new_world");
     if (randomEventsOff) setRandomEventsOff(0, "new_world");
     return nextRandomEventsNewWorld(mode);
 }

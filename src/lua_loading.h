@@ -68,7 +68,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"addCommanderLine", lAddCommanderLine}, {"addTraitLine", lAddTraitLine}, {"teleportCommander", lTeleportCommander}, {"mayEnterSquare", lMayEnterSquare},
     {"keepTraceLines", lKeepTraceLines}, {"addPlane", lAddPlane}, {"setPlaneShape", lSetPlaneShape}, {"planeIndex", lPlaneIndex}, {"factionSlot", lFactionSlot}, {"addFaction", lAddFaction},
     {"setPlaneTint", lSetPlaneTint}, {"clearPlaneTint", lClearPlaneTint}, {"setTerrainLooks", lSetTerrainLooks},
-    {"setRandomEventsOff", lSetRandomEventsOff}, {"randomEventsOff", lRandomEventsOff},
+    {"setRandomEventsOff", lSetRandomEventsOff}, {"randomEventsOff", lRandomEventsOff}, {"gameEvents", lGameEvents}, {"queueGameEvent", lQueueGameEvent},
     {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter}, {"addTransport", lAddTransport},
     {"giveAffliction", lGiveAffliction}, {"cureAffliction", lCureAffliction}, {"hasAffliction", lHasAffliction},
     {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
@@ -82,6 +82,7 @@ static const luaL_Reg LUA_UI[] = {
     {"checkbox", lCheckbox}, {"choice", lChoice}, {"tooltip", lTooltip}, {"buttonRow", lButtonRow},
     {"listBegin", lListBegin}, {"listRow", lListRow}, {"listEnd", lListEnd}, {"bindEscape", lBindEscape},
     {"bindKey", lBindKey}, {"wait", lWait}, {"sectionHeader", lSectionHeader}, {"screenWidth", lScreenWidth},
+    {"setTextFocus", lSetUiTextFocus}, {"takeTextEvents", lTakeUiTextEvents},
     {"setupScreenWidth", lSetupScreenWidth}, {"screenMusic", lScreenMusic}, {"columnX", lColumnX},
 #ifndef __APPLE__
     {"textWidth", lTextWidth},
@@ -229,7 +230,7 @@ static const char *const PREVIEW_WORLD_CALLS[] = {
     "aiMakeGuardsAt", "aiMakeDefenders", "conscription", "priestFreespawn", "inquisitionSpawn", "trollForestSpawn", "stormSpawn", "wildSpawn", "revelsSpawn", "forestShepherdSpawn",
     "alterTerrain", "ruinSquare", "digTunnelSquare", "illusionTerrain", "destroyGateway", "putRareSquare", "groveReversion", "swapSquares", "teleportSquare", "swapLocations", "moveEnchants",
     "moveGems", "removeEnchant", "destroyEnchantsAt", "setSquareOwner", "cleanSquare", "initSquareGems", "initSquareCorpses", "runHatreds", "sandstormCloudUpdate", "useSpecialSite",
-    "orderBurnForest", "orderChopForest", "orderSlaveHunt", "orderEatVillage", "newPortalPair", "fixPortals", "planeRiseToElysium", "runModEvent",
+    "orderBurnForest", "orderChopForest", "orderSlaveHunt", "orderEatVillage", "newPortalPair", "fixPortals", "planeRiseToElysium", "runModEvent", "queueGameEvent",
     "gen.setTerrain", "gen.setGround", "gen.marksToTerrain", "gen.marksToTerrainChance", "gen.spreadTerrain", "gen.specBlob", "gen.terrainBlob", "gen.drawRiver", "gen.decorateSquare",
     "gen.addGroundItems", "gen.setPortalPair", "gen.linkNewPortal", "gen.stampPiece", "gen.setFixedTemperature", "gen.setTemperatures", "gen.heatBlob", "gen.floodPlane", "gen.updateMoistWalls", "gen.fixDiagonals",
 };

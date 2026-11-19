@@ -1959,6 +1959,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "text_wrap.h"
 #include "random_events.h"
 #include "mod_events.h"
+#include "game_events.h"
 #include "trait_lines.h"
 #include "portal_crossing.h"
 #include "lua_ai.h"

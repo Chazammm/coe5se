@@ -69,6 +69,7 @@
 --   Read a setting your .c5se has  coe5.setting("welcome")   (on/off: true or false; a choice: its index from 0; a key: its key value)
 --   Text in the player's language  coe5.translate("Rolled %d of %d")   (your language blocks' translation lines; the text itself without one)
 --   Add a screen to your settings page  coe5.addScreen("Open My Mod", openScreen)
+--   Type into your own screen     coe5.ui.setTextFocus(true) each frame, then coe5.ui.takeTextEvents().events
 --   Change a key of the game's own coe5.rebindKey(coe5.keyAction.mapEndTurn, string.byte("k"))
 --   Hide the Read Tip button       coe5.hideMainMenuButton(coe5.mainMenu.readTip, function() return true end)
 --   Keep data in a file            coe5.writeIni("last", {Player1 = {Class = 3}}), coe5.readIni("last").Player1.Class
@@ -100,6 +101,7 @@
 --   Seal a portal                  coe5.onPortalCrossing(function(c) if c.portal == 1234 then return false end end)   (humans, the AI and its routes)
 --   Tint a plane's map             coe5.setPlaneTint("Inferno", 1, 0.5, 0, 0.2), coe5.clearPlaneTint("Inferno"); local r, g, b, s = coe5.get("planeTint", 4)
 --   No meteors or droughts this game   coe5.setRandomEventsOff{"meteor", "drought"}; local off = coe5.randomEventsOff()
+--   Fire a game event at turn end   coe5.queueGameEvent("drought")   (coe5.gameEvents() lists them)
 --   Draw a mod terrain like a game one  coe5.setTerrainLooks{terrain = "Dungeon Wall", ground = "Cave Wall", picture = "./wall.tga"}   (at load)
 --   A battle map for a terrain     coe5.addBattleMap{file = "./maps/moria_halls.coem", terrains = {"Moria Deeps"}, weight = 20}   (at load)
 --   A terrain's battle plants      coe5.setBattleScatter{terrain = "Moria Deeps", objects = {{"Mithril Vein", 20}}}   (at load)
@@ -1543,11 +1545,12 @@ function coe5.revealMap(player, plane) end
 
 ---Every enabled mod's events, as the last full reading of the mods saw them (at startup, after the
 ---Mods screen, at a load, at a game's end), in the order the game runs them. Each entry is
----`{mod = , line = , kind = , message = , needs = }`: the mod's name, the line of its `playerevent`
+---`{mod = , line = , kind = , message = , needs = , lines = }`: the mod's name, the line of its `playerevent`
 ---or `squareevent` in the mod's file, the kind (`"playerevent"` or `"squareevent"`), the text of its
----first `message` line ("" for none), and each trigger line (`+` or `-`) as the mod writes it. A
----map file's events aren't listed. The index in this list is what coe5.runModEvent takes.
----@return {mod: string, line: integer, kind: string, message: string, needs: string[]}[] events
+---first `message` line ("" for none), each trigger line (`+` or `-`) as the mod writes it, and every
+---line of the event as the game read it, the event word first and `endevent` last. A map file's
+---events aren't listed. The index in this list is what coe5.runModEvent takes.
+---@return {mod: string, line: integer, kind: string, message: string, needs: string[], lines: string[]}[] events
 function coe5.modEvents() end
 
 ---Runs event `index` of coe5.modEvents() now, for the player whose turn it is, with every trigger
@@ -3918,6 +3921,30 @@ function coe5.setRandomEventsOff(names) end
 ---@return string[]
 function coe5.randomEventsOff() end
 
+---The game's own world events, in the game's monthly order: the long seasons, Hades, the Monument of
+---Hades, the foretelling, tainted magic, the Elemental Anomaly, the heat wave, Bumper Harvest, Fungus
+---Year, the meteor, the Insane Fisherman and his cube, drought, strange mist, Evil Times and its
+---Bandit King, brigand lair and pirate haven, the Inferno and Primal gates, Cardinal Intervenes, the
+---sixth and seventh seals, the Celestial gate, the four riders and the Apocalypse, Blood Sun, the
+---Rephaites, the fairy circle, a gold mine attacked, Young Dvala, the merchant and the palace moved.
+---Each entry is `{name = , label = , queued = , needs = }`: the name coe5.queueGameEvent takes, the
+---event's headline (or what it does), true while it waits for the end of the turn, and what the
+---game still looks for on the map before it fires the event.
+---@return {name: string, label: string, queued: boolean, needs: string[]}[] events
+function coe5.gameEvents() end
+
+---Fires event `name` of coe5.gameEvents() at the end of this turn, in the game's own month update,
+---with the event's own tests passed: its dice, turn, season and month, and its own "already" tests.
+---The game still finds the event's place and unit as it always does (an Ancient Forest's Green
+---Enchantress for the Primal gate), and with none on the map the event doesn't happen. A gold mine's
+---attack and Young Dvala happen at the first square the game finds. Cardinal Intervenes and the
+---sixth and seventh seals need fewer than 7 seals broken, and the sixth and seventh leave the count
+---at 6 and 7. Two events queued for one month that change the same code two ways, or that both set
+---or break seals, wait: the second fires the month after. Only the host fires events in a LAN game.
+---@param name string an event's name, from coe5.gameEvents()
+---@return boolean queued false when refused: outside a game (reason=no_game), no such event (unknown_event), one already queued (already_queued), a seal breaker at 7 seals (seals_done), 16 events already queued (queue_full), a patch this game build can't take (game_code_differs, patch_unavailable), each logged as lua_refused; on a LAN client, client_write_lost
+function coe5.queueGameEvent(name) end
+
 ---Draws a mod's terrain (a number past 355) on the world map with a game terrain's looks, at script
 ---load only, as a terrainlooks block does. `ground`: the game terrain whose ground it takes (its
 ---place in the blend order and its edges); `picture` ("./file.tga", sides powers of two) is drawn
@@ -5034,6 +5061,23 @@ function coe5.ui.bindEscape(id) end
 ---@param id integer
 ---@param key integer
 function coe5.ui.bindKey(id, key) end
+
+---Takes the keyboard for a text field on your own screen (true), or gives it back. Call it while drawing the
+---screen, between screenBegin and wait. While you have it, typed text goes to coe5.ui.takeTextEvents(), and no
+---key reaches the game but Alt+Tab, Alt+Enter, Alt+F4 and Win+M (Cmd+M on Mac); clicks still reach the screen. It
+---lasts across your screen's waits and ends on Enter, Esc, the window losing focus, coe5.ui.nameBox, and any
+---screen but yours, so take it again each frame while your field is open.
+---@param on boolean
+---@return boolean done false when refused (lua_refused): bad_type, not_owner (another mod has a text field open), game_code_differs, text_input_hook_unavailable, no_screen (not between screenBegin and wait), text_input_unavailable
+---@return string|nil reason the reason, with that false
+function coe5.ui.setTextFocus(on) end
+
+---What was typed on your screen since the last call, 64 events at most: each {type = "text", text} (UTF-8) or a
+---type of backspace, clear (Ctrl+Backspace or Ctrl+U), submit (Enter), cancel (Esc) or blur (the window lost
+---focus); overflow when an event was lost. The Enter or Esc that ended the focus comes with focused false.
+---@return {focused: boolean, overflow: boolean, events: {type: string, text?: string}[]}|nil typed nil when refused (lua_refused): not_owner
+---@return string|nil reason the reason, with that nil
+function coe5.ui.takeTextEvents() end
 
 ---Ends the frame: shows the screen and returns the clicked line's id.
 ---@return integer id the clicked line's id, 0 when nothing was clicked this frame

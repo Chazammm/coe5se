@@ -98,7 +98,7 @@ static int lModEvents(lua_State *L) {
     lua_createtable(L, modEventCount, 0);
     for (int n = 0; n < modEventCount; n++) {
         const ModEvent *e = &modEvents[n];
-        lua_createtable(L, 0, 5);
+        lua_createtable(L, 0, 6);
         lua_pushstring(L, e->mod);
         lua_setfield(L, -2, "mod");
         setIntField(L, "line", e->line);
@@ -114,6 +114,12 @@ static int lModEvents(lua_State *L) {
                 lua_rawseti(L, -2, ++needs);
             }
         lua_setfield(L, -2, "needs");
+        lua_createtable(L, e->lineCount, 0);
+        for (int i = 0; i < e->lineCount; i++) {
+            lua_pushstring(L, modEventLineText(e, i));
+            lua_rawseti(L, -2, i + 1);
+        }
+        lua_setfield(L, -2, "lines");
         lua_rawseti(L, -2, n + 1);
     }
     return 1;

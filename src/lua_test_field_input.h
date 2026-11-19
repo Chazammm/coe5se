@@ -16,7 +16,7 @@ typedef struct {
 } TestFieldTextCounts;
 
 static struct {
-    int focused, count, overflow, priorTextInput;
+    int focused, screen, count, overflow, priorTextInput;
     unsigned char held[SDL_SCANCODE_COUNT];
     LuaScript *script;
     char owner[MOD_NAME_MAX];
@@ -26,6 +26,8 @@ static struct {
     void (*stop)(void);
     int (*active)(void);
 } testFieldText;
+
+static int pushTextEvents(lua_State *L);
 
 static int findSdlTextInput(void) {
     if (testFieldText.start && testFieldText.stop && testFieldText.active) return 1;
@@ -71,7 +73,7 @@ static void blurTestFieldText(int queueEvent) {
 
 static void resetTestFieldText(void) {
     blurTestFieldText(0);
-    testFieldText.count = testFieldText.overflow = 0;
+    testFieldText.count = testFieldText.overflow = testFieldText.screen = 0;
     testFieldText.script = NULL;
     testFieldText.owner[0] = 0;
 }
@@ -118,7 +120,9 @@ static int testFieldTextAnyHeld(void) {
 
 static int testFieldTextTakesEvent(const void *raw) {
     if (!raw) return 0;
-    if (testFieldText.focused && (!testField.open || testField.fighting || strcmp(testFieldText.owner, testField.owner) || !testFieldTextOwnerAlive()))
+    if (testFieldText.screen && !testFieldText.focused && uiWaitScript != testFieldText.script) resetTestFieldText();
+    if (testFieldText.focused && (testFieldText.screen ? uiWaitScript != testFieldText.script || !testFieldTextOwnerAlive()
+                                                       : !testField.open || testField.fighting || strcmp(testFieldText.owner, testField.owner) || !testFieldTextOwnerAlive()))
         resetTestFieldText();
     const unsigned char *event = raw;
     unsigned type;
@@ -177,6 +181,20 @@ static int testFieldTextTakesEvent(const void *raw) {
     return 1;
 }
 
+static void takeTextFocus(LuaScript *script, int screen) {
+    testFieldText.count = testFieldText.overflow = 0;
+    memset(&testFieldText.counts, 0, sizeof testFieldText.counts);
+    testFieldText.script = script;
+    testFieldText.screen = screen;
+    snprintf(testFieldText.owner, sizeof testFieldText.owner, "%s", script->mod);
+    testFieldText.priorTextInput = testFieldText.active() != 0;
+    testFieldText.start();
+    testFieldText.focused = 1;
+    memset(keysHeld, 0, sizeof keysHeld);
+    memset(keyStateWritten, 0, sizeof keyStateWritten);
+    memset(GAME_PTR(RVA_KEY_STATE), 0, KEY_STATE_SIZE);
+}
+
 static int lSetTestFieldTextFocus(lua_State *L) {
     checkLuaMainThread(L, "coe5.setTestFieldTextFocus");
     LuaScript *script = checkLuaScript(L);
@@ -192,18 +210,9 @@ static int lSetTestFieldTextFocus(lua_State *L) {
                : !findSdlTextInput()                     ? "text_input_unavailable"
                                                          : NULL;
     if (reason) return refuseTestFieldCall(L, "coe5.setTestFieldTextFocus", reason, 0, "on=%d", on);
-    if (on && !testFieldText.focused) {
-        testFieldText.count = testFieldText.overflow = 0;
-        memset(&testFieldText.counts, 0, sizeof testFieldText.counts);
-        testFieldText.script = script;
-        snprintf(testFieldText.owner, sizeof testFieldText.owner, "%s", script->mod);
-        testFieldText.priorTextInput = testFieldText.active() != 0;
-        testFieldText.start();
-        testFieldText.focused = 1;
-        memset(keysHeld, 0, sizeof keysHeld);
-        memset(keyStateWritten, 0, sizeof keyStateWritten);
-        memset(GAME_PTR(RVA_KEY_STATE), 0, KEY_STATE_SIZE);
-    } else if (!on) blurTestFieldText(0);
+    if (on && testFieldText.focused && testFieldText.screen) resetTestFieldText();
+    if (on && !testFieldText.focused) takeTextFocus(script, 0);
+    else if (!on) blurTestFieldText(0);
     lua_pushboolean(L, 1);
     lua_pushnil(L);
     return 2;
@@ -214,6 +223,10 @@ static int lTakeTestFieldTextEvents(lua_State *L) {
     LuaScript *script = checkLuaScript(L);
     const char *reason = !testField.open ? "not_open" : strcmp(testField.owner, script->mod) ? "not_owner" : NULL;
     if (reason) return refuseTestFieldCall(L, "coe5.takeTestFieldTextEvents", reason, 1, "count=%d", testFieldText.count);
+    return pushTextEvents(L);
+}
+
+static int pushTextEvents(lua_State *L) {
     static const char *const NAMES[] = {"text", "backspace", "clear", "submit", "cancel", "blur"};
     lua_createtable(L, 0, 3);
     setBoolField(L, "focused", testFieldText.focused);
@@ -233,4 +246,45 @@ static int lTakeTestFieldTextEvents(lua_State *L) {
     lua_setfield(L, -2, "events");
     testFieldText.count = testFieldText.overflow = 0;
     return 1;
+}
+
+static int screenTextFocusOf(const LuaScript *script) {
+    return script && testFieldText.focused && testFieldText.screen && testFieldText.script == script;
+}
+
+static int lSetUiTextFocus(lua_State *L) {
+    checkLuaMainThread(L, "coe5.ui.setTextFocus");
+    LuaScript *script = checkLuaScript(L);
+    int on = lua_toboolean(L, 1);
+    const char *reason = lua_type(L, 1) != LUA_TBOOLEAN ? "bad_type" : NULL;
+    if (!reason && testFieldText.owner[0] && strcmp(testFieldText.owner, script->mod)) reason = "not_owner";
+    if (!reason && on)
+        reason = !gameCodeMatches          ? "game_code_differs"
+               : !testFieldTextPollReady   ? "text_input_hook_unavailable"
+               : uiFrameScript != script   ? "no_screen"
+               : !findSdlTextInput()       ? "text_input_unavailable"
+                                           : NULL;
+    if (reason) return refuseTestFieldCall(L, "coe5.ui.setTextFocus", reason, 0, "on=%d", on);
+    if (on && testFieldText.focused && !testFieldText.screen) resetTestFieldText();
+    if (on && !testFieldText.focused) takeTextFocus(script, 1);
+    else if (!on && testFieldText.screen) resetTestFieldText();
+    lua_pushboolean(L, 1);
+    lua_pushnil(L);
+    return 2;
+}
+
+static int lTakeUiTextEvents(lua_State *L) {
+    checkLuaMainThread(L, "coe5.ui.takeTextEvents");
+    LuaScript *script = checkLuaScript(L);
+    if (testFieldText.owner[0] && strcmp(testFieldText.owner, script->mod))
+        return refuseTestFieldCall(L, "coe5.ui.takeTextEvents", "not_owner", 1, "count=%d", testFieldText.count);
+    if (!testFieldText.screen || testFieldText.script != script) {
+        lua_createtable(L, 0, 3);
+        setBoolField(L, "focused", 0);
+        setBoolField(L, "overflow", 0);
+        lua_newtable(L);
+        lua_setfield(L, -2, "events");
+        return 1;
+    }
+    return pushTextEvents(L);
 }

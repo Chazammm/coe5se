@@ -1,6 +1,6 @@
 #pragma once
 
-#define GAME_CODE_CLAIMS_MAX 64
+#define GAME_CODE_CLAIMS_MAX 192
 #ifdef __APPLE__
 #define SITE_CALL_BYTES  4
 #define SEAL_SWITCH_BYTES 4

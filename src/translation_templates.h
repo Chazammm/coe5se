@@ -103,6 +103,8 @@ static void clearTranslators(void) {
     translators.modCount = translators.textCount = translators.lineCount = translators.problemCount = 0;
 }
 
+static void addTranslatorText(int mod, const char *file, int line, const char *text, int limit);
+
 static int translatorMod(const char *name, const char *folder) {
     for (int i = 0; i < translators.modCount; i++)
         if (!strcmp(translators.mods[i].name, name)) return i;
@@ -110,6 +112,9 @@ static int translatorMod(const char *name, const char *folder) {
     TranslatorMod *m = &translators.mods[translators.modCount];
     snprintf(m->name, sizeof m->name, "%s", name);
     snprintf(m->folder, sizeof m->folder, "%s", folder);
+    char file[TRANSLATOR_FILE_MAX + 1];
+    snprintf(file, sizeof file, "%.*s.c5m", TRANSLATOR_FILE_MAX - 4, name);
+    addTranslatorText(translators.modCount, file, 0, name, TRANSLATOR_NAME_LIMIT);
     return translators.modCount++;
 }
 
@@ -678,7 +683,8 @@ static void writeTranslatorReport(FILE *f, const char *pick, int reads, int from
             if (final < 0) {
                 fprintf(f, "Missing: ");
                 writeTranslatorQuote(f, t->text);
-                fprintf(f, " (%s line %d)\n", t->file, t->line);
+                if (t->line) fprintf(f, " (%s line %d)\n", t->file, t->line);
+                else fprintf(f, " (the mod's name)\n");
                 continue;
             }
             const TranslatorLine *l = &translators.lines[final];
