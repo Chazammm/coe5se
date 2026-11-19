@@ -160,6 +160,9 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
     lua_createtable(L, 0, 15);
     int result = lua_gettop(L);
     pushTestFieldFootprint(L, &f);
+#ifndef __APPLE__
+    setIntField(L, "version", 2);
+#endif
     setBoolField(L, "partial", 1);
     lua_pushliteral(L, "geometry_and_occupancy_only");
     lua_setfield(L, result, "reason");
@@ -168,11 +171,23 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
     for (int dx = 0; dx < f.width; dx++)
         for (int dy = 0; dy < f.height; dy++) {
             int cx = (int)x + dx, cy = (int)y + dy, actor = -1, object = -1, uncertain = 0;
-            const char *status = "out_of_bounds";
+            const char *status = "out_of_bounds", *decision = NULL;
             if (cx >= 0 && cy >= 0 && cx < view.width && cy < view.height) {
                 actor = testFieldUnitCovering(cx, cy, 0, ignoreSelf ? (int)unit : -1, &uncertain);
                 object = testFieldUnitCovering(cx, cy, BATTLE_CELL_OBJECT, ignoreSelf ? (int)unit : -1, &uncertain);
                 status = uncertain ? "unknown" : actor >= 0 ? "occupied" : object >= 0 ? "terrain" : "clear";
+#ifndef __APPLE__
+                if (!uncertain && actor < 0 && object >= 0 && testFieldSiegeObjectCandidate(object)) {
+                    int fits = x >= 0 && y >= 0 && x <= view.width - f.width && y <= view.height - f.height;
+                    if (unit < 0) {
+                        status = "unknown";
+                        decision = "requires_instance";
+                    } else if (fits && testFieldSiegeObjectPassable((int)unit, (int)x, (int)y, object)) {
+                        status = "clear";
+                        decision = "native_instance_accepted";
+                    } else decision = "native_move_rejected";
+                }
+#endif
             }
             if (strcmp(status, "clear")) valid = 0;
             lua_createtable(L, 0, 8);
@@ -182,6 +197,10 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
             setIntField(L, "object", object);
             lua_pushstring(L, status);
             lua_setfield(L, -2, "status");
+            if (decision) {
+                lua_pushstring(L, decision);
+                lua_setfield(L, -2, "objectDecision");
+            }
             lua_pushnumber(L, ((float)cx + 0.5f) * view.cellSize + view.baseX + view.cameraX);
             lua_setfield(L, -2, "screenX");
             lua_pushnumber(L, ((float)cy + 0.5f) * view.cellSize + view.baseY + view.cameraY);

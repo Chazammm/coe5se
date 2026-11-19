@@ -60,8 +60,17 @@ typedef struct {
     int hp, monster, owner, x, y, valid;
 } TestFieldUnitSnapshot;
 
+typedef enum {
+    TEST_FIELD_UNVERIFIED,
+    TEST_FIELD_ROSTER,
+    TEST_FIELD_MAP_OBJECT,
+    TEST_FIELD_SCATTER,
+    TEST_FIELD_GATE,
+} TestFieldCreationSource;
+
 typedef struct {
     unsigned long long generation;
+    TestFieldCreationSource source;
     int actor, beforeTaken, afterTaken, cleanup;
     TestFieldUnitSnapshot created, before, after;
 } TestFieldMadeUnit;
@@ -83,6 +92,39 @@ static int isTestFieldUnit(int unit) {
 static int isTestFieldActor(int unit) {
     return isTestFieldUnit(unit) && testFieldLife.actors[unit].actor;
 }
+
+// The grid's unit layer includes verified gates and roster actors.
+static int isTestFieldBattler(int unit) {
+    return isTestFieldUnit(unit) && (testFieldLife.actors[unit].actor || testFieldLife.actors[unit].source == TEST_FIELD_GATE);
+}
+
+// Describes construction provenance independently of current monster and owner.
+static const char *testFieldCreationSource(TestFieldCreationSource source) {
+    static const char *const NAMES[] = {"unverified", "owned_actor_creation", "native_map_loader", "native_terrain_placement", "native_gate_replacement"};
+    return NAMES[source];
+}
+
+static const char *testFieldUnitKind(const TestFieldMadeUnit *made) {
+    if (made->source == TEST_FIELD_GATE) return "structure";
+    if (made->actor) return "actor";
+    return "terrain";
+}
+
+#ifndef __APPLE__
+// Verify that the stock constructors still enter the owned generation tracker.
+static int testFieldProvenanceCallsValid(void) {
+    const unsigned int calls[] = {RVA_TEST_FIELD_MAP_OBJECT_CALL, RVA_TEST_FIELD_SCATTER_CALL, RVA_TEST_FIELD_GATE_CALL};
+    for (size_t i = 0; i < sizeof calls / sizeof *calls; i++) {
+        const unsigned char *call = gameBase + calls[i];
+        int relative;
+        memcpy(&relative, call+1, sizeof relative);
+        const unsigned char *target = call + 5 + relative;
+        if (*call != 0xe8 || (target != gameBase + RVA_NEW_UNIT &&
+            (!siteInstalled[SITE_NEW_UNIT] || target != siteStub(SITE_NEW_UNIT)))) return 0;
+    }
+    return 1;
+}
+#endif
 
 static TestFieldUnitSnapshot readTestFieldUnitSnapshot(int unit) {
     TestFieldUnitSnapshot s = {.monster = -1, .owner = -1, .x = -1, .y = -1};
@@ -159,6 +201,20 @@ static int testFieldNewUnitHook(int x, int y, int player, int commander, int mon
     int scope = testFieldLife.active && testFieldLife.depth > 0 && GetCurrentThreadId() == testFieldLife.thread && (!mod || !_stricmp(mod, testFieldLife.owner));
     int fieldPlayer = player == 0 || player == TEST_BATTLE_ENEMY_PLAYER;
     int local = scope && (fieldPlayer || player == 31) && ((x == testField.x && y == testField.y) || (x == -1 && y == -1));
+    TestFieldCreationSource source = fieldPlayer ? TEST_FIELD_ROSTER : TEST_FIELD_UNVERIFIED;
+#ifndef __APPLE__
+    uintptr_t caller = observedNewUnitCaller;
+    observedNewUnitCaller = 0;
+    if (!caller) caller = (uintptr_t)__builtin_return_address(0);
+    if (caller == (uintptr_t)(gameBase + RVA_TEST_FIELD_MAP_OBJECT_CALL + 5)) source = TEST_FIELD_MAP_OBJECT;
+    if (caller == (uintptr_t)(gameBase + RVA_TEST_FIELD_SCATTER_CALL + 5)) source = TEST_FIELD_SCATTER;
+    if (caller == (uintptr_t)(gameBase + RVA_TEST_FIELD_GATE_CALL + 5)) source = TEST_FIELD_GATE;
+    if (local && ((source == TEST_FIELD_GATE && (!fieldPlayer || commander != -3)) ||
+                  ((source == TEST_FIELD_MAP_OBJECT || source == TEST_FIELD_SCATTER) && player != 31))) {
+        testFieldLife.failed = 1;
+        source = TEST_FIELD_UNVERIFIED;
+    }
+#endif
     int previous = testFieldLife.overrideDepth;
     testFieldLife.overrideDepth = local && testFieldLife.allowMultiple ? previous + 1 : 0;
     int unit = gameNewUnit(x, y, player, commander, monster);
@@ -174,7 +230,7 @@ static int testFieldNewUnitHook(int x, int y, int player, int commander, int mon
         return unit;
     }
     TestFieldMadeUnit *made = &testFieldLife.actors[unit];
-    *made = (TestFieldMadeUnit){.generation = generation, .actor = fieldPlayer};
+    *made = (TestFieldMadeUnit){.generation = generation, .actor = source == TEST_FIELD_ROSTER, .source = source};
     made->created = readTestFieldUnitSnapshot(unit);
     testFieldLife.createdCount++;
     return unit;
@@ -220,6 +276,12 @@ static int turnOnTestFieldLifecycle(int multiple) {
 }
 
 static int beginTestFieldLife(const char *owner, int multiple) {
+#ifndef __APPLE__
+    if (!testFieldProvenanceCallsValid()) {
+        writeLogError("test_field_lifecycle_unavailable", "reason=provenance_code_differs");
+        return 0;
+    }
+#endif
     if (testFieldLife.pending || testFieldLife.failed || !turnOnTestFieldLifecycle(multiple)) return 0;
     memset(testFieldLife.actors, 0, UNIT_TABLE_MAX * sizeof *testFieldLife.actors);
     testFieldLife.session++;

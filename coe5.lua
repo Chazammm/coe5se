@@ -4234,6 +4234,92 @@ function coe5.closeTestField() end
 ---@return integer[] terrains
 function coe5.testFieldTerrains() end
 
+---The Windows stock contexts that can be verified on open. Does not load a field.
+---Reports field bounds, minimumWidthVersion, context API versions and loaded terrain rows.
+---@return table|nil info
+---@return string|nil reason
+function coe5.testFieldEnvironmentInfo() end
+
+---Read the owner's explicit stock test-field context and native template selection.
+---Windows 5.43. Reports the current plane, dimensions, siege/tower/sea flags,
+---observed stock template name and whether a replacement was selected.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldEnvironmentState() end
+
+---Read the native water cover and drowning predicate for a living owned actor
+---at a hypothetical anchor. Windows 5.43. Does not move, damage or board the actor.
+---@param unit integer
+---@param x integer
+---@param y integer
+---@return table|nil state fields include cellWater, willDrown, waterMobile and ship
+---@return string|nil reason
+function coe5.testFieldWaterState(unit,x,y) end
+
+---@class TestFieldDeploymentTarget
+---@field unit integer owned roster actor
+---@field generation integer|nil expected construction generation, required with a receipt
+---@field x integer exact anchor column
+---@field y integer exact anchor row
+
+---Windows 5.43. Apply a complete roster's exact anchors inside an owned field.
+---Retains verified fixed structures and scenery. Checks the entire footprint,
+---native passability, unchanged actor bodies and final anchor readback.
+---Optional initialReceipt permits only evacuation of verified native initial
+---actor overlap. Reports byteRollbackVerified separately from healthy rollback.
+---If rollback cannot be verified, close the quarantined field and use the saved setup.
+---@param targets TestFieldDeploymentTarget[]
+---@param options? {initialReceipt: integer}
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldDeployment(targets, options) end
+
+---Windows 5.43. Get one-use evidence captured by native opening for the current
+---owner and generation. A receipt is eligible only for verified initial
+---actor-only overlap and becomes invalid if the captured source changes.
+---@return table receipt version, session, token, fresh, eligible, actors, overlaps and reason
+function coe5.testFieldInitialDeployment() end
+
+---@class TestFieldActorSubset
+---@field version integer 1
+---@field monster integer
+---@field width integer
+---@field height integer
+---@field maxHp integer native derived maximum after restored XP and injuries
+---@field hp integer positive native HP
+---@field xp integer
+---@field kills integer
+---@field injuryFlags integer native injury bits 20 through 30
+
+---Windows 5.43. Read supported condition fields of a living owned actor.
+---The result includes its unit and generation and sets fullState to false.
+---Other native effects, opaque state, poison and bleeding are outside the contract.
+---@param unit integer
+---@return TestFieldActorSubset|nil state
+---@return string|nil reason
+function coe5.testFieldActorState(unit) end
+
+---Windows 5.43. Restore the bounded condition subset after loadout restoration.
+---Checks monster, footprint and derived maximum health. Preserves other flags,
+---items and spells, and reports any unverified rollback.
+---@param unit integer
+---@param state TestFieldActorSubset
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldActorState(unit, state) end
+
+---Windows 5.43. Replace the owned actor's ordered known and memorized lists
+---without replacing equipment or school configuration. Use the whole configuration
+---transaction when the lists depend on a different loadout or base school level.
+---@param unit integer
+---@param state {known: integer[], memorized: integer[]}
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldSpells(unit, state) end
+
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
 ---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.

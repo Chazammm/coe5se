@@ -8,4 +8,6 @@ Bugs
 - Permanently retire removed owned test-field units on Windows so regeneration cannot return them to battle.
 Lua
 - Owned `openTestField` accepts a Windows battlefield width floor through `minimumWidth`.
+- Owned stock test fields verify native context and distinguish fixed structures from the editable roster on Windows.
 - Windows owned test-field actors can have individual names for native Inspect and battle messages.
+- Owned test fields can validate exact roster deployment and restore supported actor condition and spell lists on Windows.

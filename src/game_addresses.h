@@ -1355,6 +1355,7 @@
 #define RVA_BATTLE_IS_AMBUSH                   ADDR_DIFFERS(0x5804c08,         0x106cd5de4)
 #define RVA_BATTLE_AT_SEA                      ADDR_DIFFERS(0x5804c14,         0x107ee6490)
 #define RVA_BATTLE_PLANE_3_OR_4                ADDR(        0x5804c24,         0x107ee6494)
+#define RVA_BATTLE_TOWER_CONTEXT               ADDR(        0x5804c50,          MAC_NOT_LOOKED_UP)
 #define RVA_BATTLE_IS_SIEGE                    ADDR_DIFFERS(0x5804c54,         0x10c921d10)
 #define RVA_BATTLE_OVER                        ADDR_DIFFERS(0x5804c1c,         0x10c96df3c)
 #define RVA_BATTLE_NOT_A_SIEGE                 ADDR_DIFFERS(0x5804c4c,         0x1069b16b4)
@@ -3827,6 +3828,9 @@
 #define MONSTER_FLAG_NO_COMMANDER              35
 #define MONSTER_FLAG_STANDABLE_OBJECT          62
 #define MONSTER_ABILITY_UNIQUE                 0x39
+#define RVA_TEST_FIELD_MAP_OBJECT_CALL         ADDR(        0x0874ce,          MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_GATE_CALL               ADDR(        0x0ee3d2,          MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_SCATTER_CALL            ADDR(        0x0f065a,          MAC_NOT_LOOKED_UP)
 #define RVA_NEW_UNIT                           ADDR(        0x1297b0,          0x10046e828)
 #define RVA_NEW_COMMANDER                      ADDR(        0x128160,          0x10046da30)
 #define RVA_ALLOC_UNIT                         ADDR(        0x10fff0,          0x10046d184)

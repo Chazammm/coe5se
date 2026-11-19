@@ -1289,10 +1289,26 @@ static void notifyObservers(CallSite site, const CallInfo *call, int after) {
     }
 }
 
+#ifndef __APPLE__
+// The NEW_UNIT entry hook consumes the original call site before observer reentry can inherit it.
+static _Thread_local uintptr_t observedNewUnitCaller;
+#endif
+
 static u64 runObserved(CallSite site, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u64 a6, u64 a7, u64 a8) {
     CallInfo call = {{a1, a2, a3, a4, a5, a6}, 0};
+#ifndef __APPLE__
+    uintptr_t caller = 0;
+    if (site == SITE_NEW_UNIT) memcpy(&caller, (const void *)siteStubData(site)->rsp, sizeof caller);
+#endif
     notifyObservers(site, &call, 0);
+#ifndef __APPLE__
+    uintptr_t previous = observedNewUnitCaller;
+    if (site == SITE_NEW_UNIT) observedNewUnitCaller = caller;
+#endif
     u64 result = nextObserved[site](a1, a2, a3, a4, a5, a6, a7, a8);
+#ifndef __APPLE__
+    if (site == SITE_NEW_UNIT) observedNewUnitCaller = previous;
+#endif
     call = (CallInfo){{a1, a2, a3, a4, a5, a6}, result};
     notifyObservers(site, &call, 1);
     return result;
@@ -1960,6 +1976,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_inspect.h"
 #ifndef __APPLE__
 #include "lua_test_field_names.h"
+#include "lua_test_field_actor_state.h"
 #endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
@@ -1978,6 +1995,11 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "preview_lines.h"
 #include "terrain_looks.h"
 #include "battle_maps.h"
+#ifndef __APPLE__
+#include "lua_test_field_environment.h"
+#include "lua_test_field_actor_body.h"
+#include "lua_test_field_deployment.h"
+#endif
 #include "lua_transport.h"
 #include "transport_deck.h"
 #include "transport_site.h"
