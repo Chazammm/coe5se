@@ -3,12 +3,14 @@
 _Static_assert(UNIT_KNOWN_SPELLS_MAX == 60 && UNIT_MEMORIZED_SPELLS_MAX == 30, "the unit record's two spell lists hold 60 and 30 entries");
 
 static const char *testFieldUnitEditProblem(const LuaScript *script, lua_Integer unit) {
+    if (testFieldLife.retiring) return "retirement_in_progress";
     if (!gameCodeMatches) return "game_code_differs";
     if (!testField.open) return "not_open";
     if (!testField.editor) return "not_editor_field";
     if (_stricmp(script->mod, testField.owner)) return "not_owner";
     if (testField.fighting) return "in_fight";
     if (testFieldFinalViewActive()) return "final_read_only";
+    if (testFieldLife.pending || testFieldLife.failed) return "cleanup_unverified";
     if (unit < 0 || unit >= UNIT_TABLE_MAX || unit > G32(RVA_UNIT_COUNT)) return "bad_unit";
     if (!isTestFieldActor((int)unit)) return "not_on_field";
     size_t at = (size_t)unit * UNIT_SIZE;
@@ -106,6 +108,14 @@ static int lRemoveTestFieldUnit(lua_State *L) {
             }
     if (!reason && tokens > 1) reason = "ambiguous_token";
     if (reason) return pushTestFieldEditResult(L, "coe5.removeTestFieldUnit", unit, reason);
+#ifndef __APPLE__
+    if (!retireTestFieldUnit((int)unit)) {
+        testFieldLife.failed = testFieldLife.pending = 1;
+        reason = "retirement_unverified";
+    }
+    (void)oldX;
+    (void)oldY;
+#else
     short *hp = (short *)GAME_PTR(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE), oldHp = *hp;
     if (tokens) *(int *)battleCell(oldX, oldY) = -1;
     *hp = 0;
@@ -114,6 +124,7 @@ static int lRemoveTestFieldUnit(lua_State *L) {
         if (tokens) *(int *)battleCell(oldX, oldY) = (int)unit;
         reason = "remove_failed";
     }
+#endif
     writeLog("test_field_unit_removed", "mod=%s unit=%lld removed=%d", script->mod, (long long)unit, reason == NULL);
     return pushTestFieldEditResult(L, "coe5.removeTestFieldUnit", unit, reason);
 }
@@ -178,6 +189,9 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "restoreHigherKnown", ready);
     setIntField(L, "equipmentPositions", ITEM_POSITION_MAX);
     setIntField(L, "maxBaseSchoolLevel", 3);
+#ifndef __APPLE__
+    setIntField(L, "unitRetirement", lifecycle);
+#endif
     return 1;
 }
 

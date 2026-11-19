@@ -115,6 +115,7 @@ static void restoreTestFieldPlane(void) {
 }
 
 static int closeTestFieldNow(void) {
+    if (testFieldLife.retiring) return 0;
     resetTestFieldText();
     resetTestFieldFinal();
     turnOffTestFieldTraining();
@@ -576,9 +577,9 @@ static int testFieldCallIsEditor(lua_State *L) {
 }
 
 static int testFieldIsOpen(lua_State *L, const char *call) {
-    if (testField.open) return 1;
+    if (testField.open && !testFieldLife.retiring) return 1;
     LuaScript *s = checkLuaScript(L);
-    refuseLuaCall(s->mod, call, "not_open", "field=closed");
+    refuseLuaCall(s->mod, call, testFieldLife.retiring ? "retirement_in_progress" : "not_open", "available=0");
     return 0;
 }
 
@@ -601,6 +602,7 @@ static const char *testFieldFightProblem(const LuaScript *script, int *teamA, in
     if (!testField.open) return "not_open";
     if (_stricmp(script->mod, testField.owner)) return "not_owner";
     if (testField.fighting) return "in_fight";
+    if (testFieldLife.retiring) return "retirement_in_progress";
     if (testFieldFinalViewActive()) return "final_read_only";
     if (testFieldLife.pending || testFieldLife.failed || !testFieldLife.active) return "cleanup_unverified";
     int width = G32(RVA_BATTLE_WIDTH), last = G32(RVA_UNIT_COUNT);
@@ -729,7 +731,8 @@ static int lCloseTestField(lua_State *L) {
     }
     checkLuaMainThread(L, "coe5.closeTestField");
     LuaScript *script = checkLuaScript(L);
-    const char *reason = testFieldLife.session && _stricmp(script->mod, testFieldLife.owner) ? "not_owner" : NULL;
+    const char *reason = testFieldLife.session && _stricmp(script->mod, testFieldLife.owner) ? "not_owner" :
+                         testFieldLife.retiring ? "retirement_in_progress" : NULL;
     int ok = !reason && closeTestFieldNow();
     if (!ok && !reason) reason = "cleanup_unverified";
     if (reason) refuseLuaCall(script->mod, "coe5.closeTestField", reason, "session=%llu", testFieldLife.session);
@@ -748,7 +751,8 @@ static int lAddTestFieldUnits(lua_State *L) {
     int friends = !strcmp(side, "friends"), enemies = !strcmp(side, "enemies");
     int player = friends ? 0 : TEST_BATTLE_ENEMY_PLAYER;
     TestFieldSide groups = {0};
-    const char *reason = editor && !gameCodeMatches                   ? "game_code_differs"
+    const char *reason = testFieldLife.retiring                       ? "retirement_in_progress"
+                       : editor && !gameCodeMatches                   ? "game_code_differs"
                        : !testField.open                              ? "not_open"
                        : editor && _stricmp(s->mod, testField.owner) ? "not_owner"
                        : editor && testField.fighting                 ? "in_fight"
@@ -816,6 +820,7 @@ static int lMoveTestFieldUnit(lua_State *L) {
     lua_Integer unit = luaL_checkinteger(L, 1), x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
     int fromX = -1, fromY = -1;
     const char *reason = NULL;
+    if (testFieldLife.retiring) return refuseTestFieldCall(L, "coe5.moveTestFieldUnit", "retirement_in_progress", 0, "field=unchanged");
     if (!editor) {
         reason = !testField.open ? "not_open" : unit < 0 || unit >= UNIT_TABLE_MAX || !unitBattleCell((int)unit, &fromX, &fromY) ? "not_on_field" : NULL;
     } else {

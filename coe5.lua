@@ -4239,7 +4239,9 @@ function coe5.testFieldTerrains() end
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
 function coe5.testFieldEditorCapabilities() end
 
----Takes one unit off your editor field: hp 0 and its cells emptied, with no death or event of the game's.
+---Takes one owned unit off your editor field and empties its cells. Windows uses permanent native retirement so
+---a removed regenerative unit cannot re-enter a later fight. Check capabilities.unitRetirement == 1 for this behavior.
+---If retirement_unverified is returned, keep the saved setup and close the field before attempting another edit.
 ---@param unit integer a unit of the field
 ---@return boolean removed false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, primary_commander (the commander of a field with one), bad_field, ambiguous_token (the unit stands on two cells), remove_failed
 ---@return string|nil reason the reason, with that false

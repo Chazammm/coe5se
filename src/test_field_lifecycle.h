@@ -67,7 +67,7 @@ typedef struct {
 } TestFieldMadeUnit;
 
 static struct {
-    int installed, tracking, active, depth, overrideDepth, allowMultiple, failed, pending;
+    int installed, tracking, active, depth, overrideDepth, allowMultiple, failed, pending, retiring;
     unsigned long long session, serial, createdCount;
     unsigned long thread;
     char owner[MOD_NAME_MAX];
@@ -253,6 +253,25 @@ static void clearTestFieldUnitCells(int unit) {
         }
 }
 
+#ifndef __APPLE__
+// Retires only the current owned generation and clears its remaining grid references.
+static int retireTestFieldUnit(int unit) {
+    if (!isTestFieldUnit(unit) || testFieldLife.retiring || GetCurrentThreadId() != testFieldLife.thread) return 0;
+    size_t at = (size_t)unit * UNIT_SIZE;
+    unsigned long long session = testFieldLife.session, generation = testFieldLife.generations[unit];
+    int width = G32(RVA_BATTLE_WIDTH);
+    if (testField.open && (width < 1 || width > BATTLE_COLUMNS_MAX)) return 0;
+    testFieldLife.retiring = 1;
+    if (G16(RVA_UNIT_HP + at) != -9999 || G32(RVA_UNIT_X + at) != -1 || G32(RVA_UNIT_X + at + 4) != -1)
+        GAME_FN(void (*)(int), RVA_REMOVE_UNIT)(unit);
+    testFieldLife.retiring = 0;
+    if (session != testFieldLife.session || !isTestFieldUnit(unit) || generation != testFieldLife.generations[unit] ||
+        width != G32(RVA_BATTLE_WIDTH) || G16(RVA_UNIT_HP + at) != -9999 || G32(RVA_UNIT_X + at) != -1 || G32(RVA_UNIT_X + at + 4) != -1) return 0;
+    if (testField.open) clearTestFieldUnitCells(unit);
+    return 1;
+}
+#endif
+
 static int removeTestFieldUnits(void) {
     if (!testFieldLife.actors) return 0;
     int complete = !testFieldLife.failed;
@@ -264,9 +283,15 @@ static int removeTestFieldUnits(void) {
         if (!made->before.valid) {
             made->cleanup = 3;
         } else {
+#ifndef __APPLE__
+            int retired = retireTestFieldUnit(unit);
+            made->cleanup = !retired ? 4 : made->before.hp > 0 ? 1 : 2;
+            if (!retired) complete = 0;
+#else
             if (made->before.hp > 0) G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) = 0;
             clearTestFieldUnitCells(unit);
             made->cleanup = made->before.hp > 0 ? 1 : 2;
+#endif
         }
         made->after = readTestFieldUnitSnapshot(unit);
         made->afterTaken = 1;
