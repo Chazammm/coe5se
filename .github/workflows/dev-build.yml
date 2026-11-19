@@ -127,12 +127,11 @@ jobs:
             fi
             echo "Not a release: the current state of dev, for contributors and testing. Players: the latest release is at https://github.com/$GITHUB_REPOSITORY/releases/latest"
           } > "$RUNNER_TEMP/notes.md"
+          # Made again at each build, not edited: GitHub keeps a release's first date, which made a new build read as
+          # released before the release it follows.
           if gh release view dev-build > /dev/null 2>&1; then
+            gh release delete dev-build --yes
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev-build" -f sha="$GITHUB_SHA" -F force=true > /dev/null
-            gh release edit dev-build --title "CoE5SE dev build $VERSION" --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
-            gh release view dev-build --json assets --jq '.assets[].name' | while read -r old; do gh release delete-asset dev-build "$old" --yes; done
-            gh release upload dev-build "$ZIP" "$PROVENANCE"
-          else
-            gh release create dev-build "$ZIP" "$PROVENANCE" --target "$GITHUB_SHA" --title "CoE5SE dev build $VERSION" \
-              --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
           fi
+          gh release create dev-build "$ZIP" "$PROVENANCE" --target "$GITHUB_SHA" --title "CoE5SE dev build $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" --prerelease --latest=false
