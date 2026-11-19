@@ -4528,10 +4528,13 @@ function coe5.battleCellToScreen(x, y) end
 function coe5.testFieldLoadoutState(unit) end
 
 ---Sets a unit's items, path levels and spells together, reads them back, and puts the unit back as it was when anything
----fails. A cursed item comes off only with removeCursed, and an eye or a heart neither goes on nor comes off. The table
+---fails. Windows builds advertising clearHeldItems=1 accept clearHeldItems=true with twenty empty slots and the
+---original schools and ordered spells. This mode clears cursed and implanted items, preserves existing organ
+---injuries, and refuses if an active memorization depends on the removed equipment. It cannot be combined with
+---restoreKnown or removeCursed. The table
 ---says how far it got: stage validate, committed, rejected_rollback_verified or rollback_unverified.
 ---@param unit integer a unit of your editor field
----@param state {items: integer[], schools: {[1]: integer, [2]: integer}[], known: integer[], memorized: integer[], restoreKnown?: boolean, removeCursed?: {[1]: integer, [2]: integer}} items 20 item numbers (-1 for none); schools {path, level} for every magic path its monster has, level 1 to 3, or the monster's own when higher; known and memorized 60 and 30 spells at most; removeCursed {position, item}
+---@param state {items: integer[], schools: {[1]: integer, [2]: integer}[], known: integer[], memorized: integer[], restoreKnown?: boolean, removeCursed?: {[1]: integer, [2]: integer}, clearHeldItems?: boolean} items 20 item numbers (-1 for none); schools {path, level} for every magic path its monster has, level 1 to 3, or the monster's own when higher; known and memorized 60 and 30 spells at most; removeCursed {position, item}
 ---@return boolean done false when refused (lua_refused): coe5.removeTestFieldUnit's first nine, not_main_menu, training_hooks_unavailable, bad_state, bad_item_positions, bad_item, bad_schools, bad_school_level, school_not_existing, unsupported_school_level, duplicate_school, missing_school_configuration, bad_spell_list, too_many_spells, bad_spell, duplicate_spell, bad_restore_known, bad_cursed_removal, identity_changed, incomplete_native_configuration, cursed_removal_changed, cursed_removal_only, bad_existing_item, cursed_item, permanent_anatomy_item_unsupported, out_of_memory, too_many_configured_units, incompatible_slot, native_item_restriction, equipment_changes_anatomy, the memorization rules' reasons, new_spell_above_level, configuration_readback_failed, school_readback_failed, permanent_effect_changed, rollback_failed
 ---@return string|nil reason the reason, with that false
 ---@return table detail

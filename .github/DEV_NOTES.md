@@ -12,3 +12,4 @@ Lua
 - Windows owned test-field actors can have individual names for native Inspect and battle messages.
 - Owned test fields can validate exact roster deployment and restore supported actor condition and spell lists on Windows.
 - Owned Windows test fields can read and toggle the native combat-log overlay.
+- Owned Windows test-field configuration can clear all held items on one actor with verified spell and injury preservation.

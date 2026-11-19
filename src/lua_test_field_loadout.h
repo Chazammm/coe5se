@@ -348,7 +348,7 @@ static int lSetTestFieldConfiguration(lua_State *L) {
     unsigned long long generation = reason ? 0 : testFieldLife.actors[unit].generation, session = testFieldLife.session;
     TestFieldTraining wanted = {0}, oldTraining = {0};
     short items[ITEM_POSITION_MAX], oldItems[ITEM_POSITION_MAX];
-    int restoreKnown = 0, cursedPosition = -1, cursedItem = -1;
+    int restoreKnown = 0, clearHeldItems = 0, cursedPosition = -1, cursedItem = -1;
     TestFieldCasterSnapshot oldCaster, candidate = {.complete = 1, .detail = {.stage = "validate", .path = -1, .spell = -1, .level = -1}};
     if (!reason && !lua_istable(L, 2)) reason = "bad_state";
     if (!reason) reason = readTestFieldItemList(L, 2, items);
@@ -361,6 +361,16 @@ static int lSetTestFieldConfiguration(lua_State *L) {
         if (!lua_isnil(L, -1) && lua_type(L, -1) != LUA_TBOOLEAN) reason = "bad_restore_known";
         restoreKnown = lua_toboolean(L, -1);
         lua_pop(L, 1);
+    }
+    if (!reason) {
+        lua_pushliteral(L, "clearHeldItems");
+        lua_rawget(L, 2);
+        if (!lua_isnil(L, -1) && lua_type(L, -1) != LUA_TBOOLEAN) reason = "bad_clear_held_items";
+        clearHeldItems = lua_toboolean(L, -1);
+        lua_pop(L, 1);
+#ifdef __APPLE__
+        if (!reason && clearHeldItems) reason = "windows_only";
+#endif
     }
     if (!reason) {
         lua_pushliteral(L, "removeCursed");
@@ -393,26 +403,35 @@ static int lSetTestFieldConfiguration(lua_State *L) {
     readTestFieldItems((int)unit, oldItems);
     unsigned oldOrganInjuries = testFieldOrganInjuries((int)unit);
     int restoreImplantLayout = restoreKnown && testFieldSameImplants(oldItems, items);
+    if (clearHeldItems) {
+        if (restoreKnown || cursedPosition >= 0) return pushTestFieldLoadoutResult(L, unit, "clear_items_only", 1);
+        for (int p = 0; p < ITEM_POSITION_MAX; p++)
+            if (items[p] != -1) return pushTestFieldLoadoutResult(L, unit, "clear_items_only", 1);
+    }
     if (cursedPosition >= 0) {
         if (oldItems[cursedPosition] != cursedItem || !isLoadedItem(cursedItem) || !(itemFlagsOf(cursedItem) & ITEM_FLAG_CURSED) ||
             items[cursedPosition] != -1)
             return pushTestFieldLoadoutResult(L, unit, "cursed_removal_changed", 1);
         for (int p = 0; p < ITEM_POSITION_MAX; p++)
             if (p != cursedPosition && items[p] != oldItems[p]) return pushTestFieldLoadoutResult(L, unit, "cursed_removal_only", 1);
+    }
+    if (cursedPosition >= 0 || clearHeldItems) {
+        const char *only = clearHeldItems ? "clear_items_only" : "cursed_removal_only";
         for (int i = 0; i < wanted.count; i++)
-            if (testFieldSpellWeaponLevelHook((int)unit, wanted.path[i]) != wanted.level[i]) return pushTestFieldLoadoutResult(L, unit, "cursed_removal_only", 1);
+            if (testFieldSpellWeaponLevelHook((int)unit, wanted.path[i]) != wanted.level[i])
+                return pushTestFieldLoadoutResult(L, unit, only, 1);
         if (candidate.knownCount != oldCaster.knownCount || candidate.memorizedCount != oldCaster.memorizedCount ||
             memcmp(candidate.known, oldCaster.known, (size_t)candidate.knownCount * sizeof candidate.known[0]) ||
             memcmp(candidate.memorized, oldCaster.memorized, (size_t)candidate.memorizedCount * sizeof candidate.memorized[0]))
-            return pushTestFieldLoadoutResult(L, unit, "cursed_removal_only", 1);
+            return pushTestFieldLoadoutResult(L, unit, only, 1);
     }
     for (int p = 0; p < ITEM_POSITION_MAX; p++) {
         if (oldItems[p] >= 0 && !isLoadedItem(oldItems[p])) return pushTestFieldLoadoutResult(L, unit, "bad_existing_item", 1);
-        if (oldItems[p] >= 0 && oldItems[p] != items[p] && (itemFlagsOf(oldItems[p]) & ITEM_FLAG_CURSED) && p != cursedPosition &&
+        if (oldItems[p] >= 0 && oldItems[p] != items[p] && (itemFlagsOf(oldItems[p]) & ITEM_FLAG_CURSED) && p != cursedPosition && !clearHeldItems &&
             !(restoreImplantLayout && isImplantItem(oldItems[p])))
             return pushTestFieldLoadoutResult(L, unit, "cursed_item", 1);
         if (items[p] != oldItems[p] && (isImplantItem(items[p]) || isImplantItem(oldItems[p])) &&
-            !(p == cursedPosition && items[p] == -1) && !restoreImplantLayout)
+            !((p == cursedPosition || clearHeldItems) && items[p] == -1) && !restoreImplantLayout)
             return pushTestFieldLoadoutResult(L, unit, "permanent_anatomy_item_unsupported", 1);
     }
     if (!ensureExtraItems()) return pushTestFieldLoadoutResult(L, unit, "out_of_memory", 1);
@@ -485,9 +504,10 @@ static int lSetTestFieldConfiguration(lua_State *L) {
         if (testFieldOrganInjuries((int)unit) != oldOrganInjuries) rollback = 0;
         if (!rollback) reason = "rollback_failed";
     }
-    writeLog("test_field_configuration", "mod=%s unit=%lld result=%s rollback_verified=%d restore_known=%d remove_cursed_position=%d remove_cursed_item=%d",
-             script->mod, (long long)unit, reason ? reason : "committed", rollback, restoreKnown, cursedPosition, cursedItem);
+    writeLog("test_field_configuration", "mod=%s unit=%lld result=%s rollback_verified=%d restore_known=%d remove_cursed_position=%d remove_cursed_item=%d clear_held_items=%d",
+             script->mod, (long long)unit, reason ? reason : "committed", rollback, restoreKnown, cursedPosition, cursedItem, clearHeldItems);
     int result = pushTestFieldLoadoutResult(L, unit, reason, rollback);
+    setBoolField(L, "clearHeldItems", clearHeldItems);
     if (cursedPosition >= 0) {
         setIntField(L, "cursedRemovalPosition", cursedPosition);
         setIntField(L, "cursedRemovalItem", cursedItem);
