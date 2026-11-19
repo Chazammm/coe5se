@@ -4166,13 +4166,14 @@ function coe5.loadedContentOrigin(kind, id) end
 ---group a monster's index and a count (1 when left out). Friends follow the commander. No count is capped, and the
 ---enemies need at least one unit; spell and standIn are optional fields. The units come back as the second value,
 ---and coe5.closeTestField takes every one of them off.
----Any of terrain, allowMultipleUnique or emptyEditor in the table, even false, opens an editor field, which the
+---Any of terrain, allowMultipleUnique, emptyEditor or minimumWidth in the table opens an editor field, which the
 ---calls after coe5.closeTestField edit and read. It stands on terrain, a number from coe5.testFieldTerrains() (0, Plain,
 ---when left out). With emptyEditor true it has no commander (leave commander out, and spell and standIn too), either
 ---side may be empty, and the units' commander is -1. Without allowMultipleUnique it holds one unit of a unique monster
 ---at most, and none while one lives anywhere (unique_count, unique_exists). An editor field's refusal gives its reason
----as the second value.
----@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
+---as the second value. On Windows, minimumWidth is an integer from 32 to 1536. Native setup may make the field wider.
+---Read the resulting width with coe5.testFieldState().width. Omit minimumWidth for the native default.
+---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean, minimumWidth?: integer}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
 ---@param monster integer
 ---@param spell integer|nil
 ---@param enemy integer
@@ -4233,17 +4234,160 @@ function coe5.closeTestField() end
 ---@return integer[] terrains
 function coe5.testFieldTerrains() end
 
+---The Windows stock contexts that can be verified on open. Does not load a field.
+---Reports field bounds, minimumWidthVersion, context API versions and loaded terrain rows.
+---@return table|nil info
+---@return string|nil reason
+function coe5.testFieldEnvironmentInfo() end
+
+---Read the owner's explicit stock test-field context and native template selection.
+---Windows 5.43. Reports the current plane, dimensions, siege/tower/sea flags,
+---observed stock template name and whether a replacement was selected.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldEnvironmentState() end
+
+---Windows 5.43. Read the visible state and rectangle of the owned field's
+---native battle-log overlay. Reports the native toggle action and line count
+---when available. The overlay has no reserved map space.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldLogState() end
+
+---Windows 5.43. Show or hide the owner's native battle-log overlay.
+---Requires a safe update call, outside drawing. The original visibility
+---is restored on close. Combat, message generation and reports continue.
+---@param visible boolean
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldLogVisible(visible) end
+
+---Read the native water cover and drowning predicate for a living owned actor
+---at a hypothetical anchor. Windows 5.43. Does not move, damage or board the actor.
+---@param unit integer
+---@param x integer
+---@param y integer
+---@return table|nil state fields include cellWater, willDrown, waterMobile and ship
+---@return string|nil reason
+function coe5.testFieldWaterState(unit,x,y) end
+
+---@class TestFieldDeploymentTarget
+---@field unit integer owned roster actor
+---@field generation integer|nil expected construction generation, required with a receipt
+---@field x integer exact anchor column
+---@field y integer exact anchor row
+
+---Windows 5.43. Apply a complete roster's exact anchors inside an owned field.
+---Retains verified fixed structures and scenery. Checks the entire footprint,
+---native passability, unchanged actor bodies and final anchor readback.
+---Optional initialReceipt permits only evacuation of verified native initial
+---actor overlap. Reports byteRollbackVerified separately from healthy rollback.
+---If rollback cannot be verified, close the quarantined field and use the saved setup.
+---@param targets TestFieldDeploymentTarget[]
+---@param options? {initialReceipt: integer}
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldDeployment(targets, options) end
+
+---Windows 5.43. Get one-use evidence captured by native opening for the current
+---owner and generation. A receipt is eligible only for verified initial
+---actor-only overlap and becomes invalid if the captured source changes.
+---@return table receipt version, session, token, fresh, eligible, actors, overlaps and reason
+function coe5.testFieldInitialDeployment() end
+
+---Windows 5.43. Change the owned field's duplicate-unique constructor policy
+---without rebuilding. Disabling refuses while a living duplicate of an owned
+---unit's unique group exists. Changes affect subsequent constructor calls only.
+---@param enabled boolean
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldMultipleUnique(enabled) end
+
+---@class TestFieldActorSubset
+---@field version integer 1
+---@field monster integer
+---@field width integer
+---@field height integer
+---@field maxHp integer native derived maximum after restored XP and injuries
+---@field hp integer positive native HP
+---@field xp integer
+---@field kills integer
+---@field injuryFlags integer native injury bits 20 through 30
+
+---Windows 5.43. Read supported condition fields of a living owned actor.
+---The result includes its unit and generation and sets fullState to false.
+---Other native effects, opaque state, poison and bleeding are outside the contract.
+---@param unit integer
+---@return TestFieldActorSubset|nil state
+---@return string|nil reason
+function coe5.testFieldActorState(unit) end
+
+---Windows 5.43. Restore the bounded condition subset after loadout restoration.
+---Checks monster, footprint and derived maximum health. Preserves other flags,
+---items and spells, and reports any unverified rollback.
+---@param unit integer
+---@param state TestFieldActorSubset
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldActorState(unit, state) end
+
+---Windows 5.43. Replace the owned actor's ordered known and memorized lists
+---without replacing equipment or school configuration. Use the whole configuration
+---transaction when the lists depend on a different loadout or base school level.
+---@param unit integer
+---@param state {known: integer[], memorized: integer[]}
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail
+function coe5.setTestFieldSpells(unit, state) end
+
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
----pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction
+---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction.
+---Windows-only optional capabilities include multipleUniquePolicy, battleLogVisibility and clearHeldItems.
+---battleZoom, battleViewport, battleCenter and nativeMonsterInspectVersion advertise the Windows native presentation APIs.
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
+---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
 function coe5.testFieldEditorCapabilities() end
 
----Takes one unit off your editor field: hp 0 and its cells emptied, with no death or event of the game's.
+---Takes one owned unit off your editor field and empties its cells. Windows uses permanent native retirement so
+---a removed regenerative unit cannot re-enter a later fight. Check capabilities.unitRetirement == 1 for this behavior.
+---If retirement_unverified is returned, keep the saved setup and close the field before attempting another edit.
 ---@param unit integer a unit of the field
 ---@return boolean removed false when refused (lua_refused): game_code_differs, not_open, not_editor_field, not_owner, in_fight, final_read_only, bad_unit, not_on_field, dead_unit, primary_commander (the commander of a field with one), bad_field, ambiguous_token (the unit stands on two cells), remove_failed
 ---@return string|nil reason the reason, with that false
 function coe5.removeTestFieldUnit(unit) end
+
+---Windows 5.43 owned main-menu test field only. Read the actual personal-name
+---source and the game's native formatted title for this session/generation.
+---Ordinary actors: owned_native_formatter_override (no native per-unit string
+---exists); commanders: native_commander_record, shown as "name the type".
+---Works after fighting only while the original record remains identifiable.
+---Counters show formatter use, not proof that every game surface was tested.
+---@param unit integer
+---@return table|nil state {version:1,unit:integer,generation:integer,commander:integer,custom:boolean,name:string,shown:string,storage:string,maxBytes:47,nativeLogLineBytes:63,formatterReads:integer,combatReads:integer}
+---@return string|nil reason
+function coe5.testFieldUnitName(unit) end
+
+---Guarded individual rename for a living owned editor actor, outside simulation
+---and final view. Strict UTF-8, at most47 bytes, NUL/control/bidi characters,
+---percent/comma and whitespace-only nonempty strings refuse. No truncation or
+---normalization. Empty restores the original commander record or ordinary
+---type/effect formatter. Never writes monsterName or another unit/template.
+---Native Inspect and combat use the real formatter; combat rows still truncate
+---at63 bytes for the ENTIRE line. Fonts may lack glyphs. Not campaign-save or
+---promotion/commander-conversion support. Generation/session bound; cleared on
+---field close. Failure with rollbackVerified=false requires quarantine/recovery.
+---Caps: individualNameVersion=1, individualNameMaxBytes=47, nativeLogLineBytes=63;
+---these describe support, not installed hook or successful rendering evidence.
+---@param unit integer
+---@param name string empty clears
+---@return boolean accepted
+---@return string|nil reason
+---@return table detail {version:1,maxBytes:47,rollbackVerified:boolean}
+function coe5.setTestFieldUnitName(unit, name) end
 
 ---Every unit and cell of your editor field. units holds each living unit of both sides and each unit a cell holds, in
 ---unit order, with among others unit, hp, monster, owner, generation, width, height, anchors and occupied (its cells),
@@ -4317,6 +4461,19 @@ function coe5.testFieldPlacementPreflight(monster, x, y, unit, ignoreSelf) end
 ---@return table|string detailsOrReason
 function coe5.inspectTestFieldUnit(unit, options) end
 
+---Opens the real native unit card for a temporary instance of a loaded monster type.
+---Available only on Windows 5.43 with the supported Clang 23 build and an owned idle main-menu
+---editor field after its first draw. Invoke outside BATTLE_DRAW and close the native card normally.
+---Construction uses a fresh off-field slot and preserves existing actors, terrain, unique groups
+---and the game RNG. A successful return verifies cleanup, restores the slot and reports the type.
+---Starting items are omitted. Randomized preview spells can differ from a later placed instance.
+---An unverified cleanup quarantines the field. Check the returned detail before editing again.
+---@param monster integer a loaded monster type
+---@return boolean shown
+---@return table|string detailOrReason verified preview detail on success; refusal reason on failure
+---@return table|nil refusalDetail cleanup verification and quarantine status when refused
+function coe5.inspectTestFieldMonster(monster) end
+
 ---The same card for a unit that outlived the field's last fight, as it is now.
 ---@param unit integer a unit of coe5.testFieldFinalState()
 ---@param options? {readOnly?: true}
@@ -4336,6 +4493,9 @@ function coe5.inspectTestFieldItem(item) end
 ---projectiles are kept. When the fight ran without the capture, phase is unavailable with the issue capture_hook_unavailable.
 ---@return table|nil final nil when refused (lua_refused): game_code_differs, not_open, not_owner, in_fight, no_final_state
 ---@return string|nil reason the reason, with that nil
+---Windows final snapshots include classificationVersion=1. Each generation's
+---kind and creationSource distinguish roster actors, scenery and native gates.
+---Native owner and team are reported separately, including a gate's original side.
 function coe5.testFieldFinalState() end
 
 ---Takes the keyboard for a script's text field on the test field (true), or gives it back. While you have it, typed
@@ -4373,6 +4533,83 @@ function coe5.battleScreenToCell(uiX, uiY) end
 ---@return number|nil uiY
 function coe5.battleCellToScreen(x, y) end
 
+---Windows 5.43 owned idle field view with the supported Clang 23 build. Getter reads validated native globals without
+---installing a hook; values describe the current projection, not proof that pixels were redrawn.
+---Zoom is relative to viewport-height / 20. Mutations belong after BATTLE_WAIT next() returns;
+---BATTLE_DRAW is read-only. Wait for a fresh native DRAW before processing mapped input.
+---@return {version:integer,zoom:number,minZoom:number,maxZoom:number,cellSize:number}|nil view
+---@return string|nil reason
+function coe5.testFieldZoom() end
+
+---Changes actual native cell scale/camera, with optional UI-coordinate anchor. Finite zoom 0.1..2;
+---default anchor is screen centre. Native pan bounds still apply. Retained within the same owned
+---field; caller must reapply after rebuilding. Close restores the saved scale/camera. No campaign,
+---combat or final-view mutation. Exact supported native code is required; errors are explicit.
+---@param zoom number
+---@param anchorX? number
+---@param anchorY? number
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldZoom(zoom, anchorX, anchorY) end
+
+---Experimental Windows 5.43 owned idle editor viewport, in lower-left native UI coordinates.
+---Margins are retained across window resizing. Width/height must be finite and >4, and the
+---rectangle must lie inside the native screen. Native projection globals remain shared with
+---rendering, pointer mapping, previews and Inspect. Set/Fit/Pan mutate only after native WAIT;
+---DRAW is read-only. Wait for a fresh DRAW before handling mapped input. Close restores the
+---original scale/camera. Refusal does not imply a fallback projection; unverified rollback
+---disables the view contract and retains the close recovery snapshot. Mac is unavailable.
+---@param rectangle {x:number,y:number,width:number,height:number}
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldViewport(rectangle) end
+
+---Read actual usable rectangle and projection, including reachable map origins. The two-unit
+---inner padding is included in min/maxOrigin. fits requires both axes; it describes geometric
+---fit, not a completed render or an unobscured OS window. No hook installation by this getter.
+---@return {version:integer,x:number,y:number,width:number,height:number,cellSize:number,originX:number,originY:number,minOriginX:number,maxOriginX:number,minOriginY:number,maxOriginY:number,fitsX:boolean,fitsY:boolean,fits:boolean,fieldWidth:integer,fieldHeight:integer,margin:number}|nil viewport
+---@return string|nil reason
+function coe5.testFieldViewport() end
+
+---Choose an undistorted uniform scale using actual native field columns/20 rows. Clamp to
+---0.1..2; a huge field may still return fits=false and require native arrows/middle-drag or Pan.
+---Requires a previously accepted usable rectangle. Read back actual zoom and viewport.
+---@return boolean accepted
+---@return string|nil reason
+function coe5.fitTestFieldViewport() end
+
+---Pan in native UI units, clamped to the accepted viewport's full reachable map extent.
+---The scoped native pan clamp runs before native cursor/effect-cache delta translations.
+---@param dx number finite
+---@param dy number finite
+---@return boolean accepted
+---@return string|nil reason
+function coe5.panTestFieldViewport(dx,dy) end
+
+---Windows owned idle-field input, during BATTLE_WAIT only. Returns
+---the native frame-latched cumulative wheel count as unsigned 32-bit (wraps).
+---Read-only/non-consuming; compute successive deltas modulo 2^32, initializing
+---a fresh baseline on entering the field. Discard deltas over menus, text focus,
+---panels/modals/scrollable controls; never replay them on return to the map.
+---This getter alone does not suppress native input or choose a scroll region.
+---@return integer|nil count
+---@return string|nil reason
+function coe5.testFieldPointerWheel() end
+
+---Queue a one-shot camera center for the next verified fight in this owned editor field.
+---Apply on the first authenticated combat-map reset at native combat scale. The editor's last
+---zoom is observational. Subsequent native battle panning stays available.
+---@return boolean queued
+---@return string|nil reason
+function coe5.requestTestFieldBattleCenter() end
+
+---Read the current owned session's camera request, including status and applied native geometry.
+---A queued or armed request has no observed camera position. An applied request includes
+---fieldWidth, fieldHeight, initialCellSize, initialOriginX/Y and initialScreenW/H.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldBattleCenterState() end
+
 ---A unit's items by position (0 to 19: id, -1 for none, slotType, and an item's name, cursed and permanentEffects), its
 ---schools (each magic path its monster has: templateBase, its monster's level, base, the level set, level, bonus,
 ---allowance) and its known and memorized spells. The first call on a field puts in what lets a path's level be set; it
@@ -4383,10 +4620,13 @@ function coe5.battleCellToScreen(x, y) end
 function coe5.testFieldLoadoutState(unit) end
 
 ---Sets a unit's items, path levels and spells together, reads them back, and puts the unit back as it was when anything
----fails. A cursed item comes off only with removeCursed, and an eye or a heart neither goes on nor comes off. The table
+---fails. Windows builds advertising clearHeldItems=1 accept clearHeldItems=true with twenty empty slots and the
+---original schools and ordered spells. This mode clears cursed and implanted items, preserves existing organ
+---injuries, and refuses if an active memorization depends on the removed equipment. It cannot be combined with
+---restoreKnown or removeCursed. The table
 ---says how far it got: stage validate, committed, rejected_rollback_verified or rollback_unverified.
 ---@param unit integer a unit of your editor field
----@param state {items: integer[], schools: {[1]: integer, [2]: integer}[], known: integer[], memorized: integer[], restoreKnown?: boolean, removeCursed?: {[1]: integer, [2]: integer}} items 20 item numbers (-1 for none); schools {path, level} for every magic path its monster has, level 1 to 3, or the monster's own when higher; known and memorized 60 and 30 spells at most; removeCursed {position, item}
+---@param state {items: integer[], schools: {[1]: integer, [2]: integer}[], known: integer[], memorized: integer[], restoreKnown?: boolean, removeCursed?: {[1]: integer, [2]: integer}, clearHeldItems?: boolean} items 20 item numbers (-1 for none); schools {path, level} for every magic path its monster has, level 1 to 3, or the monster's own when higher; known and memorized 60 and 30 spells at most; removeCursed {position, item}
 ---@return boolean done false when refused (lua_refused): coe5.removeTestFieldUnit's first nine, not_main_menu, training_hooks_unavailable, bad_state, bad_item_positions, bad_item, bad_schools, bad_school_level, school_not_existing, unsupported_school_level, duplicate_school, missing_school_configuration, bad_spell_list, too_many_spells, bad_spell, duplicate_spell, bad_restore_known, bad_cursed_removal, identity_changed, incomplete_native_configuration, cursed_removal_changed, cursed_removal_only, bad_existing_item, cursed_item, permanent_anatomy_item_unsupported, out_of_memory, too_many_configured_units, incompatible_slot, native_item_restriction, equipment_changes_anatomy, the memorization rules' reasons, new_spell_above_level, configuration_readback_failed, school_readback_failed, permanent_effect_changed, rollback_failed
 ---@return string|nil reason the reason, with that false
 ---@return table detail

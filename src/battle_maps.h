@@ -623,12 +623,20 @@ static void battleSeedTraceHook(const char *format, ...) {
     battleShown.valid = 1, battleShown.x = x, battleShown.y = y, battleShown.pick = -1;
 }
 
+#ifndef __APPLE__
+static void observeTestFieldNativeMap(const char *path, int replaced);
+#endif
+
 static void battleSizeTraceHook(const char *format, ...) {
     va_list ap;
     va_start(ap, format);
     int width = va_arg(ap, int), attackers = va_arg(ap, int), defenders = va_arg(ap, int), starve = va_arg(ap, int), charge = va_arg(ap, int);
     char *path = va_arg(ap, char *);
     va_end(ap);
+    width = applyTestFieldMinimumWidth(width);
+#ifndef __APPLE__
+    observeTestFieldNativeMap(path, 0);
+#endif
     battleTrace()(format, width, attackers, defenders, starve, charge, path);
     if (!battleField.active || !battleMapCount || !path) return;
     int x = battleField.x, y = battleField.y;
@@ -643,6 +651,9 @@ static void battleSizeTraceHook(const char *format, ...) {
     if (pick < 0) return;
     const char *copy = battleMapCopyFor(battleMaps[pick].f.path);
     snprintf(path, BATTLE_MAP_PATH_SIZE, "%s", copy ? copy : battleMaps[pick].f.path);
+#ifndef __APPLE__
+    observeTestFieldNativeMap(path, 1);
+#endif
     writeLog("battle_map_picked", "mod=%s path=%s x=%d y=%d terrain=%d game=%s pool=%s", battleMaps[pick].mod, battleMaps[pick].f.path, x, y, terrain,
              game[0] ? game : "-", pool);
 }

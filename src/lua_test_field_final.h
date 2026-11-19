@@ -8,6 +8,7 @@ typedef struct {
     int unit, actor, readable, hp, monster, owner, team, worldX, worldY, width, height, sprite;
     int anchors, occupied, anchorX, anchorY, layer, createdDuringFight, createdMonster, createdOwner;
     unsigned long long generation;
+    TestFieldCreationSource creationSource;
 } TestFieldFinalUnit;
 
 typedef struct {
@@ -83,6 +84,7 @@ static void captureTestFieldFinal(void) {
         TestFieldFinalUnit *u = &testFieldFinal.units[testFieldFinal.count];
         *u = (TestFieldFinalUnit){.unit = id,
                                   .actor = made->actor,
+                                  .creationSource = made->source,
                                   .generation = made->generation,
                                   .monster = -1,
                                   .owner = -1,
@@ -169,13 +171,14 @@ static void captureTestFieldFinal(void) {
             noteTestFieldFinalIssue("footprint_outside", u->unit, u->anchorX, u->anchorY);
             continue;
         }
-        if (u->actor && u->layer == 0 && safeHit) {
+        int unitLayer = u->actor || u->creationSource == TEST_FIELD_GATE;
+        if (unitLayer && u->layer == 0 && safeHit) {
             if (u->occupied != u->width * u->height) noteTestFieldFinalIssue("footprint_hit_count", u->unit, u->anchorX, u->anchorY);
             for (int dx = 0; dx < u->width; dx++)
                 for (int dy = 0; dy < u->height; dy++)
                     if (testFieldFinal.grid[(u->anchorX + dx) * BATTLE_ROWS + u->anchorY + dy].hit != u->unit)
                         noteTestFieldFinalIssue("footprint_hit_mismatch", u->unit, u->anchorX + dx, u->anchorY + dy);
-        } else if (u->actor && u->layer != 0) noteTestFieldFinalIssue("actor_on_object_layer", u->unit, u->anchorX, u->anchorY);
+        } else if (unitLayer && u->layer != 0) noteTestFieldFinalIssue("actor_on_object_layer", u->unit, u->anchorX, u->anchorY);
     }
     writeLog("test_field_final_captured",
              "session=%llu source=post_aftermath_before_upkeep units=%d cells=%d round=%d winner=%d complete=%d scene_complete=0 issues=%d",
@@ -264,6 +267,9 @@ static int lTestFieldFinalState(lua_State *L) {
     setBoolField(L, "captured", testFieldFinal.captured);
     lua_pushliteral(L, "current owned native generations and every battlefield cell; not transition history");
     lua_setfield(L, state, "coverage");
+#ifndef __APPLE__
+    setIntField(L, "classificationVersion", 1);
+#endif
     setIntField(L, "session", (lua_Integer)testFieldFinal.session);
     setIntField(L, "width", testFieldFinal.width);
     setIntField(L, "height", BATTLE_ROWS);
@@ -309,8 +315,12 @@ static int lTestFieldFinalState(lua_State *L) {
             lua_pushstring(L, inspect);
             lua_setfield(L, -2, "inspectReason");
         }
-        lua_pushstring(L, u->actor ? "actor" : "terrain");
+        int structure = u->creationSource == TEST_FIELD_GATE;
+        lua_pushstring(L, structure ? "structure" : u->actor ? "actor" : "terrain");
         lua_setfield(L, -2, "kind");
+        lua_pushstring(L, testFieldCreationSource(u->creationSource));
+        lua_setfield(L, -2, "creationSource");
+        setBoolField(L, "provenanceVerified", u->readable && u->creationSource != TEST_FIELD_UNVERIFIED);
         lua_pushstring(L, testFieldFinalStatus(u));
         lua_setfield(L, -2, "status");
         setBoolField(L, "nativeFleeMarker", u->readable && u->hp > 0 && !u->anchors && u->worldX == -2);
@@ -318,7 +328,7 @@ static int lTestFieldFinalState(lua_State *L) {
         lua_setfield(L, -2, "routeStatus");
         lua_pushstring(L, u->layer ? "object" : "unit");
         lua_setfield(L, -2, "anchorLayer");
-        lua_pushstring(L, u->actor && !u->layer ? "native_unit_hit_test" : "object_layer_has_no_unit_hit_footprint");
+        lua_pushstring(L, (u->actor || structure) && !u->layer ? "native_unit_hit_test" : "object_layer_has_no_unit_hit_footprint");
         lua_setfield(L, -2, "occupiedSource");
         lua_pushliteral(L, "native_new_unit_owned_scope");
         lua_setfield(L, -2, "provenance");

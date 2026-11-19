@@ -1355,6 +1355,7 @@
 #define RVA_BATTLE_IS_AMBUSH                   ADDR_DIFFERS(0x5804c08,         0x106cd5de4)
 #define RVA_BATTLE_AT_SEA                      ADDR_DIFFERS(0x5804c14,         0x107ee6490)
 #define RVA_BATTLE_PLANE_3_OR_4                ADDR(        0x5804c24,         0x107ee6494)
+#define RVA_BATTLE_TOWER_CONTEXT               ADDR(        0x5804c50,          MAC_NOT_LOOKED_UP)
 #define RVA_BATTLE_IS_SIEGE                    ADDR_DIFFERS(0x5804c54,         0x10c921d10)
 #define RVA_BATTLE_OVER                        ADDR_DIFFERS(0x5804c1c,         0x10c96df3c)
 #define RVA_BATTLE_NOT_A_SIEGE                 ADDR_DIFFERS(0x5804c4c,         0x1069b16b4)
@@ -1449,6 +1450,7 @@
 #define RVA_DROUGHT_MONTHS                     ADDR(       0x5822f68,          0x10ce02ee0)
 #define RVA_TRADE_BONUS_PERCENT                ADDR(        0x32ee80,          MAC_INLINED)
 #define RVA_DATE                               ADDR(        0x118890,          MAC_INLINED)
+#define RVA_INSPECT_CARD_UNIT_TYPE_CALL        ADDR(        0x1d4a3b,          MAC_NOT_LOOKED_UP)
 #define RVA_UNIT_SHOWN_NAME                    ADDR(        0x0f8520,          0x1003bb774)
 #define RVA_COMMANDER_THE_NAME                 ADDR(        0x0f8bd0,          MAC_INLINED)
 #define RVA_COMMANDER_THE_NAME_INDEX           ADDR(       0x5804c40,          0x1069b1eb0)
@@ -2818,6 +2820,13 @@
 #define RVA_WEAPON_HIT_MULTIPLY_END            ADDR(        0x0dd379,          0x1003c2d04)
 #define RVA_WEAPON_HIT_PROLOGUE_END            ADDR(        0x0dcabc,          0x1003c1ff0)
 #define RVA_WEAPON_HIT_DAMAGE_DIE_CALL         ADDR(        0x0dcd4f,          0x1003c2574)
+#define RVA_TEST_FIELD_LOG_VISIBLE               ADDR(0x43e0ac, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_X                     ADDR(0x43e444, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_Y                     ADDR(0x43e4e4, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_WIDTH                 ADDR(0x43e5ac, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_HEIGHT                ADDR(0x43e5c4, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_LAST_LINE             ADDR(0x43e614, MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_LOG_SCROLL                ADDR(0x5804e80, MAC_NOT_LOOKED_UP)
 #define RVA_BATTLE_LOG                         ADDR(        0x1005c0,          0x100581730)
 #define RVA_WEAPON_TEXT                        ADDR(        0x1cc910,          0x1005275f4)
 #define RVA_WEAPON_TEXT_CALL                   ADDR(        0x1d11f2,          0x1005274a4)
@@ -3826,10 +3835,17 @@
 #define MONSTER_FLAG_NO_COMMANDER              35
 #define MONSTER_FLAG_STANDABLE_OBJECT          62
 #define MONSTER_ABILITY_UNIQUE                 0x39
+#define RVA_TEST_FIELD_MAP_OBJECT_CALL         ADDR(        0x0874ce,          MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_GATE_CALL               ADDR(        0x0ee3d2,          MAC_NOT_LOOKED_UP)
+#define RVA_TEST_FIELD_SCATTER_CALL            ADDR(        0x0f065a,          MAC_NOT_LOOKED_UP)
 #define RVA_NEW_UNIT                           ADDR(        0x1297b0,          0x10046e828)
 #define RVA_NEW_COMMANDER                      ADDR(        0x128160,          0x10046da30)
 #define RVA_ALLOC_UNIT                         ADDR(        0x10fff0,          0x10046d184)
 #define RVA_ALLOC_TEMP_UNIT                    ADDR(        0x110410,          MAC_INLINED)
+#ifndef __APPLE__
+#define RVA_NEW_UNIT_ALLOC_TEMP_CALL           0x1299c5
+#define RVA_UNIT_STATS_SHOW_SPELLS             0x58243a4
+#endif
 #define RVA_RESERVED_UNIT                      ADDR(        0x1f1ef0,          MAC_INLINED)
 #define RVA_RESERVED_COMMANDER                 ADDR(        WIN_INLINED,       MAC_INLINED)
 #define RVA_RESERVE_UNITS                      ADDR(        0x1e8630,        0x10050bfc4)
