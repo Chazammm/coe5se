@@ -24,6 +24,7 @@ coe5.wrap('MAIN_MENU_WAIT', function(next, ...)
     ran = true
     local out, open = {}, false
     local ok, why = xpcall(function()
+        assert(coe5.testFieldEditorCapabilities().battleLogVisibility == 1)
         local spear = assert(coe5.findMonster('Spearman'))
         local accepted, detail = coe5.openTestField{
             terrain = 0, emptyEditor = true, friends = {{spear, 2}}, enemies = {{spear, 2}}

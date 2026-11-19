@@ -249,6 +249,7 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
 #ifndef __APPLE__
     setIntField(L, "unitRetirement", lifecycle);
     setIntField(L, "clearHeldItems", lifecycle);
+    setIntField(L, "battleLogVisibility", lifecycle);
     int provenance = lifecycle && testFieldProvenanceCallsValid();
     setIntField(L, "structureProvenance", provenance);
     setIntField(L, "exactDeploymentVersion", provenance);

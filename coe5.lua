@@ -4344,7 +4344,8 @@ function coe5.setTestFieldActorState(unit, state) end
 function coe5.setTestFieldSpells(unit, state) end
 
 ---What this CoE5SE's test field offers, for a script to check before it opens a field: uniqueGuard, state,
----pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction
+---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction.
+---Windows-only optional capabilities include multipleUniquePolicy, battleLogVisibility and clearHeldItems.
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
 ---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities
