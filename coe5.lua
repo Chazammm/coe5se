@@ -4247,6 +4247,21 @@ function coe5.testFieldEnvironmentInfo() end
 ---@return string|nil reason
 function coe5.testFieldEnvironmentState() end
 
+---Windows 5.43. Read the visible state and rectangle of the owned field's
+---native battle-log overlay. Reports the native toggle action and line count
+---when available. The overlay has no reserved map space.
+---@return table|nil state
+---@return string|nil reason
+function coe5.testFieldLogState() end
+
+---Windows 5.43. Show or hide the owner's native battle-log overlay.
+---Requires a safe update call, outside drawing. The original visibility
+---is restored on close. Combat, message generation and reports continue.
+---@param visible boolean
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldLogVisible(visible) end
+
 ---Read the native water cover and drowning predicate for a living owned actor
 ---at a hypothetical anchor. Windows 5.43. Does not move, damage or board the actor.
 ---@param unit integer
@@ -4280,6 +4295,14 @@ function coe5.setTestFieldDeployment(targets, options) end
 ---actor-only overlap and becomes invalid if the captured source changes.
 ---@return table receipt version, session, token, fresh, eligible, actors, overlaps and reason
 function coe5.testFieldInitialDeployment() end
+
+---Windows 5.43. Change the owned field's duplicate-unique constructor policy
+---without rebuilding. Disabling refuses while a living duplicate of an owned
+---unit's unique group exists. Changes affect subsequent constructor calls only.
+---@param enabled boolean
+---@return boolean accepted
+---@return string|nil reason
+function coe5.setTestFieldMultipleUnique(enabled) end
 
 ---@class TestFieldActorSubset
 ---@field version integer 1

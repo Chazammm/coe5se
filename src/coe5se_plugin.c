@@ -1977,6 +1977,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #ifndef __APPLE__
 #include "lua_test_field_names.h"
 #include "lua_test_field_actor_state.h"
+#include "lua_test_field_log.h"
 #endif
 #include "lua_mod_export.h"
 #include "lua_game_calls.h"
@@ -1999,6 +2000,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_test_field_environment.h"
 #include "lua_test_field_actor_body.h"
 #include "lua_test_field_deployment.h"
+#include "lua_test_field_unique_policy.h"
 #endif
 #include "lua_transport.h"
 #include "transport_deck.h"

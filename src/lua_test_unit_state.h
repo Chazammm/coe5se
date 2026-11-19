@@ -252,6 +252,7 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "structureProvenance", provenance);
     setIntField(L, "exactDeploymentVersion", provenance);
     setIntField(L, "initialDeploymentVersion", provenance);
+    setIntField(L, "multipleUniquePolicy", provenance);
     setIntField(L, "individualNameVersion", lifecycle);
     setIntField(L, "individualNameMaxBytes", COMMANDER_NAME_SIZE - 1);
     setIntField(L, "nativeLogLineBytes", 63);

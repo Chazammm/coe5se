@@ -19,6 +19,7 @@ static int testFieldFinalViewActive(void);
 static void turnOffTestFieldTraining(void);
 #ifndef __APPLE__
 static int testFieldNameClose(void);
+static int restoreTestFieldLog(void);
 #endif
 static int installBattleMapHooks(void);
 #ifndef __APPLE__
@@ -180,6 +181,10 @@ static int closeTestFieldNow(void) {
     if (testField.editor) {
 #ifndef __APPLE__
         cleaned = testFieldNameClose();
+        if (!restoreTestFieldLog()) {
+            testFieldLife.failed = testFieldLife.pending = 1;
+            cleaned = 0;
+        }
 #endif
         cleaned = removeTestFieldUnits() && cleaned;
     } else clearTestBattleSquare(x, y);

@@ -15,6 +15,7 @@ static int lTestFieldEnvironmentState(lua_State *L);
 static int lTestFieldWaterState(lua_State *L);
 static int lSetTestFieldDeployment(lua_State *L);
 static int lTestFieldInitialDeployment(lua_State *L);
+static int lSetTestFieldMultipleUnique(lua_State *L);
 #endif
 
 static const luaL_Reg LUA_COE5[] = {
@@ -32,8 +33,10 @@ static const luaL_Reg LUA_COE5[] = {
     {"testFieldEnvironmentInfo", lTestFieldEnvironmentInfo}, {"testFieldEnvironmentState", lTestFieldEnvironmentState},
     {"testFieldWaterState", lTestFieldWaterState},
     {"setTestFieldDeployment", lSetTestFieldDeployment}, {"testFieldInitialDeployment", lTestFieldInitialDeployment},
+    {"setTestFieldMultipleUnique", lSetTestFieldMultipleUnique},
     {"testFieldUnitName", lTestFieldUnitName}, {"setTestFieldUnitName", lSetTestFieldUnitName},
     {"testFieldActorState", lTestFieldActorState}, {"setTestFieldActorState", lSetTestFieldActorState},
+    {"testFieldLogState", lTestFieldLogState}, {"setTestFieldLogVisible", lSetTestFieldLogVisible},
     {"setTestFieldSpells", lSetTestFieldSpells},
     {"startPreviewWorld", lStartPreviewWorld}, {"endPreviewWorld", lEndPreviewWorld},
     {"previewWorldActive", lPreviewWorldActive}, {"declaredPlanes", lDeclaredPlanes},
