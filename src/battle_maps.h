@@ -629,6 +629,7 @@ static void battleSizeTraceHook(const char *format, ...) {
     int width = va_arg(ap, int), attackers = va_arg(ap, int), defenders = va_arg(ap, int), starve = va_arg(ap, int), charge = va_arg(ap, int);
     char *path = va_arg(ap, char *);
     va_end(ap);
+    width = applyTestFieldMinimumWidth(width);
     battleTrace()(format, width, attackers, defenders, starve, charge, path);
     if (!battleField.active || !battleMapCount || !path) return;
     int x = battleField.x, y = battleField.y;
