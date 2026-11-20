@@ -14,6 +14,7 @@
 
 #include "font_fallback_layout.h"
 static unsigned int modFileNow(void);
+static const char *includingModName(void);
 static int pickLettersWithoutFont(void);
 static void noteTranslatorLine(const char *word, const char *args, int mod, int level, int inBlock, int rank, int taken);
 static int isLanguageRecordWord(const char *word);
@@ -29,6 +30,8 @@ typedef struct {
     int open;
     int tags;
     int pickReached;
+    int openReached;
+    int pickShut;
     char tag[LANGUAGE_TAG_MAX + 1];
 } LanguageScan;
 
@@ -353,6 +356,10 @@ static int languageLineHook(const char *text, int own, int mod, int level) {
         return 0;
     }
     if (level != 2) return 1;
+    if (!strcmp(word, INCLUDE_WORD)) {
+        if (!own || includingModName()) return 0;
+        return !languages.rank;
+    }
     if (!strcmp(word, "translation") || !strcmp(word, "fontfile")) {
         int taken = languages.rank && takesLanguageLine(word, at + n);
         noteTranslatorLine(word, at + n, mod, level, 1, languages.rank, taken);
@@ -375,10 +382,26 @@ static void languageWordLine(const char *args, int mod, int level) {
     refuseC5mLine(LANGUAGE_WORD, modName(mod), "language_not_here", "line=%d text=%.60s", G32(RVA_MOD_LINE), args);
 }
 
+typedef struct { int open, rank; char tag[LANGUAGE_TAG_MAX + 1]; } LanguageBlockKept;
+
+static LanguageBlockKept keepLanguageBlock(void) {
+    LanguageBlockKept k = {languages.open && languages.file == modFileNow(), languages.rank, ""};
+    memcpy(k.tag, languages.tag, sizeof k.tag);
+    return k;
+}
+
+static void resumeLanguageBlock(const LanguageBlockKept *k) {
+    languages.open = k->open;
+    languages.file = modFileNow();
+    languages.rank = k->rank;
+    memcpy(languages.tag, k->tag, sizeof languages.tag);
+}
+
 // ---- Content-free lines (ADR 0017) ------------------------------------------------------------
 static int scanLanguageLine(const char *word, const char *args, int mayDeclare, LanguageScan *scan) {
     if (strcmp(word, LANGUAGE_WORD)) return scan->open;
     scan->open = mayDeclare;
+    scan->openReached = 0;
     char line[LANGUAGE_TAG_MAX + 64], tag[LANGUAGE_TAG_MAX + 2];
     snprintf(line, sizeof line, "%.*s", (int)languageLineLength(args), args);
     const char *p = line;
@@ -386,7 +409,7 @@ static int scanLanguageLine(const char *word, const char *args, int mayDeclare, 
     if (n < 0 || n > LANGUAGE_TAG_MAX || !isLanguageTag(tag)) return 1;
     if (!scan->tags) snprintf(scan->tag, sizeof scan->tag, "%.*s", LANGUAGE_TAG_MAX, tag), scan->tags = 1;
     else if (_stricmp(scan->tag, tag)) scan->tags = 2;
-    if (languages.pick[0] && languageRank(tag, languages.pick)) scan->pickReached = 1;
+    if (languages.pick[0] && languageRank(tag, languages.pick)) scan->openReached = 1, scan->pickReached |= !scan->pickShut;
     return 1;
 }
 

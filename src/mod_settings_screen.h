@@ -773,8 +773,14 @@ static void translatorsBeforePass(int level), translatorsAfterPass(int level);
 static void fallbackFontsBeforePass(int level), fallbackFontsAfterPass(int level);
 static void drawnTextAroundPass(int level);
 static void modDescriptionsAfterPass(int level);
+#ifndef __APPLE__
+static void captureTestFieldSceneryTemplates(int level);
+#endif
 static void modsRunHook(int level) {
     if (level == 2) beginContentPass();
+#ifndef __APPLE__
+    captureTestFieldSceneryTemplates(level);
+#endif
     loadLuaCommandsFiles();
     syncLuaScriptsBeforePass(level);
     unsigned int spellPasses = spellPassCount();

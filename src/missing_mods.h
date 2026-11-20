@@ -111,8 +111,10 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
     FILE *f = fopen(path, "rb");
     if (!f) return 0;
     static char line[MOD_LINE_MAX + 2];
-    int outerLanguage = scan->language.open;
-    scan->language.open = 0;
+    int outerLanguage = scan->language.open, outerReached = scan->language.openReached, outerShut = scan->language.pickShut;
+    int c5mLines = kind == SCAN_INCLUDED && includeFileIsC5m(path);
+    scan->language.open = kind == SCAN_INCLUDED && outerLanguage;
+    if (scan->language.open && !outerReached) scan->language.pickShut = 1;
     long at = ftell(f);
     while (fgets(line, sizeof line, f)) {
         long next = ftell(f);
@@ -125,8 +127,9 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
             scan->longLine = !ends;
         } else {
             const char *own = kind == SCAN_C5M ? sidecarLineText(line) : NULL, *text = own ? own : line;
+            if (c5mLines && sidecarLineText(line)) text = sidecarLineText(line);
             char file[INCLUDE_FILE_MAX + 2], included[MAX_PATH];
-            if ((own || kind == SCAN_SIDECAR) && !scan->language.open && readIncludeLine(text, file, sizeof file) > 0) {
+            if ((own || kind == SCAN_SIDECAR) && readIncludeLine(text, file, sizeof file) > 0) {
                 hashContentLine(text, &scan->hash);
                 scan->settingsOpen = 0;
                 if (!findIncludedFile(mod, file, included, sizeof included)) scanModFile(mod, included, scan, SCAN_INCLUDED);
@@ -137,7 +140,7 @@ static int scanModFile(int mod, const char *path, ModFileScan *scan, int kind) {
     }
     fclose(f);
     scan->longLine = 0;
-    scan->language.open = outerLanguage;
+    scan->language.open = outerLanguage, scan->language.openReached = outerReached, scan->language.pickShut = outerShut;
     return 1;
 }
 

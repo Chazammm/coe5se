@@ -241,6 +241,7 @@ static void readSidecarSettingsText(IniParse *r, const char *text, int in);
 
 static void readIncludedSettings(IniParse *r, const char *file, int in) {
     char path[MAX_PATH], *text;
+    file = includeFileName(file);
     finishSidecarBlock(r);
     endSettingsFile(r);
     if (!r->dir || findIncludedFileIn(r->dir, r->mod, file, path, sizeof path) || settingsIncludeRead(r->mod, path)) return;
@@ -262,9 +263,14 @@ static void readSidecarSettingsText(IniParse *r, const char *text, int in) {
     char raw[INI_LINE_MAX + 1], word[24];
     SettingProblem p;
     int inLanguage = 0;
+    int c5mLines = in >= SETTINGS_IN_INCLUDED && includeFileIsC5m(includeLabelText(in - SETTINGS_IN_INCLUDED));
     for (int line = 1; *text; line++) {
         int tooLong;
         text = copySettingsLine(text, raw, &tooLong);
+        if (c5mLines && sidecarLineText(raw)) {
+            const char *own = sidecarLineText(raw);
+            memmove(raw, own, strlen(own) + 1);
+        }
         if (in == SETTINGS_IN_C5M) {
             const char *own = sidecarLineText(raw);
             if (!own) {

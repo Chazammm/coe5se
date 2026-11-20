@@ -295,14 +295,15 @@ static struct {
 
 typedef struct { char *text; size_t size; int rank; } ModBlockText;
 
-static void readDescriptionFile(int mod, const char *path, int kind, ModBlockText *description, ModBlockText *name) {
+static void readDescriptionFile(int mod, const char *path, int kind, int rank, ModBlockText *description, ModBlockText *name) {
     FILE *f = fopen(path, "rb");
     if (!f) return;
     static char line[MOD_LINE_MAX + 2];
     char word[32], tag[LANGUAGE_TAG_MAX + 2];
-    int rank = -1;
+    int c5mLines = kind == SCAN_INCLUDED && includeFileIsC5m(path);
     while (fgets(line, sizeof line, f)) {
         const char *own = kind == SCAN_C5M ? sidecarLineText(line) : line, *text = own ? own : line;
+        if (c5mLines && sidecarLineText(line)) own = text = sidecarLineText(line);
         const char *at = text + strspn(text, " \t\r\n");
         size_t n = strcspn(at, " \t\r\n\"#");
         snprintf(word, sizeof word, "%.*s", (int)(n < sizeof word ? n : sizeof word - 1), at);
@@ -314,8 +315,8 @@ static void readDescriptionFile(int mod, const char *path, int kind, ModBlockTex
             continue;
         }
         char included[MAX_PATH], file[INCLUDE_FILE_MAX + 2];
-        if (rank < 0 && own && kind != SCAN_INCLUDED && readIncludeLine(text, file, sizeof file) > 0) {
-            if (!findIncludedFile(mod, file, included, sizeof included)) readDescriptionFile(mod, included, SCAN_INCLUDED, description, name);
+        if (rank && own && kind != SCAN_INCLUDED && readIncludeLine(text, file, sizeof file) > 0) {
+            if (!findIncludedFile(mod, file, included, sizeof included)) readDescriptionFile(mod, included, SCAN_INCLUDED, rank, description, name);
             continue;
         }
         int isDescription = !strcmp(word, "description");
@@ -338,9 +339,9 @@ static void readModDescription(int mod, ModBlockText *description, ModBlockText 
     description->text[0] = name->text[0] = '\0';
     description->rank = name->rank = 1;
     if (buildPath(path, sizeof path, __func__, "%s" PATH_SEP "%s" MOD_FILE_SUFFIX, modFolder(mod), modName(mod)))
-        readDescriptionFile(mod, path, SCAN_C5M, description, name);
+        readDescriptionFile(mod, path, SCAN_C5M, -1, description, name);
     if (buildPath(path, sizeof path, __func__, "%s" PATH_SEP "%s" SIDECAR_SUFFIX, modFolder(mod), modName(mod)))
-        readDescriptionFile(mod, path, SCAN_SIDECAR, description, name);
+        readDescriptionFile(mod, path, SCAN_SIDECAR, -1, description, name);
 }
 
 static void forgetModDescriptions(void) {

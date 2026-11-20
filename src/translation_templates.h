@@ -598,13 +598,14 @@ static int translatorFileNameOk(const char *name) {
 static void writeTranslatorTemplate(FILE *f, int mod, const char *pick, int reads) {
     const char *name = translators.mods[mod].name, *languageName = translatorLanguageName(pick);
     fprintf(f, "# CoE5SE: translation template for %s\n", name);
-    fprintf(f, "# Every text CoE5SE read from the mod's files, once each. A filled line is the translation the game shows now.\n");
-    fprintf(f, "# A line starting with # is not translated yet: the translation goes in its second quotes, then the # comes off.\n");
-    fprintf(f, "# The lines go in a .c5se of a mod, under the language line. Written again at each mods pass: copy before editing.\n");
+    fprintf(f, "# Every translatable string CoE5SE found in this mod, listed once each.\n");
+    fprintf(f, "# Uncommented lines are currently active translations. Commented lines (#) still need translation:\n");
+    fprintf(f, "# fill in the second quoted string and remove the leading #.\n");
+    fprintf(f, "# Copy this file into your mod before editing (CoE5SE overwrites this template whenever mods reload).\n");
     if (pick[0] && languageName[0]) fprintf(f, "language \"%s\" \"%s\"\n", pick, languageName);
     else if (pick[0]) fprintf(f, "language \"%s\"\n", pick);
-    else if (reads) fprintf(f, "# Default on CoE5SE's page in Mod Settings: each enabled translation mod reads in its own language. The block starts with a language tag and the language's own name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
-    else fprintf(f, "# No language picked on CoE5SE's page in Mod Settings. The block starts with a language tag and the language's own name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
+    else if (reads) fprintf(f, "# Language is set to Default in Mod Settings (each enabled translation mod uses its declared language).\n# Start your file with a language tag and display name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
+    else fprintf(f, "# No language selected in Mod Settings. Start your file with a language tag and display name:\n# language \"fr\" \"Fran\xc3\xa7" "ais\"\n");
     const char *file = NULL;
     for (int i = 0; i < translators.textCount; i++) {
         const TranslatorText *t = &translators.texts[i];

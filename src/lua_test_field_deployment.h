@@ -213,7 +213,12 @@ static int lSetTestFieldDeployment(lua_State *L) {
             blockedObject=object;blockedX=x;blockedY=y;
             if(!testFieldDeploymentRemember(&snap,object)){reason="unverified_object";goto done;}
             TestFieldActorBody *b=&snap.bodies[object];
-            if(b->actor || b->structure || (b->source!=2 && b->source!=3) || b->owner!=31 || b->x!=snap.x || b->y!=snap.y) {reason="unverified_object";goto done;}
+            if(b->actor || b->structure || b->owner!=31 || b->x!=snap.x || b->y!=snap.y ||
+                (b->source!=TEST_FIELD_MAP_OBJECT && b->source!=TEST_FIELD_SCATTER && b->source!=TEST_FIELD_OWNED_SCENERY)) {
+                reason="unverified_object";goto done;
+            }
+            const TestFieldMadeUnit *made=&testFieldLife.actors[object];
+            if(b->source==TEST_FIELD_OWNED_SCENERY && (made->sceneryX!=x || made->sceneryY!=y)) {reason="unverified_object";goto done;}
             if(++snap.objectAnchors[object]!=1){reason="ambiguous_object_anchor";goto done;}
         }
     }
@@ -258,6 +263,9 @@ static int lSetTestFieldDeployment(lua_State *L) {
             blockedX=x;blockedY=y;
             if(cover[cell]>=0){blockedObject=cover[cell];kind=snap.byUnit[cover[cell]]?"target_overlap":"structure";reason="blocked";goto done;}
             int object=objects[cell];
+            if(object>=0 && snap.bodies[object].source==TEST_FIELD_OWNED_SCENERY && !testFieldLife.actors[object].sceneryStandable) {
+                blockedObject=object;kind="terrain";reason="blocked";goto done;
+            }
             if(object>=0 && row->object<0){row->object=object;row->objectX=x;row->objectY=y;}
             cover[cell]=row->unit;
         }

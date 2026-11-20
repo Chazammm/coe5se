@@ -19,6 +19,15 @@ static const char *sidecarLineText(const char *line) {
 #define INCLUDE_WORD     "include"
 #define INCLUDE_FILE_MAX 198
 
+static const char *includeFileName(const char *file) {
+    return strncmp(file, "./", 2) ? file : file + 2;
+}
+
+static int includeFileIsC5m(const char *file) {
+    size_t n = strlen(file), e = sizeof MOD_FILE_SUFFIX - 1;
+    return n > e && !strcmp(file + n - e, MOD_FILE_SUFFIX);
+}
+
 static int readIncludeLine(const char *line, char *file, size_t size) {
     while (*line == ' ' || *line == '\t' || *line == '\r' || *line == '\n') line++;
     size_t n = sizeof INCLUDE_WORD - 1;

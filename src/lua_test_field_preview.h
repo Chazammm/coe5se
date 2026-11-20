@@ -180,12 +180,12 @@ static int lTestFieldPlacementPreflight(lua_State *L) {
                 object = testFieldUnitCovering(cx, cy, BATTLE_CELL_OBJECT, ignoreSelf ? (int)unit : -1, &uncertain);
                 status = uncertain ? "unknown" : actor >= 0 ? "occupied" : object >= 0 ? "terrain" : "clear";
 #ifndef __APPLE__
-                if (!uncertain && actor < 0 && object >= 0 && testFieldSiegeObjectCandidate(object)) {
+                if (!uncertain && actor < 0 && object >= 0 && testFieldDeploymentObjectCandidate(object)) {
                     int fits = x >= 0 && y >= 0 && x <= view.width - f.width && y <= view.height - f.height;
                     if (unit < 0) {
                         status = "unknown";
                         decision = "requires_instance";
-                    } else if (fits && testFieldSiegeObjectPassable((int)unit, (int)x, (int)y, object)) {
+                    } else if (fits && testFieldDeploymentObjectPassable((int)unit, (int)x, (int)y, object)) {
                         status = "clear";
                         decision = "native_instance_accepted";
                     } else decision = "native_move_rejected";

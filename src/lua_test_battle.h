@@ -997,19 +997,23 @@ static int testFieldTokenCovering(int x, int y, int layer, int self, int strict)
 }
 
 #ifndef __APPLE__
-static int testFieldSiegeObjectCandidate(int object) {
-    if (!testField.environmentBorrowed || !testField.setupComplete || !G32(RVA_BATTLE_IS_SIEGE) ||
-        testFieldEnvironmentProblem() || !isTestFieldUnit(object)) return 0;
+static int testFieldDeploymentObjectCandidate(int object) {
+    if (!testField.setupComplete || testFieldEnvironmentProblem() || !isTestFieldUnit(object)) return 0;
     const TestFieldMadeUnit *made = &testFieldLife.actors[object];
     size_t at = (size_t)object * UNIT_SIZE;
-    return (made->source == TEST_FIELD_MAP_OBJECT || made->source == TEST_FIELD_SCATTER) &&
+    int eligible = made->source == TEST_FIELD_OWNED_SCENERY ? made->sceneryStandable :
+        testField.environmentBorrowed && G32(RVA_BATTLE_IS_SIEGE) &&
+        (made->source == TEST_FIELD_MAP_OBJECT || made->source == TEST_FIELD_SCATTER);
+    return eligible &&
            G16(RVA_UNIT_HP + at) > 0 && G16(RVA_UNIT_PLAYER + at) == made->created.owner &&
            G16(RVA_UNIT_MONSTER + at) == made->created.monster;
 }
 
-static int testFieldSiegeObjectPassable(int unit, int x, int y, int object) {
-    return isTestFieldActor(unit) && testFieldSiegeObjectCandidate(object) &&
-           GAME_FN(int (*)(int, int, int, int), RVA_BATTLE_CAN_STAND)(unit, x, y, 0);
+static int testFieldDeploymentObjectPassable(int unit, int x, int y, int object) {
+    if (!isTestFieldActor(unit) || !testFieldDeploymentObjectCandidate(object)) return 0;
+    int (*canStand)(int, int, int, int) = GAME_FN(int (*)(int, int, int, int), RVA_BATTLE_CAN_STAND);
+    return canStand(unit, x, y, 0) &&
+        (testFieldLife.actors[object].source != TEST_FIELD_OWNED_SCENERY || canStand(unit, x, y, 4));
 }
 #endif
 
@@ -1056,7 +1060,7 @@ static int lMoveTestFieldUnit(lua_State *L) {
             int actor = testFieldTokenCovering(cx, cy, 0, (int)unit, editor);
             int object = testFieldTokenCovering(cx, cy, BATTLE_CELL_OBJECT, (int)unit, editor);
 #ifndef __APPLE__
-            if (editor && actor < 0 && object >= 0 && testFieldSiegeObjectPassable((int)unit, (int)x, (int)y, object)) continue;
+            if (editor && actor < 0 && object >= 0 && testFieldDeploymentObjectPassable((int)unit, (int)x, (int)y, object)) continue;
 #endif
             if (actor >= 0 || object >= 0) reason = "blocked";
         }

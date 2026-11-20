@@ -23,6 +23,7 @@ static struct {
     int lineMod, lineLevel;
     int including;
     int includeLabel;
+    int includeC5m;
     char includeFile[INCLUDE_FILE_MAX + 1];
     unsigned int file;
     IncludedFile *included;
@@ -86,10 +87,13 @@ static int modPathHook(char *buf, size_t size, const char *fmt, ...) {
 }
 
 static const char *findIncludedFileIn(const char *folder, const char *name, const char *file, char *path, size_t size) {
-    static const char *const ENDINGS[2] = {SIDECAR_SUFFIX, SIDECAR_SUFFIX};
+    static const char *const ENDINGS[2] = {SIDECAR_SUFFIX, MOD_FILE_SUFFIX};
     static const char *const REASONS[4] = {"bad_file", "file_not_found", "file_wrong_case", "file_link"};
     char own[MOD_NAME_MAX + sizeof SIDECAR_SUFFIX], dotted[INCLUDE_FILE_MAX + 3];
+    file = includeFileName(file);
     snprintf(own, sizeof own, "%s" SIDECAR_SUFFIX, name);
+    if (!_stricmp(file, own)) return "own_file";
+    snprintf(own, sizeof own, "%s" MOD_FILE_SUFFIX, name);
     if (!_stricmp(file, own)) return "own_file";
     if (strlen(file) > INCLUDE_FILE_MAX) return "bad_file";
     snprintf(dotted, sizeof dotted, "./%s", file);
@@ -117,16 +121,20 @@ static void readIncludedFile(int mod, int level, const char *file) {
     char outer[GAME_PATH_SIZE];
     memcpy(outer, GAME_PTR(RVA_EVENT_FILE), sizeof outer);
     int line = G32(RVA_MOD_LINE), reading = sidecar.reading, owner = sidecar.mod;
+    LanguageBlockKept block = keepLanguageBlock();
     finishSpellBlock();
     sidecar.reading = sidecar.including = 1;
     sidecar.mod = mod;
     sidecar.includeLabel = includeLabelIndex(file);
+    sidecar.includeC5m = includeFileIsC5m(file);
     snprintf(sidecar.includeFile, sizeof sidecar.includeFile, "%s", file);
     sidecar.file++;
+    resumeLanguageBlock(&block);
     int read = nextRunOneMod(mod, level);
     finishSpellBlock();
-    sidecar.reading = reading, sidecar.including = 0, sidecar.mod = owner;
+    sidecar.reading = reading, sidecar.including = sidecar.includeC5m = 0, sidecar.mod = owner;
     sidecar.file++;
+    resumeLanguageBlock(&block);
     memcpy(GAME_PTR(RVA_EVENT_FILE), outer, sizeof outer);
     G32(RVA_MOD_LINE) = line;
     if (read <= 0) writeLogWarning("include_not_read", "reason=file_not_read mod=%s file=%s level=%d", modName(mod), file, level);
@@ -134,18 +142,18 @@ static void readIncludedFile(int mod, int level, const char *file) {
 
 static void takeIncludeLine(int mod, int level, int kind, const char *file) {
     char path[MAX_PATH];
-    const char *name = modName(mod);
     if (kind < 0) {
         refuseIncludeLine(mod, 1, "bad_include_line", "-", "Include needs one quoted file: include \"folder/file%s\"", SIDECAR_SUFFIX);
         return;
     }
+    const char *name = includeFileName(file);
     if (G32(RVA_EVENT_STATE)) {
         refuseIncludeLine(mod, 1, "include_in_event", file, "Include inside an event");
         return;
     }
     const char *reason = findIncludedFile(mod, file, path, sizeof path);
     if (reason && !strcmp(reason, "own_file")) {
-        refuseIncludeLine(mod, 1, reason, file, "Include of %.60s%s, which is read already", name, SIDECAR_SUFFIX);
+        refuseIncludeLine(mod, 1, reason, file, "Include of %.120s, which is read already", file);
         return;
     }
     if (reason && (!strcmp(reason, "file_not_found") || !strcmp(reason, "file_wrong_case"))) {
@@ -157,18 +165,18 @@ static void takeIncludeLine(int mod, int level, int kind, const char *file) {
         return;
     }
     if (reason) {
-        refuseIncludeLine(mod, 1, reason, file, "Bad include file '%.120s': a %s in the mod's folder, letters, digits, _ - . and / only, no ..", file,
-                          SIDECAR_SUFFIX);
+        refuseIncludeLine(mod, 1, reason, file, "Bad include file '%.120s': a %s or %s in the mod's folder, letters, digits, _ - . and / only, no ..",
+                          file, SIDECAR_SUFFIX, MOD_FILE_SUFFIX);
         return;
     }
     for (int i = 0; i < sidecar.includedCount; i++)
-        if (!strcmp(sidecar.included[i].file, file)) {
+        if (!strcmp(sidecar.included[i].file, name)) {
             refuseIncludeLine(mod, 1, "duplicate_include", file, "Include file '%.120s' included already", file);
             return;
         }
     if (growList((void **)&sidecar.included, &sidecar.includedCapacity, sidecar.includedCount + 1, sizeof *sidecar.included))
-        snprintf(sidecar.included[sidecar.includedCount++].file, sizeof sidecar.included[0].file, "%s", file);
-    readIncludedFile(mod, level, file);
+        snprintf(sidecar.included[sidecar.includedCount++].file, sizeof sidecar.included[0].file, "%.*s", INCLUDE_FILE_MAX, name);
+    readIncludedFile(mod, level, name);
 }
 
 static char *modLineReadHook(char *buf, int size, void *file) {
@@ -176,12 +184,10 @@ static char *modLineReadHook(char *buf, int size, void *file) {
     sidecar.prefixedLine = 0;
     if (!got || !sidecar.prefixedLines) return got;
     const char *text = buf;
-    if (!sidecar.reading) {
-        text = sidecarLineText(buf);
-        if (text) {
-            memset((char *)text - (sizeof SIDECAR_LINE_PREFIX - 1), ' ', sizeof SIDECAR_LINE_PREFIX - 1);
-            sidecar.prefixedLine = 1;
-        }
+    if (!sidecar.reading || sidecar.includeC5m) {
+        const char *after = sidecarLineText(buf);
+        if (after) memset((char *)after - (sizeof SIDECAR_LINE_PREFIX - 1), ' ', sizeof SIDECAR_LINE_PREFIX - 1);
+        if (!sidecar.reading) text = after, sidecar.prefixedLine = after != NULL;
     }
     if (languageLineHook(text ? text : buf, text != NULL, sidecar.lineMod, sidecar.lineLevel)) {
         sidecar.prefixedLine = 0;

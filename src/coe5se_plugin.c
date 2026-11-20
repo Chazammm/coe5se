@@ -1997,6 +1997,9 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #ifndef __APPLE__
 #include "lua_test_field_monster_inspect.h"
 #endif
+#ifndef __APPLE__
+#include "lua_test_field_scenery.h"
+#endif
 #include "lua_loading.h"
 #include "game_data.h"
 #include "content_travel.h"

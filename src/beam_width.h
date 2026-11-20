@@ -147,7 +147,8 @@ static void beamFlyLaunched(int attacker, int weapon, int x, int y) {
 }
 
 #define BEAM_TRAIL_SLOTS     512
-#define BEAM_TRAIL_SIZE_PER  4.0f
+#define BEAM_TRAIL_SQUARE    4.0f
+#define BEAM_TRAIL_ALPHA     0.6f
 
 static int beamFlyDraws(int index) {
     return index >= 0 && index < FLY_WEAPONS_MAX && beamFly[index].width >= 2 && beamFly[index].lines ? beamFly[index].width : 1;
@@ -190,10 +191,12 @@ static void beamFlyDraw(int index, void (*draw)(int index)) {
     draw(index);
     int to = G32(RVA_PARTICLE_FREE_HINT) - from;
     if (to > slots) to = slots;
-    float grow = BEAM_TRAIL_SIZE_PER * (float)beamFly[index].width;
+    float grow = 1.0f + BEAM_TRAIL_SQUARE * (float)(beamFly[index].width - 1);
     for (int i = 0; i < to; i++) {
         unsigned char *p = particles + (size_t)(from + i) * PARTICLE_SIZE;
-        if (wasFree[i] && *(unsigned short *)(p + PARTICLE_FLAGS) != 0xffff) *(float *)(p + PARTICLE_SIZE_PX) *= grow;
+        if (!wasFree[i] || *(unsigned short *)(p + PARTICLE_FLAGS) == 0xffff) continue;
+        *(float *)(p + PARTICLE_SIZE_PX) *= grow;
+        *(float *)(p + PARTICLE_ALPHA) *= BEAM_TRAIL_ALPHA;
     }
 }
 
