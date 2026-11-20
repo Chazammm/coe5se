@@ -66,12 +66,14 @@ typedef enum {
     TEST_FIELD_MAP_OBJECT,
     TEST_FIELD_SCATTER,
     TEST_FIELD_GATE,
+    TEST_FIELD_OWNED_SCENERY,
 } TestFieldCreationSource;
 
 typedef struct {
     unsigned long long generation;
     TestFieldCreationSource source;
     int actor, beforeTaken, afterTaken, cleanup;
+    int sceneryX, sceneryY, scenerySlide;
     TestFieldUnitSnapshot created, before, after;
 } TestFieldMadeUnit;
 
@@ -98,7 +100,7 @@ static int isTestFieldBattler(int unit) {
 }
 
 static const char *testFieldCreationSource(TestFieldCreationSource source) {
-    static const char *const NAMES[] = {"unverified", "owned_actor_creation", "native_map_loader", "native_terrain_placement", "native_gate_replacement"};
+    static const char *const NAMES[] = {"unverified", "owned_actor_creation", "native_map_loader", "native_terrain_placement", "native_gate_replacement", "owned_scenery_placement"};
     return NAMES[source];
 }
 
