@@ -2,7 +2,7 @@
 
 // The exact stock templates verified for this Windows object's constructor.
 static const struct { int monster; const char *name; } testFieldSceneryTypes[] = {
-    {1404, "Stone Wall"}, {1634, "Cabbage"},
+    {1404, "Stone Wall"}, {1448, "Palisade Wall"}, {1634, "Cabbage"},
 };
 static int testFieldSceneryRequest = -1;
 static const char *testFieldSceneryRequestName;

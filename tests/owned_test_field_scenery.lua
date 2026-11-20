@@ -12,6 +12,7 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
     local ok,why=xpcall(function()
         local kinds=assert(api.testFieldSceneryTypes())
         assert(kinds.version==1)
+        local tested={}
         assert(api.openTestField({emptyEditor=true,terrain=0}))
         opened=true
         local ordinary=assert(api.findMonster('Spearman'))
@@ -42,8 +43,9 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
             assert(api.removeTestFieldScenery(id,state.session,row.generation))
             assert(api.battleObjectAt(b.x,b.y)<0 and #assert(api.testFieldSceneryState()).objects==0)
             assert(not api.removeTestFieldScenery(id,state.session,row.generation))
+            tested[kind.monster]=true
         end
-        assert(#kinds.types>=2)
+        assert(tested[1404] and tested[1448] and tested[1634])
         assert(api.closeTestField())
         opened=false
         assert(assert(api.testFieldLifecycle()).complete)
