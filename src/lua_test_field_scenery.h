@@ -1,8 +1,11 @@
 #pragma once
 
 // The exact stock templates verified for this Windows object's constructor.
-static const struct { int monster; const char *name; } testFieldSceneryTypes[] = {
-    {1404, "Stone Wall"}, {1448, "Palisade Wall"}, {1634, "Cabbage"},
+typedef struct { int monster; const char *name; int standable; } TestFieldSceneryType;
+static const TestFieldSceneryType testFieldSceneryTypes[] = {
+    {1394, "Stone Parapet (Medium Cover)", 1}, {1395, "Stone Parapet (Heavy Cover)", 1},
+    {1404, "Stone Wall", 0}, {1446, "Palisade Parapet", 1}, {1448, "Palisade Wall", 0},
+    {1462, "Wooden Stairs", 1}, {1511, "Stone Stairs", 1}, {1634, "Cabbage", 0},
 };
 static int testFieldSceneryRequest = -1;
 static const char *testFieldSceneryRequestName;
@@ -21,14 +24,14 @@ static TestFieldCall testFieldSceneryLookupCall = {
 };
 
 // Returns the verified constructor argument for this loaded definition.
-static const char *testFieldSceneryName(int id) {
+static const TestFieldSceneryType *testFieldSceneryType(int id) {
     for (size_t i = 0; i < sizeof testFieldSceneryTypes / sizeof *testFieldSceneryTypes; i++) {
         if (testFieldSceneryTypes[i].monster != id) continue;
         const char *name = testFieldSceneryTypes[i].name;
         if (!isUsedMonster(id) || !isMonsterSpriteValid(id) || monsterMadeByName(id) ||
             strncmp((const char *)monsterRecord(id), name, MONSTER_NAME_SIZE) ||
             monsterTokenWidth(id) != 1 || monsterTokenHeight(id) != 1) return NULL;
-        return name;
+        return &testFieldSceneryTypes[i];
     }
     return NULL;
 }
@@ -58,12 +61,14 @@ static int lTestFieldSceneryTypes(lua_State *L) {
     int count = 0;
     for (size_t i = 0; version && i < sizeof testFieldSceneryTypes / sizeof *testFieldSceneryTypes; i++) {
         int id = testFieldSceneryTypes[i].monster;
-        if (!testFieldSceneryName(id)) continue;
-        lua_createtable(L, 0, 5);
+        const TestFieldSceneryType *type = testFieldSceneryType(id);
+        if (!type) continue;
+        lua_createtable(L, 0, 6);
         setIntField(L, "monster", id);
         setIntField(L, "owner", 31);
         setIntField(L, "width", 1);
         setIntField(L, "height", 1);
+        setBoolField(L, "standable", type->standable);
         lua_pushliteral(L, "object");
         lua_setfield(L, -2, "layer");
         lua_rawseti(L, -2, ++count);
@@ -73,7 +78,7 @@ static int lTestFieldSceneryTypes(lua_State *L) {
 }
 
 // Finds an unoccupied one-cell target on either battlefield layer.
-static const char *testFieldSceneryTarget(lua_State *L, int arg, int *x, int *y) {
+static const char *testFieldSceneryTarget(lua_State *L, int arg, int *x, int *y, int *occupant) {
     lua_Integer cx, cy;
     int width = G32(RVA_BATTLE_WIDTH);
     if (width < 1 || width > BATTLE_COLUMNS_MAX ||
@@ -81,8 +86,10 @@ static const char *testFieldSceneryTarget(lua_State *L, int arg, int *x, int *y)
         cx < 0 || cx >= width || cy < 0 || cy >= BATTLE_ROWS) return "off_field";
     *x = (int)cx;
     *y = (int)cy;
-    if (testFieldTokenCovering(*x, *y, 0, -1, 1) >= 0 ||
-        testFieldTokenCovering(*x, *y, BATTLE_CELL_OBJECT, -1, 1) >= 0) return "blocked";
+    if (testFieldTokenCovering(*x, *y, BATTLE_CELL_OBJECT, -1, 1) >= 0) return "blocked";
+    int actor = testFieldTokenCovering(*x, *y, 0, -1, 1);
+    if (actor >= 0 && (!occupant || !isTestFieldActor(actor))) return "blocked";
+    if (occupant) *occupant = actor;
     return NULL;
 }
 
@@ -123,7 +130,7 @@ static int lTestFieldSceneryState(lua_State *L) {
         if (!testFieldSceneryIdentity(unit, made->generation, made->sceneryX, made->sceneryY))
             return refuseTestFieldRead(L, call, "scenery_identity_unverified");
         TestFieldUnitSnapshot row = readTestFieldUnitSnapshot(unit);
-        lua_createtable(L, 0, 12);
+        lua_createtable(L, 0, 13);
         setIntField(L, "unit", unit);
         setIntField(L, "generation", (lua_Integer)made->generation);
         setIntField(L, "monster", row.monster);
@@ -133,6 +140,7 @@ static int lTestFieldSceneryState(lua_State *L) {
         setIntField(L, "y", made->sceneryY);
         setIntField(L, "width", 1);
         setIntField(L, "height", 1);
+        setBoolField(L, "standable", made->sceneryStandable);
         lua_pushliteral(L, "object");
         lua_setfield(L, -2, "anchorLayer");
         lua_pushliteral(L, "owned_scenery_placement");
@@ -148,26 +156,42 @@ static int lAddTestFieldScenery(lua_State *L) {
     const char *call = "coe5.addTestFieldScenery";
     const char *reason = testFieldSceneryProblem(L, call, 1);
     lua_Integer monster = -1;
-    const char *name = NULL;
-    int x = -1, y = -1;
+    const TestFieldSceneryType *type = NULL;
+    int x = -1, y = -1, occupant = -1, actorX = -1, actorY = -1;
     if (!reason && (!readTestFieldInteger(L, 1, &monster) || monster < 0 || monster >= MONSTER_TABLE_MAX ||
-        !(name = testFieldSceneryName((int)monster)))) reason = "unsupported_scenery";
-    if (!reason) reason = testFieldSceneryTarget(L, 2, &x, &y);
+        !(type = testFieldSceneryType((int)monster)))) reason = "unsupported_scenery";
+    if (!reason) reason = testFieldSceneryTarget(L, 2, &x, &y, type->standable ? &occupant : NULL);
+    if (!reason && occupant >= 0 && !unitBattleCell(occupant, &actorX, &actorY)) reason = "unverified_occupant";
     if (!reason && !pointTestFieldCall(&testFieldSceneryLookupCall)) reason = "scenery_lookup_unavailable";
     if (reason) return refuseTestFieldRead(L, call, reason);
 
     unsigned char *cell = battleCell(x, y);
     unsigned char old[BATTLE_CELL_SIZE], expected[BATTLE_CELL_SIZE];
+    unsigned char actorBody[UNIT_SIZE];
+    const unsigned char *actorRecord = occupant >= 0 ? GAME_PTR(RVA_UNITS + (size_t)occupant * UNIT_SIZE) : NULL;
+    unsigned char *actorAnchor = occupant >= 0 ? battleCell(actorX, actorY) : NULL;
+    unsigned long long actorGeneration = occupant >= 0 ? testFieldLife.generations[occupant] : 0;
+    if (actorRecord) memcpy(actorBody, actorRecord, sizeof actorBody);
     memcpy(old, cell, sizeof old);
     const unsigned long long serial = testFieldLife.serial;
+    if (actorAnchor && *(int *)actorAnchor != occupant) return refuseTestFieldRead(L, call, "unverified_occupant");
     enterTestFieldCode();
     testFieldSceneryRequest = (int)monster;
-    testFieldSceneryRequestName = name;
+    testFieldSceneryRequestName = type->name;
+    // The terrain constructor expects a unit-free target. Stage the one owned
+    // anchor while it runs and restore it before checking native passability.
+    if (actorAnchor) *(int *)actorAnchor = -1;
     int unit = GAME_FN(int (*)(const char *, int, int, int, unsigned long long, int, int),
-                       RVA_BATTLE_PLACE_TERRAIN_UNIT)(name, x, y, -1, 0, 0, 0);
+                       RVA_BATTLE_PLACE_TERRAIN_UNIT)(type->name, x, y, -1, 0, 0, 0);
     testFieldSceneryRequest = -1;
     testFieldSceneryRequestName = NULL;
     leaveTestFieldCode();
+    if (actorAnchor && *(int *)actorAnchor == -1) *(int *)actorAnchor = occupant;
+    if (actorRecord && (!isTestFieldActor(occupant) || actorGeneration != testFieldLife.generations[occupant] ||
+        *(int *)actorAnchor != occupant || memcmp(actorBody, actorRecord, sizeof actorBody))) {
+        testFieldLife.pending = testFieldLife.failed = 1;
+        return refuseTestFieldRead(L, call, "scenery_occupant_changed");
+    }
     if (unit < 0 && serial == testFieldLife.serial && !memcmp(old, cell, sizeof old) && !testFieldLife.failed)
         return refuseTestFieldRead(L, call, "native_scenery_refused");
     if (unit < 0 && testFieldLife.serial == serial + 1) {
@@ -186,8 +210,10 @@ static int lAddTestFieldScenery(lua_State *L) {
     memcpy(expected, old, sizeof expected);
     memcpy(expected + BATTLE_CELL_OBJECT, &unit, sizeof unit);
     memset(expected + BATTLE_CELL_OBJECT_SLIDE, 0, sizeof(int));
+    int (*canStand)(int, int, int, int) = GAME_FN(int (*)(int, int, int, int), RVA_BATTLE_CAN_STAND);
     if (made->actor || made->created.monster != monster || memcmp(expected, cell, sizeof expected) ||
-        !testFieldSceneryIdentity(unit, made->generation, x, y)) {
+        !testFieldSceneryIdentity(unit, made->generation, x, y) ||
+        (occupant >= 0 && (!canStand(occupant, actorX, actorY, 0) || !canStand(occupant, actorX, actorY, 4)))) {
         if (retireTestFieldUnit(unit)) {
             memcpy(cell, old, sizeof old);
             return refuseTestFieldRead(L, call, "native_scenery_rejected");
@@ -198,6 +224,7 @@ static int lAddTestFieldScenery(lua_State *L) {
     made->source = TEST_FIELD_OWNED_SCENERY;
     made->sceneryX = x;
     made->sceneryY = y;
+    made->sceneryStandable = type->standable;
     memcpy(&made->scenerySlide, old + BATTLE_CELL_OBJECT_SLIDE, sizeof made->scenerySlide);
     testFieldInitialDeploymentReset();
     lua_pushinteger(L, unit);
@@ -224,7 +251,8 @@ static int lMoveTestFieldScenery(lua_State *L) {
     int unit, x, y;
     TestFieldMadeUnit *made = reason ? NULL : testFieldSceneryHandle(L, &unit);
     if (!reason && !made) reason = "stale_scenery";
-    if (!reason) reason = testFieldSceneryTarget(L, 4, &x, &y);
+    if (!reason && testFieldTokenCovering(made->sceneryX, made->sceneryY, 0, -1, 1) >= 0) reason = "scenery_occupied";
+    if (!reason) reason = testFieldSceneryTarget(L, 4, &x, &y, NULL);
     if (reason) return refuseTestFieldRead(L, call, reason);
     unsigned char *source = battleCell(made->sceneryX, made->sceneryY), *dest = battleCell(x, y);
     unsigned char beforeFrom[BATTLE_CELL_SIZE], beforeTo[BATTLE_CELL_SIZE];
@@ -258,6 +286,7 @@ static int lRemoveTestFieldScenery(lua_State *L) {
     int unit;
     TestFieldMadeUnit *made = reason ? NULL : testFieldSceneryHandle(L, &unit);
     if (!reason && !made) reason = "stale_scenery";
+    if (!reason && testFieldTokenCovering(made->sceneryX, made->sceneryY, 0, -1, 1) >= 0) reason = "scenery_occupied";
     if (reason) return refuseTestFieldRead(L, call, reason);
     unsigned char *cell = battleCell(made->sceneryX, made->sceneryY);
     unsigned char underlying[BATTLE_CELL_SIZE];

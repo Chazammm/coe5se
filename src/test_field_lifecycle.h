@@ -73,7 +73,7 @@ typedef struct {
     unsigned long long generation;
     TestFieldCreationSource source;
     int actor, beforeTaken, afterTaken, cleanup;
-    int sceneryX, sceneryY, scenerySlide;
+    int sceneryX, sceneryY, scenerySlide, sceneryStandable;
     TestFieldUnitSnapshot created, before, after;
 } TestFieldMadeUnit;
 

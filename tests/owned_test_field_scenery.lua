@@ -32,6 +32,7 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
             assert(#state.objects==1)
             local row=state.objects[1]
             assert(row.unit==id and row.monster==kind.monster and row.owner==31 and row.anchorLayer=='object')
+            assert(row.width==1 and row.height==1 and row.standable==kind.standable)
             assert(api.battleObjectAt(a.x,a.y)==id and api.battleUnitAt(a.x,a.y)<0)
             assert(not api.moveTestFieldScenery(id,state.session,row.generation+1,b.x,b.y))
             assert(api.moveTestFieldScenery(id,state.session,row.generation,b.x,b.y))
@@ -45,7 +46,24 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
             assert(not api.removeTestFieldScenery(id,state.session,row.generation))
             tested[kind.monster]=true
         end
-        assert(tested[1404] and tested[1448] and tested[1634])
+        for _,monster in ipairs({1394,1395,1404,1446,1448,1462,1511,1634}) do assert(tested[monster],monster) end
+        local actor=assert(api.addTestFieldUnits('friends',{{ordinary,1}}))[1]
+        assert(api.moveTestFieldUnit(actor,10,10))
+        for _,kind in ipairs(kinds.types) do
+            if kind.standable then
+                local object=assert(api.addTestFieldScenery(kind.monster,10,10))
+                local state=assert(api.testFieldSceneryState())
+                local generation=state.objects[1].generation
+                assert(api.battleUnitAt(10,10)==actor and api.battleObjectAt(10,10)==object)
+                local removed,why=api.removeTestFieldScenery(object,state.session,generation)
+                assert(not removed and why=='scenery_occupied' and api.battleUnitAt(10,10)==actor)
+                assert(api.moveTestFieldUnit(actor,11,10))
+                assert(api.moveTestFieldUnit(actor,10,10))
+                assert(api.moveTestFieldUnit(actor,11,10))
+                assert(api.removeTestFieldScenery(object,state.session,generation))
+                assert(api.battleObjectAt(10,10)<0 and api.moveTestFieldUnit(actor,10,10))
+            end
+        end
         assert(api.closeTestField())
         opened=false
         assert(assert(api.testFieldLifecycle()).complete)
