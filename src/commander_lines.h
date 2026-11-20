@@ -155,6 +155,7 @@ static int dispatchCommanderLineClick(int id) {
     return 1;
 }
 
+static int luaCallbackRetired(int i);
 static int addCommanderLineFor(void *caller, const char *label, const char *tip, int icon, const float *colour, int lua) {
     if (!label || !label[0]) {
         refuseApiCall(caller, "addCommanderLine", "no_label", "tooltip=%s", tip ? tip : "");
@@ -173,16 +174,19 @@ static int addCommanderLineFor(void *caller, const char *label, const char *tip,
         refuseApiCall(caller, "addCommanderLine", "site_unavailable", "label=%s", label);
         return -1;
     }
-    int id = commanderLineId(commanderLineCount);
+    int at = 0;
+    while (at < commanderLineCount && !luaCallbackRetired(commanderLines[at].lua)) at++;
+    int id = commanderLineId(at);
     if (id < 0) {
         refuseApiCall(caller, "addCommanderLine", "no_free_id", "label=%s lines=%d", label, commanderLineCount);
         return -1;
     }
-    if (!growList((void **)&commanderLines, &commanderLineCapacity, commanderLineCount + 1, sizeof commanderLines[0])) {
+    if (at == commanderLineCount && !growList((void **)&commanderLines, &commanderLineCapacity, commanderLineCount + 1, sizeof commanderLines[0])) {
         refuseApiCall(caller, "addCommanderLine", "out_of_memory", "label=%s", label);
         return -1;
     }
-    CommanderLine *line = &commanderLines[commanderLineCount++];
+    if (at == commanderLineCount) commanderLineCount++;
+    CommanderLine *line = &commanderLines[at];
     noteApiCut(caller, "addCommanderLine", "label", label, COMMANDER_LINE_LABEL_MAX);
     noteApiCut(caller, "addCommanderLine", "tooltip", tip ? tip : "", COMMANDER_LINE_TIP_MAX);
     snprintf(line->label, sizeof line->label, "%.63s", label);

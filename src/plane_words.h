@@ -335,9 +335,33 @@ static const struct { const char *word; int kind, id; } PLANE_NUMBER_WORDS[] = {
     {"startplane", PLANE_REF_CLASS, CLASS_ABILITY_STARTPLANE},
 };
 
-static const struct { const char *word; int arg; } PLANE_EVENT_WORDS[] = {
-    {"+plane", 0}, {"-plane", 0}, {"randloc", 0}, {"+minterrains", 2}, {"-minterrains", 2}, {"+minunits", 2}, {"-minunits", 2},
+static const struct { const char *word; int arg, textsAfter; } PLANE_EVENT_WORDS[] = {
+    {"+plane", 0, 0}, {"-plane", 0, 0}, {"randloc", 0, 0}, {"+minterrains", 2, 0}, {"-minterrains", 2, 0}, {"+minunits", 2, 1}, {"-minunits", 2, 1},
 };
+
+static int gameQuotedTexts(const char *s) {
+    int n = 0, open = 0;
+    for (; *s; s++)
+        if (*s == '"') n += open, open = !open;
+    return n;
+}
+
+static const char *planeEventNameAt(const char *line, size_t len) {
+    int arg = -1, textsAfter = 0;
+    for (size_t i = 0; i < sizeof PLANE_EVENT_WORDS / sizeof PLANE_EVENT_WORDS[0]; i++)
+        if (spellWordIs(line, len, PLANE_EVENT_WORDS[i].word)) arg = PLANE_EVENT_WORDS[i].arg, textsAfter = PLANE_EVENT_WORDS[i].textsAfter;
+    if (arg < 0) return NULL;
+    const char *at = line + len;
+    for (int n = 0; n < arg; n++) {
+        while (*at == ' ' || *at == '\t') at++;
+        const char *close = *at == '"' ? strchr(at + 1, '"') : NULL;
+        at = close ? close + 1 : at + strcspn(at, " \t");
+    }
+    while (*at == ' ' || *at == '\t') at++;
+    if (*at != '"') return NULL;
+    const char *close = strchr(at + 1, '"');
+    return close && gameQuotedTexts(close + 1) >= textsAfter ? at : NULL;
+}
 
 typedef struct {
     int kind, record, id;
@@ -485,18 +509,8 @@ static void resolvePlaneNames(int planesKnown) {
 static const char *planeNameEventLine(const char *line, int level, const char *mod) {
     if (line[0] != '+' && line[0] != '-' && line[0] != 'r') return line;
     size_t len = strcspn(line, " \t");
-    int arg = -1;
-    for (size_t i = 0; i < sizeof PLANE_EVENT_WORDS / sizeof PLANE_EVENT_WORDS[0]; i++)
-        if (spellWordIs(line, len, PLANE_EVENT_WORDS[i].word)) arg = PLANE_EVENT_WORDS[i].arg;
-    if (arg < 0 || level == 4) return line;
-    const char *at = line + len;
-    for (int n = 0; n < arg; n++) {
-        while (*at == ' ' || *at == '\t') at++;
-        const char *close = *at == '"' ? strchr(at + 1, '"') : NULL;
-        at = close ? close + 1 : at + strcspn(at, " \t");
-    }
-    while (*at == ' ' || *at == '\t') at++;
-    if (*at != '"') return line;
+    const char *at = planeEventNameAt(line, len);
+    if (!at || level == 4) return line;
     char word[16], name[PLANE_NAME_SIZE + 2];
     snprintf(word, sizeof word, "%.*s", (int)(len < sizeof word ? len : sizeof word - 1), line);
     const char *rest = at;
@@ -721,9 +735,7 @@ static int declinedPlaneLine(const char *line, size_t len, int mod, int level) {
 
 static int declinedPlaneEventLine(const char *line) {
     size_t len = strcspn(line, " \t");
-    for (size_t i = 0; i < sizeof PLANE_EVENT_WORDS / sizeof PLANE_EVENT_WORDS[0]; i++)
-        if (spellWordIs(line, len, PLANE_EVENT_WORDS[i].word) && strchr(line, '"')) return 1;
-    return 0;
+    return planeEventNameAt(line, len) != NULL;
 }
 
 static void planeWordsBeforePass(int level) {

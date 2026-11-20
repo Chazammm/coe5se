@@ -301,6 +301,14 @@ static ModContentNote *findModContentNote(const char *name) {
     return NULL;
 }
 
+static void noteModScriptsLoading(const char *name, const char *folder) {
+    ModContentNote *note = findModContentNote(name);
+    if (!note) return;
+    u64 hash = note->noMultiplayer ? CONTENT_HASH_START : hashScriptsUnder(folder);
+    if (hash != note->scriptHash) writeLog("mod_script_hash_retaken", "mod=%s", name);
+    note->scriptHash = hash;
+}
+
 static void noteModContent(int mod) {
     if (mod < 0 || mod > G32(RVA_MOD_LAST_INDEX)) return;
     ModContentNote *note = findModContentNote(modName(mod));

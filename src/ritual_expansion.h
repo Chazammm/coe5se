@@ -17,6 +17,7 @@ _Static_assert(RITUAL_TABLE_SLOTS <= 0xffff, "the Mac's bounds hold the table's 
 #define RITUAL_LEVEL_OFFSET       0x34
 #define RITUAL_ROW_CASTABLE_BASE  1000
 #define RITUAL_ROW_GREYED_BASE    0x3000
+#define GAME_RITUAL_ROW_GREYED    3000
 _Static_assert(RITUAL_ROW_GREYED_BASE == RITUAL_ROW_GREYED && RITUAL_ROW_CASTABLE_BASE == RITUAL_ROW_CASTABLE,
                "jazzy_api.h names the row ids the moved table uses");
 _Static_assert(RITUAL_ROW_GREYED_BASE - RITUAL_ROW_CASTABLE_BASE > LAST_MOD_RITUAL_SLOT &&
@@ -67,6 +68,13 @@ static unsigned int ritualTableRva(void) {
     return ritualExpansionActive ? (unsigned int)(ritualTable - gameBase) : RVA_RITUAL_TABLE;
 }
 static int ritualSlotCount(void) { return ritualExpansionActive ? RITUAL_SLOT_CAP : VANILLA_RITUAL_SLOTS; }
+
+static long long ritualRightClickSlot(int id) {
+    long long greyed = ritualExpansionActive ? RITUAL_ROW_GREYED_BASE : GAME_RITUAL_ROW_GREYED;
+    long long magnitude = id < 0 ? -(long long)id : (long long)id;
+    return magnitude - RITUAL_ROW_CASTABLE_BASE < greyed - RITUAL_ROW_CASTABLE_BASE ? magnitude - RITUAL_ROW_CASTABLE_BASE
+                                                                                     : magnitude - greyed;
+}
 
 static void expandRitualTableLine(const char *args, int mod, int level) {
     (void)level;

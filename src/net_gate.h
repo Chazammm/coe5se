@@ -9,7 +9,8 @@ typedef enum { LUA_CLASS_CONTENT, LUA_CLASS_PERSONAL, LUA_CLASS_OFF } LuaClass;
     X(SITE_KEYBOARD_SHORTCUTS_WAIT) X(SITE_MAP_DRAW) X(SITE_MAP_MENU_BUTTON_TEXT) X(SITE_MAP_SCREEN_WAIT) X(SITE_MESSAGES_WAIT) \
     X(SITE_MESSAGE_BOX_WAIT) X(SITE_MOD_BANNER_DRAW) X(SITE_RECRUIT_WAIT) X(SITE_RITUAL_SCREEN_ROW) X(SITE_SQUARE_INFO_BUTTON_ROW) \
     X(SITE_SQUARE_INFO_SCREEN) X(SITE_SQUARE_INFO_WAIT) X(SITE_TOOLTIP_LINE_DRAW) X(SITE_TOP_BAR_INCOME) X(SITE_SQUARE_PANEL_WRAP) X(SITE_UNIT_LIST_WAIT) \
-    X(SITE_VIEW_ARMY_WAIT) X(SITE_WARN_WAIT) X(SITE_CEREMONY_SCREEN_ROW) X(SITE_CEREMONY_SCREEN_WAIT)
+    X(SITE_VIEW_ARMY_WAIT) X(SITE_WARN_WAIT) X(SITE_CEREMONY_SCREEN_ROW) X(SITE_CEREMONY_SCREEN_WAIT) \
+    X(SITE_RITUAL_SCREEN_WAIT)
 
 static int isPersonalSite(CallSite site) {
 #define PERSONAL_CASE(s) case s:
@@ -201,7 +202,8 @@ static const char *const PERSONAL_CLOSED_CALLS[] = {
     "coe5.chooseMemorized", "coe5.cleanSquare", "coe5.clearPlaneTint", "coe5.closeTestField", "coe5.commanderLearnRitual",
     "coe5.commanderUseItems", "coe5.conscription", "coe5.cureAffliction", "coe5.damageUnitPlain", "coe5.declaredPlanes",
     "coe5.destroyEnchantsAt", "coe5.destroyGateway", "coe5.digTunnelSquare", "coe5.drawTestField", "coe5.endPreviewWorld",
-    "coe5.fightTestField", "coe5.fireTestField", "coe5.fixPortals", "coe5.forestShepherdSpawn", "coe5.gameEvents", "coe5.gen.addGroundItems",
+    "coe5.fightTestField", "coe5.fireTestField", "coe5.fixAction", "coe5.fixAfter", "coe5.fixCommand", "coe5.fixPortals",
+    "coe5.fixTrigger", "coe5.forestShepherdSpawn", "coe5.gameEvents", "coe5.gen.addGroundItems",
     "coe5.gen.decorateSquare", "coe5.gen.drawRiver", "coe5.gen.findCaveSpot", "coe5.gen.findSpotByNeighbours",
     "coe5.gen.fixDiagonals", "coe5.gen.floodPlane", "coe5.gen.heatBlob", "coe5.gen.linkNewPortal", "coe5.gen.markAt",
     "coe5.gen.markBlob", "coe5.gen.markNearTerrain", "coe5.gen.markRect", "coe5.gen.markRiver", "coe5.gen.markVoidNear",
@@ -337,6 +339,15 @@ static int luaModCommandOpenFor(NetRole role, LuaClass cls, int level) {
     }
 }
 
+static int commandFixOpenFor(NetRole role, LuaClass cls) {
+    switch (role) {
+    case NET_ROLE_SINGLE: return 1;
+    case NET_ROLE_HOST:
+    case NET_ROLE_CLIENT: return cls == LUA_CLASS_CONTENT;
+    default: return 0;
+    }
+}
+
 static const char *luaCallRefusalFor(NetRole role, LuaClass cls, const char *name, int inTurn) {
     if (role == NET_ROLE_SINGLE) return NULL;
     if (role == NET_ROLE_OFFICIAL) return "official_game";
@@ -432,6 +443,22 @@ static const char *const REPLAY_UNDONE_WRITES[] = {"coe5.battleBanishUnit", "coe
 static int writeUndoneInReplay(const char *name) {
     for (int i = 0; i < REPLAY_UNDONE_WRITE_COUNT; i++)
         if (!strcmp(name, REPLAY_UNDONE_WRITES[i])) return 1;
+    return 0;
+}
+
+static const char *const REPLAY_OUTLIVING_WRITES[] = {
+    "coe5.addPlayerBlessing", "coe5.alterTerrain", "coe5.bolsterBlessing", "coe5.cleanSquare", "coe5.commanderUseItems", "coe5.destroyEnchantsAt",
+    "coe5.destroyGateway", "coe5.digTunnelSquare", "coe5.fixPortals", "coe5.initSquareCorpses", "coe5.initSquareGems", "coe5.moveEnchants",
+    "coe5.moveGems", "coe5.newPortalPair", "coe5.orderBurnForest", "coe5.orderChopForest", "coe5.orderEatVillage", "coe5.orderSlaveHunt",
+    "coe5.putRareSquare", "coe5.queueGameEvent", "coe5.revealDisc", "coe5.revealMap", "coe5.revealPortalExits", "coe5.revealTerrainOnPlane",
+    "coe5.ruinSquare", "coe5.runModEvent", "coe5.sendMessage", "coe5.setRandomEventsOff", "coe5.setSeenDisc", "coe5.setSquareOwner",
+    "coe5.swapLocations", "coe5.swapSquares", "coe5.useSpecialSite", "coe5.worldNews",
+};
+#define REPLAY_OUTLIVING_WRITE_COUNT ((int)(sizeof REPLAY_OUTLIVING_WRITES / sizeof REPLAY_OUTLIVING_WRITES[0]))
+
+static int writeOutlivesReplay(const char *name) {
+    for (int i = 0; i < REPLAY_OUTLIVING_WRITE_COUNT; i++)
+        if (!strcmp(name, REPLAY_OUTLIVING_WRITES[i])) return 1;
     return 0;
 }
 

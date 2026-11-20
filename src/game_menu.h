@@ -458,15 +458,63 @@ static int boundMapScreenWait(int a, int b) {
     return id;
 }
 
+static long long ritualRightClickSlot(int id);
+static int ritualSlotCount(void);
+#define RITUAL_SCREEN_DEPTH_MAX 8
+typedef struct { int kept, scroll, resetA; float top; } RitualScreenKept;
+static RitualScreenKept ritualScreenKept[RITUAL_SCREEN_DEPTH_MAX];
+static int ritualScreenDepth;
+static int (*nextRitualScreenGameWait)(int, int);
+static int keepRitualScreenScroll(int a, int b) {
+    int id = nextRitualScreenGameWait(a, b);
+    if (ritualScreenDepth < 1 || ritualScreenDepth > RITUAL_SCREEN_DEPTH_MAX) return id;
+    RitualScreenKept *k = &ritualScreenKept[ritualScreenDepth - 1];
+    k->scroll = G32(RVA_LAYOUT_WINDOWS + LAYOUT_WINDOW_SCROLL);
+    k->top = GF(RVA_LAYOUT_WINDOWS + LAYOUT_WINDOW_TOP);
+    k->resetA = G32(RVA_SCREEN_RESET_A);
+    k->kept = 1;
+    return id;
+}
+
+static int (*nextRitualScreenWait)(int, int);
+static int boundRitualScreenWait(int a, int b) {
+    siteResultMod[SITE_RITUAL_SCREEN_WAIT] = NULL;
+    int depth = ++ritualScreenDepth;
+    RitualScreenKept *k = depth <= RITUAL_SCREEN_DEPTH_MAX ? &ritualScreenKept[depth - 1] : NULL;
+    static int deepLogged;
+    if (k) k->kept = 0;
+    else if (!deepLogged++) writeLogError("ritual_screen_scroll_unkept", "reason=too_deep depth=%d max=%d", depth, RITUAL_SCREEN_DEPTH_MAX);
+    int id = nextRitualScreenWait(a, b);
+    ritualScreenDepth--;
+    if (k && k->kept) {
+        G32(RVA_LAYOUT_WINDOWS + LAYOUT_WINDOW_SCROLL) = k->scroll;
+        GF(RVA_LAYOUT_WINDOWS + LAYOUT_WINDOW_TOP) = k->top;
+        G32(RVA_SCREEN_RESET_A) = k->resetA;
+    }
+    if (id > -RITUAL_ROW_CASTABLE) return id;
+    long long slot = ritualRightClickSlot(id);
+    int slots = ritualSlotCount();
+    const char *mod = siteResultMod[SITE_RITUAL_SCREEN_WAIT];
+    if (slot >= slots) {
+        refuseLuaCall(mod ? mod : "?", "RITUAL_SCREEN_WAIT", "ritual_past_table", "id=%d slot=%lld slots=%d", id, slot, slots);
+        return 0;
+    }
+    return id;
+}
+
 static void installWaitIdBounds(void) {
     char owner[64];
     moduleFileName((void *)boundUnitListWait, owner, sizeof owner);
     const WrapPlace outermost = {.priority = WRAP_PRIORITY_DEFAULT, .layer = WRAP_LAYER_OUTERMOST};
     int unitList = insertWrap(SITE_UNIT_LIST_WAIT, (void *)boundUnitListWait, (void **)&nextUnitListWait, outermost, owner, NULL);
     int mapScreen = insertWrap(SITE_MAP_SCREEN_WAIT, (void *)boundMapScreenWait, (void **)&nextMapScreenWait, outermost, owner, NULL);
-    writeLog("wait_id_bounds_installed", "unit_list=%d map_screen=%d", unitList, mapScreen);
+    int ritualScreen = insertWrap(SITE_RITUAL_SCREEN_WAIT, (void *)boundRitualScreenWait, (void **)&nextRitualScreenWait, outermost, owner, NULL) &&
+                       insertWrap(SITE_RITUAL_SCREEN_WAIT, (void *)keepRitualScreenScroll, (void **)&nextRitualScreenGameWait,
+                                  (WrapPlace){.priority = INT_MIN}, owner, NULL);
+    writeLog("wait_id_bounds_installed", "unit_list=%d map_screen=%d ritual_screen=%d", unitList, mapScreen, ritualScreen);
 }
 
+static int luaCallbackRetired(int i);
 static int addGameMenuLineFor(void *caller, const char *label, const char *tip, int (*visible)(void), int (*onClick)(void), int lua,
                               int section, const char *sectionName) {
     if (!label || !label[0]) {
@@ -490,11 +538,14 @@ static int addGameMenuLineFor(void *caller, const char *label, const char *tip, 
         refuseApiCall(caller, "addGameMenuLine", "site_unavailable", "label=%s section=%d", label, section);
         return 0;
     }
-    if (!growList((void **)&menuLines, &menuLineCapacity, menuLineCount + 1, sizeof menuLines[0])) {
+    int at = 0;
+    while (at < menuLineCount && !luaCallbackRetired(menuLines[at].lua)) at++;
+    if (at == menuLineCount && !growList((void **)&menuLines, &menuLineCapacity, menuLineCount + 1, sizeof menuLines[0])) {
         refuseApiCall(caller, "addGameMenuLine", "out_of_memory", "label=%s", label);
         return 0;
     }
-    MenuLine *line = &menuLines[menuLineCount++];
+    if (at == menuLineCount) menuLineCount++;
+    MenuLine *line = &menuLines[at];
     noteApiCut(caller, "addGameMenuLine", "label", label, (int)sizeof line->label - 1);
     noteApiCut(caller, "addGameMenuLine", "tooltip", tip ? tip : "", (int)sizeof line->tip - 1);
     snprintf(line->label, sizeof line->label, "%.63s", label);

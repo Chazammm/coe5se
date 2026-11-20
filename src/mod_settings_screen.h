@@ -793,6 +793,7 @@ static void modsRunHook(int level) {
     recBonusBeforePass(level);
     corpseWordsBeforePass(level);
     commanderCastsBeforePass(level);
+    ritualMenusBeforePass(level);
     itemSlotsBeforePass(level);
     afflictionWordsBeforePass(level);
     keepWeaponsBeforePass(level);

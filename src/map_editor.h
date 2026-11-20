@@ -98,6 +98,7 @@ static void gateMapEditorDraw(void) {
     mapEditorDrawing--;
 }
 
+static int luaCallbackRetired(int i);
 static int addMapEditorLineFor(void *caller, const char *label, const char *tip, int lua) {
     if (!label || !label[0]) {
         refuseApiCall(caller, "addMapEditorLine", "no_label", "tooltip=%s", tip ? tip : "");
@@ -107,16 +108,19 @@ static int addMapEditorLineFor(void *caller, const char *label, const char *tip,
         refuseApiCall(caller, "addMapEditorLine", "site_unavailable", "label=%s", label);
         return -1;
     }
-    int id = mapEditorLineId(mapEditorLineCount);
+    int at = 0;
+    while (at < mapEditorLineCount && !luaCallbackRetired(mapEditorLines[at].lua)) at++;
+    int id = mapEditorLineId(at);
     if (id < 0) {
         refuseApiCall(caller, "addMapEditorLine", "no_free_id", "label=%s lines=%d", label, mapEditorLineCount);
         return -1;
     }
-    if (!growList((void **)&mapEditorLines, &mapEditorLineCapacity, mapEditorLineCount + 1, sizeof mapEditorLines[0])) {
+    if (at == mapEditorLineCount && !growList((void **)&mapEditorLines, &mapEditorLineCapacity, mapEditorLineCount + 1, sizeof mapEditorLines[0])) {
         refuseApiCall(caller, "addMapEditorLine", "out_of_memory", "label=%s", label);
         return -1;
     }
-    MapEditorLine *line = &mapEditorLines[mapEditorLineCount++];
+    if (at == mapEditorLineCount) mapEditorLineCount++;
+    MapEditorLine *line = &mapEditorLines[at];
     noteApiCut(caller, "addMapEditorLine", "label", label, MAP_EDITOR_LINE_LABEL_MAX);
     noteApiCut(caller, "addMapEditorLine", "tooltip", tip ? tip : "", MAP_EDITOR_LINE_TIP_MAX);
     snprintf(line->label, sizeof line->label, "%.63s", label);
@@ -137,6 +141,15 @@ static void loadScriptsBeforeMapEditor(void) {
     nextMapEditor();
 }
 
+static int (*nextBattleEditorWait)(int, int);
+static int loadScriptsAtBattleEditorFrame(int block, int mode) {
+    if (!startupFinished) {
+        writeLog("battle_editor_before_menu", "menu_frames=%d", menuFrames);
+        finishStartup();
+    }
+    return nextBattleEditorWait(block, mode);
+}
+
 static void installMapEditorHooks(void) {
     char owner[64];
     moduleFileName((void *)gateMapEditorDraw, owner, sizeof owner);
@@ -145,12 +158,13 @@ static void installMapEditorHooks(void) {
     int wait = insertWrap(SITE_MAP_EDITOR_WAIT, (void *)dispatchMapEditorLineClick, (void **)&nextMapEditorWait, outermost, owner, NULL);
     int draw = insertWrap(SITE_MAP_EDITOR_DRAW, (void *)gateMapEditorDraw, (void **)&nextMapEditorDraw, outermost, owner, NULL);
     int editor = insertWrap(SITE_MAP_EDITOR, (void *)loadScriptsBeforeMapEditor, (void **)&nextMapEditor, outermost, owner, NULL);
+    int battleEditor = insertWrap(SITE_BATTLE_EDITOR_WAIT, (void *)loadScriptsAtBattleEditorFrame, (void **)&nextBattleEditorWait, outermost, owner, NULL);
     int mapFrame = insertWrap(SITE_MAP_SCREEN_WAIT, (void *)markMapScreenFrame, (void **)&nextMapScreenFrame,
                               (WrapPlace){.priority = INT_MIN}, owner, NULL);
     int battleFrame = insertWrap(SITE_BATTLE_WAIT, (void *)markBattleFrame, (void **)&nextBattleFrame,
                                  (WrapPlace){.priority = INT_MIN}, owner, NULL);
-    writeLog("map_editor_hooks_installed", "toolbox_line=%d wait=%d draw=%d editor=%d map_frame=%d battle_frame=%d", line, wait, draw, editor,
-             mapFrame, battleFrame);
+    writeLog("map_editor_hooks_installed", "toolbox_line=%d wait=%d draw=%d editor=%d map_frame=%d battle_frame=%d battle_editor=%d", line, wait, draw,
+             editor, mapFrame, battleFrame, battleEditor);
 }
 
 // ---- The map view ---------------------------------------------------------------------------------

@@ -12,7 +12,8 @@
 -- stops with an error, <ModName>.lua never loads. The two files exist only so the commands are
 -- added before the game reads any mod's content. A later CoE5SE may load <ModName>.lua early too,
 -- right after the commands file, so write neither to depend on when the other loads. Of the coe5
--- functions, a commands file may call only coe5.addModCommand and coe5.log while it loads; any
+-- functions, a commands file may call only coe5.addModCommand, the command fixes (coe5.fixCommand,
+-- fixTrigger, fixAction, fixAfter) and coe5.log while it loads; any
 -- other coe5 call returns nil (lua_refused reason=commands_file), while require, print, warn, and
 -- Lua's libraries work as usual. It has Lua's base library (without load, dofile, loadfile, and
 -- collectgarbage, and with CoE5SE's own require, below), string, table, math, utf8, and coroutine;
@@ -110,6 +111,8 @@
 --   A carrier on land and in air   coe5.addTransport{monster = "Sky Galleon", land = true, air = true}   (at load)
 --   Add an independent faction     coe5.addFaction{name = "Ash Court", like = "Inferno", home = "Ash Plane", color = {0.8, 0.3, 0}}   (at load; coe5.factionSlot("Ash Court") in the game)
 --   Add a mod command              coe5.addModCommand("mymod_gold", function(args, mod, level) ... end)   (in <ModName>_commands.lua only)
+--   Fix one of the game's commands coe5.fixCommand("hp", function(t) if t.args == "0" then return "hp 1" end end)   (in <ModName>_commands.lua only)
+--   Answer one of the game's triggers  coe5.fixTrigger("minunitshere", function(t) return myCount(t.x, t.y, t.args) end)   (in <ModName>_commands.lua only)
 --   Change a square as the world is built  coe5.wrap("PLAY_GAME_NEW_WORLD", function(next, mode) local r = next(mode) coe5.set("squareTerrain", x, y, t) coe5.set("squareName", x, y, "Old Tower") return r end)
 --   A commander's square           local u = coe5.get("commanderUnit", c); coe5.get("unitX", u), coe5.get("unitY", u)
 --   Can an AI commander get there  coe5.route(c, x, y)   (nil for no route; only inside an AI site's wrap)
@@ -241,7 +244,8 @@ function require(name) end
 ---| "PARTICIPANTS_BUTTON_ROW"   # fn(next, style): starts Setup Participants' Ok row. Lines drawn before next go above the row; lines drawn after it go into the row, above Ok. next returns an integer. On Mac CoE5SE makes the row itself (the game has no call for it there), and next works the same.
 ---| "GAME_MENU_SAVING_SECTION_END"  # fn(next): closes the Game Menu's "Saving & Exiting" section. Lines drawn before next go at the end of the section. next returns an integer.
 ---| "GAME_MENU_WAIT"            # fn(next, block, mode): each frame of the in-game Game Menu (F10). next returns the clicked id; coe5.gameMenu.resign resigns. CoE5SE's own wrapper, which runs the Game Menu lines, runs first.
----| "RITUAL_SCREEN_ROW"         # fn(next, id, a, b, name, costType1, cost1, costType2, cost2, costType3, cost3, costType4, cost4, hover, apCost, castable, mirrorMonster, mirrorText): one row of the ritual screen. id is the slot + coe5.ritual.rowCastable, or + coe5.ritual.rowGreyed when greyed out; hover is the reason text, and the costs are already scaled for the caster; pass a and b on unchanged. hover and mirrorText may be nil; name may not. In next, a mirrorMonster past the last monster or a costType above 50 is refused (lua_refused reason=out_of_range) and the game's own value kept. next returns nothing the game uses (nil).
+---| "RITUAL_SCREEN_ROW"         # fn(next, id, a, b, name, costType1, cost1, costType2, cost2, costType3, cost3, costType4, cost4, hover, apCost, castable, mirrorMonster, mirrorText): one row of the ritual screen. id is the slot + coe5.ritual.rowCastable, or + coe5.ritual.rowGreyed when greyed out; hover is the reason text, and the costs are already scaled for the caster; pass a and b on unchanged. A ritual in a ritualmenu reaches the wrap as its own row; CoE5SE, inside every wrap, then draws its menu's line or nothing in its place. Each frame of the menu's picker calls this site again for each of its rituals with the game's own arguments, so a wrap changes each row once a draw. hover and mirrorText may be nil; name may not. In next, a mirrorMonster past the last monster or a costType above 50 is refused (lua_refused reason=out_of_range) and the game's own value kept. next returns nothing the game uses (nil).
+---| "RITUAL_SCREEN_WAIT"        # fn(next, block, mode): the ritual screen waiting for a click, once a frame. The game passes block 0: the screen lays its rows out again every frame, so RITUAL_SCREEN_ROW runs every frame too. next returns the clicked id, 0 when nothing was clicked, which the screen then acts on: coe5.ritual.rowCastable + a slot casts that ritual as a click on its row does (the action point and cost checks, then the cast and its target pick), 1 is Exit, and a row's id made negative is a right click on that row (the ritual's description); any other id goes back to the frame's start. Return another id and the screen acts on it. A wrap may draw a screen of its own (coe5.ui) before it returns: the ritual screen comes back scrolled as it was. A right click whose ritual is past the ritual table becomes 0 (lua_refused reason=ritual_past_table). A click on a ritualmenu line is coe5.ritual.rowMenu + n; CoE5SE, outside every wrap, then opens that line's picker and gives the screen the picked ritual's id, or 0.
 ---| "MAP_SCREEN_WAIT"           # fn(next, block, mode): each frame of the map screen, after the game has bound its shortcuts. next returns the clicked id; coe5.mapAction.gameMenu opens the Game Menu. A commander's button is 20000 + its index (negated too); an id for a commander past the game's last becomes 0 (lua_refused, reason=commander_past_table). After next, "mapPointerX" and "mapPointerY" hold the square under the pointer and "mouseButtons" the frame's buttons (set it to 0 to keep a click from the map). A line drawn here isn't shown: the map lays out its lines before this wait.
 ---| "MAP_MENU_BUTTON_TEXT"      # fn(next, text): the map's "(F10) Menu" button text. next(text) draws it; pass other text to draw that. next returns nothing the game uses (nil).
 ---| "SQUARE_INFO_SCREEN"        # fn(next, player, x, y, mode): the square info window, "(i) terrain info", for square (x, y). In next, a player that isn't a slot (0-31) is refused (lua_refused reason=out_of_range) and the game's own kept. next returns nothing the game uses (nil).
@@ -4027,6 +4031,61 @@ function coe5.addTransport(transport) end
 ---@return boolean added false when refused (lua_refused reason=not_in_commands_file, no_name, bad_name, duplicate, game_command, site_unavailable, out_of_memory, script_stopped)
 function coe5.addModCommand(name, handler) end
 
+---Fixes one of the game's .c5m commands, from your <ModName>_commands.lua only, while it loads.
+---`fix` gets every line whose first word is `command`, in every enabled mod's .c5m and .c5se and in a
+---map's event file, before CoE5SE or the game reads it, and returns nil to leave the line as it is, a
+---new line to read in its place, or false (or "") to drop it. A new line is read as if the mod had
+---written it, CoE5SE's own words included, and goes on to the next fix of the same command: fixes run
+---in load order. A content line comes at the level the game reads its command (t.level: 2, or 1 for
+---icon, description, coeversion, modversion and modprio, or 4 for spr1, spr2, spr and sample); a line
+---in an event only in an event pass (level 3), with t.event true, t.player, t.squareEvent, and t.x and
+---t.y, the event's square (-1 in a squareevent). t.command is the command in lowercase (a trigger
+---without its + or -, which is t.sign, 1 or -1), t.args the rest of the line, t.line the whole line,
+---t.mod the mod's name (nil for a map's events). In a LAN game a fix runs for a content mod only.
+---@param command string one of the game's commands, any case; a trigger with or without its sign
+---@param fix fun(t: {command: string, args: string, line: string, mod: string|nil, level: integer, event: boolean|nil, sign: integer|nil, player: integer|nil, squareEvent: boolean|nil, x: integer|nil, y: integer|nil}): string|false|nil
+---@return boolean added false when refused (lua_refused reason=not_in_commands_file, not_a_game_command, out_of_memory, script_stopped); a result that is not a string, false or nil is lua_refused reason=bad_result, once, and a new line over 49,999 bytes or with a line break is lua_refused reason=line_too_long or two_lines, and the line is read as it was
+function coe5.fixCommand(command, fix) end
+
+---Answers one of the game's event triggers in place of the game, from your <ModName>_commands.lua
+---only, while it loads. `fix` runs where the game would check the trigger: in a playerevent once, on
+---the event's square (not at all when it has none, as the game skips the line), and in a squareevent
+---once for each square still marked, with t.x and t.y; after randloc, setloc or the like it is the
+---event's square each time, as for the game. It returns whether the trigger holds there, as written
+---with +; CoE5SE turns the answer around for a - line, as the game does. True keeps the square (the
+---event goes on), false drops it (a playerevent fails, and a squareevent fails when no square is
+---left), and nil leaves the square to the next fix or to the game. For hascom, hascomhere, hasunit,
+---hasunithere and hasaffunithere, a unit holds too and becomes the unit the actions after act on
+---(killunit, promote, makeaff, comname, gainxp, newitem), as the unit the game finds does. The fields
+---of t are coe5.fixCommand's. In a LAN game a fix runs for a content mod only, on the host, where
+---events run.
+---@param trigger string one of the game's triggers, with or without its + or -
+---@param fix fun(t: {command: string, args: string, line: string, mod: string|nil, level: integer, event: boolean, sign: integer, player: integer, squareEvent: boolean, x: integer, y: integer}): boolean|integer|nil
+---@return boolean added false when refused (lua_refused reason=not_in_commands_file, not_a_game_command, not_a_trigger, out_of_memory, script_stopped); a result of another type, or a unit past 98998, is lua_refused reason=bad_result, once
+function coe5.fixTrigger(trigger, fix) end
+
+---Does one of the game's event actions in place of the game, from your <ModName>_commands.lua only,
+---while it loads. `fix` runs where the game would act: in a playerevent once, on the event's square
+---(not at all when it has none), and in a squareevent once for each marked square, with t.x and t.y
+---(the event's square each time after randloc and the like). It returns true when it did the
+---action there, so the game's action skips that square; anything else leaves the square to the next
+---fix or to the game. The fields of t are coe5.fixCommand's. In a LAN game a fix runs for a content
+---mod only, on the host, where events run.
+---@param action string one of the game's event actions
+---@param fix fun(t: {command: string, args: string, line: string, mod: string|nil, level: integer, event: boolean, player: integer, squareEvent: boolean, x: integer, y: integer}): boolean|nil
+---@return boolean added false when refused (lua_refused reason=not_in_commands_file, not_a_game_command, not_an_action, out_of_memory, script_stopped)
+function coe5.fixAction(action, fix) end
+
+---Runs `fix` after the game reads each content line whose first word is `command`, from your
+---<ModName>_commands.lua only, while it loads, to set right what the line did with coe5.set. t has
+---coe5.fixCommand's fields and the records the line's block is on, -1 for none: t.monster, t.weapon,
+---t.item, t.class, t.terrain, t.ritual (coe5.set("monster", t.monster, "hp", 30)). Its result is unused.
+---In a LAN game a fix runs for a content mod only.
+---@param command string one of the game's content commands
+---@param fix fun(t: {command: string, args: string, line: string, mod: string|nil, level: integer, monster: integer, weapon: integer, item: integer, class: integer, terrain: integer, ritual: integer})
+---@return boolean added false when refused (lua_refused reason=not_in_commands_file, not_a_game_command, not_a_content_command, out_of_memory, script_stopped)
+function coe5.fixAfter(command, fix) end
+
 ---Names a subfolder of your mod's area for your data files. The area is coe5se_data\<your mod's
 ---name> in the game's user folder (%APPDATA%\coe5 on Windows, ~/.coe5 on Mac); without this call
 ---your files go in the area itself. The subfolder is always inside the area: no mod reaches
@@ -5464,6 +5523,7 @@ coe5.ritual = {
   reasonPlane = -7,
   rowCastable = 1000,   -- a castable ritual's row id is its slot + 1000
   rowGreyed = 12288,    -- a greyed-out one's is its slot + 12288 (0x3000)
+  rowMenu = 900,        -- a ritualmenu line's is 900 + its place among the screen's lines, from 0 (at most 32)
 }
 
 ---The Voice of El's Ceremonies screen: its rows' ids (C: CEREMONY_ROW_*), for CEREMONY_SCREEN_ROW. A row's ceremony is its

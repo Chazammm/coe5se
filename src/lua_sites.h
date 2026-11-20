@@ -442,6 +442,7 @@ static const LuaSite luaSites[] = {
     {"RITUAL_LOCATION_CHECK",         SITE_RITUAL_LOCATION_CHECK,         K_CALL,    "i:iiii"},
     {"CEREMONY_SCREEN_ROW",           SITE_CEREMONY_SCREEN_ROW,           K_CALL,    RITUAL_ROW_SIGNATURE},
     {"CEREMONY_SCREEN_WAIT",          SITE_CEREMONY_SCREEN_WAIT,          K_CALL,    "i:ii"},
+    {"RITUAL_SCREEN_WAIT",            SITE_RITUAL_SCREEN_WAIT,            K_CALL,    "i:ii"},
     {"PLAYER_GOLD_INCOME",            SITE_PLAYER_GOLD_INCOME,            K_OBSERVE, "i:i"},
     {"PLAYER_IRON_INCOME",            SITE_PLAYER_IRON_INCOME,            K_OBSERVE, "i:i"},
     {"PLAYER_HERBS_INCOME",           SITE_PLAYER_HERBS_INCOME,           K_OBSERVE, "i:i"},

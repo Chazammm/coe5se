@@ -11,12 +11,13 @@ static const struct { const char *word; int kind, id; } FACTION_PLAYER_WORDS[] =
     {"revertowner", FACTION_REF_MONSTER, ABILITY_REVERTOWNER},
 };
 
-static const char *const FACTION_EVENT_CONDITIONS[] = {
-    "squareowner", "armyowner", "player", "class", "humanplayer", "aiplayer", "hascom", "hascomhere", "ownsloc",
-    "ownsloctarg", "hasunit", "hasunithere", "hasitem", "hasitemhere", "hasaffunithere", "minunits", "minunitshere",
+static const struct { const char *word; int texts; } FACTION_EVENT_CONDITIONS[] = {
+    {"squareowner", 0}, {"armyowner", 0}, {"player", 0},     {"class", 1},     {"humanplayer", 0},    {"aiplayer", 0},
+    {"hascom", 1},      {"hascomhere", 1}, {"ownsloc", 0},   {"ownsloctarg", 0}, {"hasunit", 1},      {"hasunithere", 1},
+    {"hasitem", 1},     {"hasitemhere", 1}, {"hasaffunithere", 0}, {"minunits", 1}, {"minunitshere", 1},
 };
-static const char *const FACTION_EVENT_COMMANDS[] = {
-    "playercolor", "addresources", "message", "newunits", "promoteunits", "reveal", "changeowner",
+static const struct { const char *word; int texts; } FACTION_EVENT_COMMANDS[] = {
+    {"playercolor", 0}, {"addresources", 0}, {"message", 1}, {"newunits", 1}, {"promoteunits", 2}, {"reveal", 0}, {"changeowner", 0},
 };
 
 typedef struct {
@@ -160,24 +161,31 @@ static void factionNamesBeforePass(int level) {
     if (level == 2) factionRefCount = 0;
 }
 
-static int factionEventWordKind(const char *line, size_t len) {
+static int factionEventWordKind(const char *line, size_t len, int *texts) {
     if (line[0] == '+' || line[0] == '-') {
         for (size_t i = 0; i < sizeof FACTION_EVENT_CONDITIONS / sizeof FACTION_EVENT_CONDITIONS[0]; i++)
-            if (spellWordIs(line + 1, len - 1, FACTION_EVENT_CONDITIONS[i])) return 1;
+            if (spellWordIs(line + 1, len - 1, FACTION_EVENT_CONDITIONS[i].word)) return *texts = FACTION_EVENT_CONDITIONS[i].texts, 1;
         return 0;
     }
     for (size_t i = 0; i < sizeof FACTION_EVENT_COMMANDS / sizeof FACTION_EVENT_COMMANDS[0]; i++)
-        if (spellWordIs(line, len, FACTION_EVENT_COMMANDS[i])) return 2;
+        if (spellWordIs(line, len, FACTION_EVENT_COMMANDS[i].word)) return *texts = FACTION_EVENT_COMMANDS[i].texts, 2;
     return 0;
+}
+
+static const char *factionEventNameAt(const char *line, size_t len, int *kind) {
+    int texts = 0;
+    *kind = factionEventWordKind(line, len, &texts);
+    if (!*kind) return NULL;
+    const char *at = line + len;
+    while (*at == ' ' || *at == '\t') at++;
+    return *at == '"' && gameQuotedTexts(at) > texts ? at : NULL;
 }
 
 static const char *factionNameEventLine(const char *line, int level, const char *mod) {
     size_t len = strcspn(line, " \t");
-    int kind = factionEventWordKind(line, len);
-    if (!kind || level != 3 || G32(RVA_EVENT_STATE) < 1) return line;
-    const char *at = line + len;
-    while (*at == ' ' || *at == '\t') at++;
-    if (*at != '"') return line;
+    int kind;
+    const char *at = factionEventNameAt(line, len, &kind);
+    if (!at || level != 3 || G32(RVA_EVENT_STATE) < 1) return line;
     char word[20], name[FACTION_NAME_SIZE + 2];
     snprintf(word, sizeof word, "%.*s", (int)(len < sizeof word ? len : sizeof word - 1), line);
     const char *rest = at;
@@ -197,7 +205,8 @@ static int declinedFactionNameLine(const char *line, size_t len) {
     if (*args != '"') return 0;
     for (size_t i = 0; i < sizeof FACTION_PLAYER_WORDS / sizeof FACTION_PLAYER_WORDS[0]; i++)
         if (spellWordIs(line, len, FACTION_PLAYER_WORDS[i].word)) return 1;
-    return factionEventWordKind(line, len) != 0;
+    int kind;
+    return factionEventNameAt(line, len, &kind) != NULL;
 }
 
 static int playerOfFactionName(const char *name) {

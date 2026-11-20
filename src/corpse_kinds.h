@@ -1482,7 +1482,7 @@ static char *corpseSenseDeadText(int commander, int x, int y, int *band) {
     if (!share) return text;
     size_t used = strnlen(text, SENSEDEAD_TEXT_SIZE);
     char line[SENSEDEAD_TEXT_SIZE];
-    int n = snprintf(line, sizeof line, "%sCoE5SE: %s of the dead seem to be %s.", used && text[used - 1] != ' ' ? " " : "", share,
+    int n = snprintf(line, sizeof line, "%s%s of the dead seem to be %s.", used && text[used - 1] != ' ' ? " " : "", share,
                      customCorpseKinds[best].name);
     if (n > 0 && used + (size_t)n < SENSEDEAD_TEXT_SIZE) memcpy(text + used, line, (size_t)n + 1);
     return text;

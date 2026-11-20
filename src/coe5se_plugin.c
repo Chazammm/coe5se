@@ -236,6 +236,7 @@ static void clearMonsterUniqueGroup(int monster);
 static void uniqueGroupsBeforePass(int level);
 static int countsAsNamedUnique(int monster, const unsigned char *record, const char *name);
 static void commanderCastsBeforePass(int level);
+static void ritualMenusBeforePass(int level);
 static void itemSlotsBeforePass(int level);
 static void keepWeaponsBeforePass(int level);
 static void copyMonsterKeepsWeapons(int source, int target);
@@ -1952,6 +1953,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "lua_split_chain.h"
 #include "mac_copy_hooks.h"
 #include "lua_coe5_table.h"
+#include "command_fixes.h"
 #include "game_code_claims.h"
 #include "font_fallback.h"
 #include "drawn_text.h"
@@ -2038,6 +2040,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "faction_movers.h"
 #include "faction_saves.h"
 #include "faction_names.h"
+#include "ritual_menus.h"
 #include "copied_ritual.h"
 
 static void logHeaderEnd(void) {
@@ -2156,6 +2159,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_CORPSE_KINDS)) corpseKindsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) killTransformsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) commanderCastsInit();
+    if (featureOn(FEATURE_RITUAL_WORDS)) installRitualMenus();
     if (featureOn(FEATURE_ITEM_SLOTS)) itemSlotsInit();
     carrierWordsInit();
     transportWordsInit();

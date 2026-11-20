@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define PLUGIN_API_VERSION 18
+#define PLUGIN_API_VERSION 19
 
 #define WRAP_PRIORITY_DEFAULT 0
 
@@ -125,6 +125,7 @@
 #define RITUAL_REASON_PLANE        (-7)
 #define RITUAL_ROW_CASTABLE        1000
 #define RITUAL_ROW_GREYED          12288
+#define RITUAL_ROW_MENU            900
 #define CEREMONY_ROW_USABLE        10
 #define CEREMONY_ROW_GREYED        12288
 #define TARGET_USEFUL              1
@@ -558,6 +559,7 @@ typedef enum {
     SITE_RITUAL_COST_PERCENT,
     SITE_ELIMINATED_TEXT,
     SITE_STORED_FORMAT,
+    SITE_RITUAL_SCREEN_WAIT,
     SITE_COUNT
 } CallSite;
 #define SITE_UNIT_STRENGTH SITE_UNIT_BATTLE_STRENGTH

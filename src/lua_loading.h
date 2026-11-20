@@ -74,7 +74,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
     {"afflictionValue", lAfflictionValue}, {"setAfflictionTurn", lSetAfflictionTurn}, {"setAfflictionValue", lSetAfflictionValue},
     {"removeAffliction", lRemoveAffliction}, {"afflictionEffect", lAfflictionEffect},
-    {"addModCommand", lAddModCommand}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
+    {"addModCommand", lAddModCommand}, {"fixCommand", lFixCommand}, {"fixTrigger", lFixTrigger}, {"fixAction", lFixAction}, {"fixAfter", lFixAfter}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 static const luaL_Reg LUA_UI[] = {
     {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
@@ -137,7 +137,7 @@ static const struct { const char *table, *name; int value; } GAME_NUMBERS[] = {
     {"ritual", "reasonMirror", RITUAL_REASON_MIRROR}, {"ritual", "reasonMaxcast", RITUAL_REASON_MAXCAST},
     {"ritual", "reasonImmortal", RITUAL_REASON_IMMORTAL}, {"ritual", "reasonMastery", RITUAL_REASON_MASTERY},
     {"ritual", "reasonPlane", RITUAL_REASON_PLANE}, {"ritual", "rowCastable", RITUAL_ROW_CASTABLE},
-    {"ritual", "rowGreyed", RITUAL_ROW_GREYED},
+    {"ritual", "rowGreyed", RITUAL_ROW_GREYED}, {"ritual", "rowMenu", RITUAL_ROW_MENU},
     {"ceremony", "rowUsable", CEREMONY_ROW_USABLE}, {"ceremony", "rowGreyed", CEREMONY_ROW_GREYED},
     {"screen", "fileBrowserRowFirst", FILE_BROWSER_ROW_FIRST}, {"screen", "fileBrowserDelete", FILE_BROWSER_DELETE},
     {"screen", "squareInfoOk", SQUARE_INFO_OK},
@@ -221,7 +221,8 @@ static int lXpcall(lua_State *L) {
 
 static int lRequire(lua_State *L);
 static int luaCommandsFileCall(const luaL_Reg *fn) {
-    return fn->func == lAddModCommand || fn->func == lLog || fn->func == lRequire;
+    return fn->func == lAddModCommand || fn->func == lFixCommand || fn->func == lFixTrigger || fn->func == lFixAction || fn->func == lFixAfter ||
+           fn->func == lLog || fn->func == lRequire;
 }
 
 static const char *const PREVIEW_WORLD_CALLS[] = {
@@ -294,10 +295,26 @@ static const char *clientWriteRefusalNow(lua_State *L, const char *name, int inT
     return clientWriteRefusalFor(w.kind, inTurn, own, netReplayRunning());
 }
 
+static int gameVarInParkedRecords(const GameVar *v) {
+    return (v->count == UNIT_TABLE_MAX && v->stride == UNIT_SIZE) || (v->count == COMMANDER_TABLE_MAX && v->stride == COMMANDER_SIZE);
+}
+
+static const char *replayWriteRefusalNow(lua_State *L, const char *name) {
+    if (strcmp(name, "coe5.set")) return writeOutlivesReplay(name) ? "replay" : NULL;
+    const char *value = lua_type(L, 1) == LUA_TSTRING ? lua_tostring(L, 1) : "";
+    const GameVar *v = findGameVar(value);
+    if (!v || !v->writable) return NULL;
+    if (v->type == T_RECORD_WORD || contentValueRow(v) >= 0) return "replay";
+    if (clientWriteOf(name, value).kind == CLIENT_WRITE_STAYS || gameVarInParkedRecords(v)) return NULL;
+    return "replay";
+}
+
 static int lanRehearsalInTurn;
 
 static const char *luaCallNetRefusal(lua_State *L, const LuaScript *s, const luaL_Reg *fn, const char *name) {
     NetRole role = netRoleNow();
+    const char *replay = role != NET_ROLE_CLIENT && netReplayRunning() ? replayWriteRefusalNow(L, name) : NULL;
+    if (replay) return replay;
     if (role == NET_ROLE_SINGLE)
         return lanRehearsalInTurn && modClassNow(s->mod) == LUA_CLASS_CONTENT ? clientWriteRefusalNow(L, name, 1) : NULL;
     LuaClass cls = modClassNow(s->mod);
@@ -649,6 +666,7 @@ static void loadLuaScript(const char *mod, const char *folder) {
     if (s && (s->dead || !s->L)) return;
     if (!s && !(s = newLuaScript(mod, folder, path))) return;
     s->mainTried = 1;
+    if (!s->commandsTried) noteModScriptsLoading(mod, folder);
     int known = 0;
     unsigned long long before = hashBothGameDataOf(s, &known);
     LuaLoadPhase outer = beginLuaLoadPhase(LUA_LOAD_MAIN);
@@ -691,6 +709,7 @@ static int loadLuaCommandsFile(const char *mod, const char *folder) {
     if (!s && !(s = newLuaScript(mod, folder, path))) return -1;
     s->commandsTried = 1;
     if (s->dead || !s->L) return -1;
+    noteModScriptsLoading(mod, folder);
     snprintf(chunk, sizeof chunk, "%s" LUA_COMMANDS_SUFFIX, mod);
     LuaCommandsFile file = {path, chunk, s->commandsName};
     int known = 0;
@@ -775,6 +794,7 @@ static void retireLuaScript(LuaScript *s, const char *reason) {
         modCommands[kept++] = modCommands[i];
     }
     modCommandCount = kept;
+    dropCommandFixesOf(s);
     writeLog("lua_script_turned_off", "mod=%s reason=%s", s->mod, reason);
     closeDeadLuaScript(s);
 }

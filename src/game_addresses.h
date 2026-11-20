@@ -275,9 +275,22 @@
 #define RVA_TEXT_FIELD_FOCUS                   ADDR(        0x42e704,          0x1008626a0)
 #define RVA_TEXT_FIELD_CURSOR                  ADDR(        0x57c591c,         0x10611b990)
 #define RVA_LAYOUT_TOP_Y                       ADDR(        0x434974,          0x10085761c)
+#define RVA_SCROLL_SLOT                        ADDR(        0x435d48,          0x100862668)
+#define RVA_SCROLL_SAVED_TOP                   ADDR(        0x5932ce0,         0x10611b364)
+#define RVA_SCROLL_SAVED_POS                   ADDR(        0x592ae50,         0x10611b4f4)
+#define RVA_LAYOUT_SCROLL_RESTORE              ADDR_DIFFERS(0x030893,          0x100341c84)
+#define RVA_LAYOUT_SCROLL_BAR                  ADDR_DIFFERS(0x03332e,          0x100344af0)
+#define RVA_LAYOUT_WINDOWS                     ADDR(        0x13190820,        0x10611b684)
+#define LAYOUT_WINDOW_STRIDE                   0x84
+#define LAYOUT_WINDOW_CONTENT_H                0x70
+#define LAYOUT_WINDOW_TOP                      0x74
+#define LAYOUT_WINDOW_SCROLL                   0x80
 #define RVA_SCREEN_RESET_A                     ADDR(        0x435d20,          0x100872b64)
 #define RVA_SCREEN_RESET_B                     ADDR(        0x430e54,          0x10086269c)
 #define RVA_SCREEN_RESET_C                     ADDR(        0x42dcfc,          0x1008626a4)
+#define RVA_SCREEN_RESET_A_SAVED               ADDR(        0x4370f4,          0x10086266c)
+#define RVA_SCREEN_RESET_A_SAVE                ADDR(         0x3b570,          MAC_INLINED)
+#define RVA_SCREEN_RESET_A_RESTORE             ADDR(         0x3b550,          MAC_INLINED)
 #define RVA_SCREEN_RESET_BYTE                  ADDR(        WIN_NOT_FOUND,     0x106cee568)
 #define RVA_LAYOUT_MARK_OPEN                   ADDR(        0x0297e0,          MAC_INLINED)
 #define RVA_LAYOUT_MARK_CLOSE                  ADDR(        0x0297a0,          MAC_INLINED)
@@ -1813,6 +1826,15 @@
 #define RVA_MIST_SPREAD                        ADDR(        0x12fb90,                MAC_INLINED)
 #define RVA_MIST_SPREAD_COPY_START             ADDR(        WIN_NO_EQUIVALENT, 0x1003a592c)
 #define RVA_MIST_SPREAD_COPY_END               ADDR(        WIN_NO_EQUIVALENT, 0x1003a6010)
+#define RVA_MIST_SPREAD_FROM                   ADDR(        0x252210,         MAC_INLINED)
+#define RVA_HADES_FOREST_WITHER                ADDR(        0x12eb80,         MAC_INLINED)
+#define RVA_HADES_WITHER_SQUARE                ADDR(        0x106920,         0x10047e2e8)
+#define RVA_STARS_REROLL                       ADDR(        0x13ff80,         MAC_INLINED)
+#define RVA_WINTER_WARM_SPOTS                  ADDR(        0x12df20,         MAC_INLINED)
+#define RVA_WARM_SPOT_AREA                     ADDR(        0x12e190,         MAC_INLINED)
+#define RVA_CLOUD_WALK                         ADDR(        0x250c20,         0x1005738cc)
+#define RVA_VOID_COLOR_SPAWN                   ADDR(        0x29ec80,         MAC_INLINED)
+#define RVA_VOID_WANDER_POOL                   ADDR(        0x29f160,         MAC_INLINED)
 #define RVA_TEMPERATURE_CHANGE                 ADDR_DIFFERS(0x0b3aa0,                0x100551978)
 #define RVA_SPECIAL_SITE_POPULATE                      ADDR(        0x140dc0,                MAC_INLINED)
 #define RVA_SPECIAL_SITE_POP_COPY_START        ADDR(        WIN_NO_EQUIVALENT, 0x1003a6b70)
@@ -3206,6 +3228,14 @@
 #define RVA_RITUAL_CLICK_CASTABLE_BOUND        ADDR(        0x2b004a,          0x100360e70)
 #define RVA_RITUAL_RIGHT_CLICK_BAND            ADDR_DIFFERS(0x2b0293,          0x100360764)
 #define RVA_RITUAL_RIGHT_CLICK_GREYED          ADDR_DIFFERS(0x2b029b,          0x100360768)
+#define RVA_RITUAL_SCREEN_WAIT_CALL            ADDR(        0x2aff9b,          0x1003606a8)
+#define RVA_RITUAL_SCREEN_SCROLL_SLOT          ADDR(        0x2aff82,          0x10036068c)
+#define RVA_RITUAL_SCREEN_SCROLL_SAVE          ADDR(        0x2affa9,          0x1003606b0)
+#define RVA_RITUAL_SCREEN_PASS_BOUND           ADDR_DIFFERS(0x2afb84,          0x10035f9bc)
+#define RVA_RITUAL_SCREEN_LEVEL_HEADER         ADDR(        0x2aef39,          0x10035fc08)
+#define FRAME_RITUAL_SCREEN_HEADER_LEVEL       FRAME_OFFSET(0x00009c,          0x78)
+#define RVA_RITUAL_INFO_SCREEN                 ADDR(        0x2b03d0,          MAC_INLINED)
+#define RVA_RITUAL_INFO_WAIT_CALL              ADDR(        0x2b0a41,          0x100360e10)
 #define RVA_BACKUP_TABLES                      ADDR(        0x1ca350,          MAC_INLINED)
 #define RVA_RITUAL_BACKUP                      ADDR(        0x582f7f0,         0x10c063d20)
 #define RVA_RITUAL_BACKUP_SIZE                 ADDR(        0x190a8b,          0x100332524)
@@ -3904,6 +3934,34 @@
 #define COMMANDER_SIZE                         0xd4
 #define COMMANDER_TABLE_MAX                    9990
 #define COMMANDER_KNOWN_RITUALS_MAX            64
+#define RVA_KNOWN_RITUALS_FLAGS_OR             ADDR(        0x2bd990,          MAC_NOT_FOUND)
+#define RVA_KNOWN_RITUAL_OF_SCHOOL             ADDR(        0x2bd9f0,          0x100553c30)
+#define RVA_RANDOM_UNKNOWN_RITUAL              ADDR(        0x2bda80,          0x100553184)
+#define RVA_WRITE_INT16S_TO_ZERO               ADDR(        0x058350,          MAC_NOT_FOUND)
+#define RVA_READ_INT16S_TO_ZERO                ADDR(        0x0587e0,          MAC_NOT_FOUND)
+#define RVA_NET_PUT_CMDR_RECORD                ADDR(        0x1e81e0,          MAC_INLINED)
+#define RVA_AI_KNOWN_RITUALS_COUNT             ADDR(        0x06af6d,          0x1004dce64)
+#define RVA_LOAD_COMMANDER_RITUALS_BOUND       ADDR_DIFFERS(0x18b7b2,          0x1004efae4)
+#define RVA_SAVE_COMMANDER_RITUALS_BOUND       ADDR_DIFFERS(0x18c745,          0x1004f112c)
+#define RVA_NET_PUT_RITUALS_COUNT              ADDR_DIFFERS(0x1e72e6,          0x10050086c)
+#define RVA_NET_GET_RITUALS_BOUND              ADDR_DIFFERS(0x1e8150,          0x1004ff5e0)
+#define RVA_RITUAL_SCREEN_KNOWN_BOUND          ADDR_DIFFERS(0x2ae477,          0x10035f6f8)
+#define RVA_RITUAL_SCREEN_KNOWN_BOUND_2        ADDR_DIFFERS(0x2aec03,          0x10035fa38)
+#define RVA_NEW_SCHOOL_KNOWN_BOUND             ADDR_DIFFERS(0x2bc4b3,          0x100553db8)
+#define RVA_FORGET_RITUAL_FIND_BOUND           ADDR(        0x2bdd0c,          0x100553044)
+#define RVA_FORGET_RITUAL_SHIFT_BOUND          ADDR_DIFFERS(0x2bdd7d,          0x100553150)
+#define RVA_FORGET_RITUAL_LAST_CLEAR           ADDR(        0x2bdd82,          0x100553160)
+#define RVA_LEARN_RITUAL_BOUND                 ADDR(        0x2bddf4,          MAC_INLINED)
+#define RVA_LEARN_RITUAL_END_BOUND             ADDR(        0x2bde14,          MAC_INLINED)
+#define RVA_KNOWS_RITUAL_BOUND                 ADDR_DIFFERS(0x2be073,          0x10055382c)
+#define RVA_PLAYER_RITUAL_FLAGS_BOUND          ADDR_DIFFERS(0x2c1472,          0x100371a94)
+#define RVA_CAN_CAST_NEWRIT_KNOWN_BOUND        ADDR_DIFFERS(0x2ca402,          0x100553324)
+#define RVA_GAINRIT_INLINE_BOUND               ADDR(        WIN_NO_EQUIVALENT, 0x100561404)
+#define RVA_RITUAL_FORGETRITS_STORE            ADDR(        0x2c850a,          0x100561030)
+#define RVA_RITUAL_FORGETCURRIT_CALL           ADDR(        0x2c84d7,          0x100561d94)
+#define RVA_RITUAL_SIMULACRUM_CLEAR            ADDR(        0x2c6101,          0x100560a20)
+#define RVA_NEW_COMMANDER_RITUALS_CLEAR        ADDR(        0x12824a,          0x10046dba4)
+#define RVA_PROMOTE_KNOWS_NONE_TEST            ADDR(        0x10fc0e,          0x10046d88c)
 #define RVA_COMMANDER_NAMES                    ADDR(        0x11d3c860,        0x10ce0cb80)
 #define RVA_COMMANDER_NAME                     ADDR(        0x0f8f50,          MAC_INLINED)
 #define RVA_COMMANDER_NAME_INDEX               ADDR(        0x5804c28,         0x1069b1ac4)
@@ -6722,6 +6780,9 @@ static const SiteInfo SITES[SITE_COUNT] = {
  (0x073a7a, 0x0752bf, 0x0797a1, 0x0b8b93, 0x0d16be, 0x0d28d2, 0x0d2bda, 0x0d2c52, 0x0dde50,
                        0x0df058, 0x0df755, 0x0eafba, 0x0ec512, 0x0eced5, 0x0f80a8, 0x1d171f, 0x1ddd93), 0x3299c0,
  (M(0x1003c61ec), M(0x1003cc6a8)), M(0x10056cb10)),
+    [SITE_RITUAL_SCREEN_WAIT] = SITE("ritual_screen_wait", 0,
+ (0x2aff9b),       0x23ec30,
+ (M(0x1003606a8)), M(0x100485000)),
 };
 #undef M
 #undef SITE

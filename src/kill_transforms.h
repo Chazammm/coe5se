@@ -88,7 +88,7 @@ static const char *killWordLineHook(const char *line, size_t len, int mod, int l
     if (word < 0) return line;
     const char *p = line + len, *text = p;
     skipSpaces(&p);
-    if (isLineEnd(p) || *p == '-' || (*p >= '0' && *p <= '9')) return line;
+    if (!isalpha((unsigned char)*p) && *p != '"') return line;
     int mask = 0, custom = -1, read = 1;
     char name[MONSTER_NAME_SIZE] = "";
     const char *start = p;

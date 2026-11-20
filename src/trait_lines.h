@@ -109,8 +109,10 @@ static int traitLineIcon(const TraitLine *line) {
 }
 
 static int addTraitLine(const char *label, const char *text, int icon, int picture, int resBit, int lua) {
-    if (!growList((void **)&traitLines, &traitLineCapacity, traitLineCount + 1, sizeof traitLines[0])) return -1;
-    TraitLine *line = &traitLines[traitLineCount];
+    int at = 0;
+    while (at < traitLineCount && !luaCallbackRetired(traitLines[at].lua)) at++;
+    if (at == traitLineCount && !growList((void **)&traitLines, &traitLineCapacity, traitLineCount + 1, sizeof traitLines[0])) return -1;
+    TraitLine *line = &traitLines[at];
     snprintf(line->label, sizeof line->label, "%s", label);
     snprintf(line->text, sizeof line->text, "%s", text ? text : "");
     line->icon = icon;
@@ -118,8 +120,12 @@ static int addTraitLine(const char *label, const char *text, int icon, int pictu
     line->resBit = resBit;
     line->lua = lua;
     line->file = NULL;
-    if (traitDescriptions && traitLineCount < TRAIT_DESCRIPTION_SLOTS) traitDescriptions[traitLineCount] = strdup(line->text);
-    return traitLineCount++;
+    if (traitDescriptions && at < TRAIT_DESCRIPTION_SLOTS) {
+        free((void *)traitDescriptions[at]);
+        traitDescriptions[at] = strdup(line->text);
+    }
+    if (at == traitLineCount) traitLineCount++;
+    return at;
 }
 
 typedef struct { int ref, unit, monster; } TraitVisibleCall;

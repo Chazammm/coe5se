@@ -18,17 +18,28 @@ static int settingValueNow(const ModSetting *s) {
 }
 
 static void noteModEventLine(const char *line, int level, const char *mod, const char *file);
+static const char *fixEventCommandLine(const char *line, int level, const char *mod, char **fixed);
+static void runFixedEventLine(const char *line, int level, const char *mod);
+static void readEventLine(const char *line, int level, const char *mod, const char *file, const char *base);
 static void eventLineHook(const char *line, int level) {
     const char *file = (const char *)(gameBase + RVA_EVENT_FILE), *slash = strrchr(file, '/'), *back = strrchr(file, '\\');
     if (back > slash) slash = back;
     const char *base = slash ? slash + 1 : file;
     size_t len = strlen(base), c5m = sizeof MOD_FILE_SUFFIX - 1, side = sizeof SIDECAR_SUFFIX - 1;
-    char mod[MOD_NAME_MAX] = "", name[SETTING_NAME_SIZE];
+    char mod[MOD_NAME_MAX] = "";
     if (includingModName()) snprintf(mod, sizeof mod, "%s", includingModName());
     else if (len > c5m && !_stricmp(base + len - c5m, MOD_FILE_SUFFIX)) snprintf(mod, sizeof mod, "%.*s", (int)(len - c5m), base);
     else if (len > side && !_stricmp(base + len - side, SIDECAR_SUFFIX)) snprintf(mod, sizeof mod, "%.*s", (int)(len - side), base);
     noteModLine(mod, level);
     noteModEventLine(line, level, mod, file);
+    char *fixed = NULL;
+    line = fixEventCommandLine(line, level, mod, &fixed);
+    if (line) readEventLine(line, level, mod, file, base);
+    free(fixed);
+}
+
+static void readEventLine(const char *line, int level, const char *mod, const char *file, const char *base) {
+    char name[SETTING_NAME_SIZE];
     line = planeNameEventLine(line, level, mod);
     if (!line) return;
     line = factionNameEventLine(line, level, mod);
@@ -41,7 +52,7 @@ static void eventLineHook(const char *line, int level) {
         previewEventLineBefore(level);
         int stateBefore = G32(RVA_EVENT_STATE);
         eventFindersLineBegin();
-        nextEventLine(line, level);
+        runFixedEventLine(line, level, mod);
         eventFindersLineEnd();
         if (level == 3) previewNoteEventLine(mod, base, line, stateBefore);
         eventLogicAfterLine(line, level);

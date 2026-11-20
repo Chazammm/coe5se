@@ -375,6 +375,7 @@ static int runLuaCallback(int i, int wantResult, int fallback) {
     return r;
 }
 static const void *luaCallbackScript(int i) { return i >= 0 && i < luaCallbackCount ? luaCallbacks[i].s : NULL; }
+static int luaCallbackRetired(int i) { return i >= 0 && i < luaCallbackCount && luaCallbacks[i].s && luaCallbacks[i].s->retired; }
 
 static int runLuaVisible(int i) {
     if (i < 0 || i >= luaCallbackCount) return 0;
