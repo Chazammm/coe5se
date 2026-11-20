@@ -174,6 +174,10 @@ static int lTestFieldPointerButtons(lua_State *L) {
     return 1;
 }
 
+#ifndef __APPLE__
+static int testFieldSceneryLookupValid(void);
+#endif
+
 static int lTestFieldEditorCapabilities(lua_State *L) {
     checkLuaMainThread(L, "coe5.testFieldEditorCapabilities");
     int ready = gameCodeMatches != 0, lifecycle = ready && testFieldLife.installed >= 0;
@@ -201,7 +205,7 @@ static int lTestFieldEditorCapabilities(lua_State *L) {
     setIntField(L, "battleCenter", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI);
     setIntField(L, "nativeMonsterInspectVersion", lifecycle && TEST_FIELD_VERIFIED_WINDOWS_ABI && testFieldTextPollReady);
     int provenance = lifecycle && testFieldProvenanceCallsValid();
-    setIntField(L, "sceneryVersion", provenance && TEST_FIELD_VERIFIED_WINDOWS_ABI);
+    setIntField(L, "sceneryVersion", provenance && TEST_FIELD_VERIFIED_WINDOWS_ABI && testFieldSceneryLookupValid());
     setIntField(L, "structureProvenance", provenance);
     setIntField(L, "exactDeploymentVersion", provenance);
     setIntField(L, "initialDeploymentVersion", provenance);

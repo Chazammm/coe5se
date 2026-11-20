@@ -4333,6 +4333,53 @@ function coe5.testFieldEnvironmentInfo() end
 ---@return string|nil reason
 function coe5.testFieldEnvironmentState() end
 
+---Verified stock scenery definitions for Windows 5.43, without opening a field.
+---Version 0 means unavailable. Each type has an exact loaded monster ID, owner, layer, dimensions, standable flag and role.
+---@return {version: integer, types: table[]} catalog
+function coe5.testFieldSceneryTypes() end
+
+---Read authored scenery in the owner's preparation field.
+---Each object includes its generation, exact monster ID, anchor, owner, health and standable flag.
+---@return {version: integer, session: integer, objects: table[]}|nil state
+---@return string|nil reason
+function coe5.testFieldSceneryState() end
+
+---Place an exact verified scenery definition at a zero-based battlefield cell.
+---The object layer must be free. Standable scenery may share a verified army footprint.
+---@param monster integer
+---@param x integer
+---@param y integer
+---@return integer|nil unit
+---@return string|nil reason
+function coe5.addTestFieldScenery(monster, x, y) end
+
+---Move an authored scenery object while keeping its native generation and health.
+---@param unit integer
+---@param session integer
+---@param generation integer
+---@param x integer
+---@param y integer
+---@return true|nil moved
+---@return string|nil reason
+function coe5.moveTestFieldScenery(unit, session, generation, x, y) end
+
+---Permanently remove the authored scenery with this session and generation.
+---@param unit integer
+---@param session integer
+---@param generation integer
+---@return true|nil removed
+---@return string|nil reason
+function coe5.removeTestFieldScenery(unit, session, generation) end
+
+---Open the read-only native card for a verified feature at this zero-based cell.
+---A final capture is inspectable only while its live identity and position still match.
+---@param x integer
+---@param y integer
+---@param final? boolean
+---@return true|nil shown
+---@return string|nil reason
+function coe5.inspectTestFieldFeature(x, y, final) end
+
 ---Windows 5.43. Read the visible state and rectangle of the owned field's
 ---native battle-log overlay. Reports the native toggle action and line count
 ---when available. The overlay has no reserved map space.
@@ -4423,6 +4470,7 @@ function coe5.setTestFieldActorState(unit, state) end
 ---pointerButtons, lifecycle, multipleUnique, emptyEditor, configuration, cursedRemoval, schoolLevelReduction.
 ---Windows-only optional capabilities include multipleUniquePolicy, battleLogVisibility and clearHeldItems.
 ---battleZoom, battleViewport, battleCenter and nativeMonsterInspectVersion advertise the Windows native presentation APIs.
+---sceneryVersion advertises verified native scenery editing on supported Windows builds.
 ---and restoreHigherKnown, each 1 or 0; spellRecords, the spell table's size; equipmentPositions, 20; maxBaseSchoolLevel, 3.
 ---Windows adds minimumWidthVersion (1 for supported game code and lifecycle), minimumWidthMin and minimumWidthMax.
 ---@return {uniqueGuard: integer, state: integer, pointerButtons: integer, lifecycle: integer, multipleUnique: integer, emptyEditor: integer, spellRecords: integer, configuration: integer, cursedRemoval: integer, schoolLevelReduction: integer, restoreHigherKnown: integer, equipmentPositions: integer, maxBaseSchoolLevel: integer} capabilities

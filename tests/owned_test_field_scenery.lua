@@ -15,6 +15,7 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         local tested={}
         assert(api.openTestField({emptyEditor=true,terrain=0}))
         opened=true
+        local previousSession=assert(api.testFieldSceneryState()).session
         local ordinary=assert(api.findMonster('Spearman'))
         local unsupported,reason=api.addTestFieldScenery(ordinary,0,0)
         assert(not unsupported and reason=='unsupported_scenery')
@@ -67,6 +68,18 @@ api.wrap('MAIN_MENU_WAIT',function(next,...)
         assert(api.closeTestField())
         opened=false
         assert(assert(api.testFieldLifecycle()).complete)
+        assert(api.openTestField({emptyEditor=true,terrain=0}))
+        opened=true
+        local wall=assert(api.addTestFieldScenery(1404,10,10))
+        local state=assert(api.testFieldSceneryState())
+        local generation=state.objects[1].generation
+        assert(previousSession~=state.session)
+        local stale,reason=api.moveTestFieldScenery(wall,previousSession,generation,11,10)
+        assert(not stale and reason=='stale_scenery')
+        assert(api.battleObjectAt(10,10)==wall and api.battleObjectAt(11,10)<0)
+        assert(api.removeTestFieldScenery(wall,state.session,generation))
+        assert(api.closeTestField() and assert(api.testFieldLifecycle()).complete)
+        opened=false
     end,tostring)
     if opened then api.closeTestField() end
     assert(api.writeIni('results',{complete={status=ok and 'PASS' or 'FAIL',detail=why or 'Owned scenery native contract verified'}}))
