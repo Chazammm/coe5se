@@ -998,12 +998,12 @@ static int testFieldTokenCovering(int x, int y, int layer, int self, int strict)
 
 #ifndef __APPLE__
 static int testFieldDeploymentObjectCandidate(int object) {
-    if (!testField.environmentBorrowed || !testField.setupComplete ||
-        testFieldEnvironmentProblem() || !isTestFieldUnit(object)) return 0;
+    if (!testField.setupComplete || testFieldEnvironmentProblem() || !isTestFieldUnit(object)) return 0;
     const TestFieldMadeUnit *made = &testFieldLife.actors[object];
     size_t at = (size_t)object * UNIT_SIZE;
     int eligible = made->source == TEST_FIELD_OWNED_SCENERY ? made->sceneryStandable :
-        G32(RVA_BATTLE_IS_SIEGE) && (made->source == TEST_FIELD_MAP_OBJECT || made->source == TEST_FIELD_SCATTER);
+        testField.environmentBorrowed && G32(RVA_BATTLE_IS_SIEGE) &&
+        (made->source == TEST_FIELD_MAP_OBJECT || made->source == TEST_FIELD_SCATTER);
     return eligible &&
            G16(RVA_UNIT_HP + at) > 0 && G16(RVA_UNIT_PLAYER + at) == made->created.owner &&
            G16(RVA_UNIT_MONSTER + at) == made->created.monster;

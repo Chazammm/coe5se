@@ -4002,7 +4002,7 @@
 #define RVA_LOAD_BATMAP_NEW_UNIT_CALL          ADDR(        0x0874ce,          0x10051867c)
 #define RVA_GATE_SWAP_NEW_UNIT_CALL            ADDR(        0x0ee3d2,          0x1003cf404)
 #define RVA_PLACE_TERRAIN_NEW_UNIT_CALL        ADDR(        0x0f065a,          0x1003c7ca4)
-#define RVA_PLACE_TERRAIN_FIND_MONSTER_CALL    ADDR(        0x0f0601,          MAC_NOT_LOOKED_UP)
+#define RVA_PLACE_TERRAIN_FIND_MONSTER_CALL    ADDR(        0x0f0601,          0x1003c7c68)
 #define RVA_NEW_UNIT                           ADDR(        0x1297b0,          0x10046e828)
 #define RVA_NEW_COMMANDER                      ADDR(        0x128160,          0x10046da30)
 #define RVA_ALLOC_UNIT                         ADDR(        0x10fff0,          0x10046d184)

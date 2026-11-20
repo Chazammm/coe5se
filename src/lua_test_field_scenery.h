@@ -94,7 +94,6 @@ static int testFieldSceneryLookup(const char *name, int mode) {
 }
 
 // Windows terrain constructor's template lookup call.
-// @platform-split scenery_template_lookup: the Mac call is not mapped.
 static TestFieldCall testFieldSceneryLookupCall = {
     RVA_PLACE_TERRAIN_FIND_MONSTER_CALL, RVA_FIND_MONSTER, (void *)testFieldSceneryLookup,
     "owned_scenery_exact_lookup", NULL, 0,
@@ -246,11 +245,12 @@ static int testFieldSceneryAnchorsValid(void) {
         for (int y = 0; y < BATTLE_ROWS; y++) {
             const unsigned char *cell = battleCell(x, y);
             int actor = *(const int *)cell, object = *(const int *)(cell + BATTLE_CELL_OBJECT);
-            if (actor >= 0 && actor < UNIT_TABLE_MAX && testFieldLife.actors[actor].source == TEST_FIELD_OWNED_SCENERY)
+            if (actor >= 0 && actor < UNIT_TABLE_MAX && testFieldLife.actors[actor].source == TEST_FIELD_OWNED_SCENERY &&
+                !testFieldLife.actors[actor].cleanup)
                 return 0;
             if (object < 0 || object >= UNIT_TABLE_MAX) continue;
             const TestFieldMadeUnit *made = &testFieldLife.actors[object];
-            if (made->source == TEST_FIELD_OWNED_SCENERY && (made->sceneryX != x || made->sceneryY != y))
+            if (made->source == TEST_FIELD_OWNED_SCENERY && !made->cleanup && (made->sceneryX != x || made->sceneryY != y))
                 return 0;
         }
     return 1;
@@ -269,7 +269,7 @@ static int lTestFieldSceneryState(lua_State *L) {
     int count = 0;
     for (int unit = 0; unit < UNIT_TABLE_MAX; unit++) {
         const TestFieldMadeUnit *made = &testFieldLife.actors[unit];
-        if (made->source != TEST_FIELD_OWNED_SCENERY) continue;
+        if (made->source != TEST_FIELD_OWNED_SCENERY || made->cleanup) continue;
         TestFieldUnitSnapshot row;
         if (!readTestFieldSceneryAt(unit, made->generation, made->sceneryX, made->sceneryY, &row))
             return refuseTestFieldRead(L, call, "scenery_identity_unverified");
@@ -333,6 +333,7 @@ static int lAddTestFieldScenery(lua_State *L) {
         !(type = testFieldSceneryType((int)monster)))) reason = "unsupported_scenery";
     if (!reason) reason = testFieldSceneryTarget(L, 2, &x, &y, testFieldSceneryStandable(type) ? &occupant : NULL);
     if (!reason && occupant >= 0 && !unitBattleCell(occupant, &actorX, &actorY)) reason = "unverified_occupant";
+    if (!reason && occupant >= 0 && testFieldTokenCovering(x, y, 0, occupant, 1) != -1) reason = "blocked";
     if (!reason && !testFieldSceneryLookupValid()) reason = "scenery_lookup_unavailable";
     if (reason) return refuseTestFieldRead(L, call, reason);
 
@@ -521,7 +522,6 @@ static int lRemoveTestFieldScenery(lua_State *L) {
     memcpy(cell + BATTLE_CELL_OBJECT_SLIDE, &made->scenerySlide, sizeof made->scenerySlide);
     free(board);
     made->cleanup = 1;
-    made->source = TEST_FIELD_SCATTER;
     testFieldInitialDeploymentReset();
     lua_pushboolean(L, 1);
     return 1;
