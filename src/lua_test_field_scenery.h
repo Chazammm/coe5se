@@ -1,12 +1,66 @@
 #pragma once
 
-// The exact stock templates verified for this Windows object's constructor.
-typedef struct { int monster; const char *name; int standable; } TestFieldSceneryType;
+// Exact stock IDs, including orientation records which share a display name.
+typedef enum { SCENERY_OTHER, SCENERY_WALL, SCENERY_PARAPET, SCENERY_STAIRS } TestFieldSceneryRole;
+typedef struct {
+    int first, last;
+    const char *name;
+    TestFieldSceneryRole role;
+    unsigned long long flags;
+    int cover, rangeBonus;
+} TestFieldSceneryType;
+
+#define SCENERY_STONE_WALL_FLAGS     0x0c002800030401c7ULL
+#define SCENERY_WOOD_WALL_FLAGS      0x0c002800028001c6ULL
+#define SCENERY_METAL_WALL_FLAGS     0x0c002800038481c7ULL
+#define SCENERY_CLOUD_WALL_FLAGS     0x0c002800038481c6ULL
+#define SCENERY_STONE_SURFACE_FLAGS  0x4c002800030401c7ULL
+#define SCENERY_WOOD_SURFACE_FLAGS   0x4c002800028001c6ULL
+#define SCENERY_METAL_SURFACE_FLAGS  0x4c002800038481c7ULL
+#define SCENERY_CLOUD_SURFACE_FLAGS  0x4c002800038481c6ULL
+
 static const TestFieldSceneryType testFieldSceneryTypes[] = {
-    {1394, "Stone Parapet (Medium Cover)", 1}, {1395, "Stone Parapet (Heavy Cover)", 1},
-    {1404, "Stone Wall", 0}, {1446, "Palisade Parapet", 1}, {1448, "Palisade Wall", 0},
-    {1462, "Wooden Stairs", 1}, {1511, "Stone Stairs", 1}, {1634, "Cabbage", 0},
+    {1393,1393,"Stone Parapet (Light Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,1,1},
+    {1394,1394,"Stone Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,2,1},
+    {1395,1395,"Stone Parapet (Heavy Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,3,2},
+    {1396,1409,"Stone Wall",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1410,1417,"Cliff",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1418,1418,"Cliff Parapet (Light Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,1,1},
+    {1419,1419,"Cliff Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,2,1},
+    {1420,1423,"Cliff",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1424,1424,"Bramble Parapet (Light Cover)",SCENERY_PARAPET,SCENERY_WOOD_SURFACE_FLAGS,1,1},
+    {1425,1425,"Bramble Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_WOOD_SURFACE_FLAGS,2,1},
+    {1426,1430,"Bramble Wall",SCENERY_WALL,SCENERY_WOOD_WALL_FLAGS,0,0},
+    {1432,1432,"Cliff Parapet (Light Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,1,1},
+    {1433,1433,"Cliff Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,2,1},
+    {1434,1435,"Cliff",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1446,1446,"Palisade Parapet",SCENERY_PARAPET,SCENERY_WOOD_SURFACE_FLAGS,1,1},
+    {1447,1447,"Palisade Parapet (High)",SCENERY_PARAPET,SCENERY_WOOD_SURFACE_FLAGS,1,2},
+    {1448,1455,"Palisade Wall",SCENERY_WALL,SCENERY_WOOD_WALL_FLAGS,0,0},
+    {1462,1462,"Wooden Stairs",SCENERY_STAIRS,SCENERY_WOOD_SURFACE_FLAGS,0,0},
+    {1463,1463,"Bronze Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_METAL_SURFACE_FLAGS,2,1},
+    {1464,1477,"Bronze Wall",SCENERY_WALL,SCENERY_METAL_WALL_FLAGS,0,0},
+    {1478,1478,"Bronze Stairs",SCENERY_STAIRS,SCENERY_METAL_SURFACE_FLAGS,0,0},
+    {1479,1479,"Silver Parapet (Medium Cover)",SCENERY_PARAPET,SCENERY_METAL_SURFACE_FLAGS,2,1},
+    {1480,1493,"Silver Wall",SCENERY_WALL,SCENERY_METAL_WALL_FLAGS,0,0},
+    {1494,1494,"Silver Stairs",SCENERY_STAIRS,SCENERY_METAL_SURFACE_FLAGS,0,0},
+    {1495,1495,"Golden Parapet (Heavy Cover)",SCENERY_PARAPET,SCENERY_METAL_SURFACE_FLAGS,3,2},
+    {1496,1509,"Golden Wall",SCENERY_WALL,SCENERY_METAL_WALL_FLAGS,0,0},
+    {1510,1510,"Golden Stairs",SCENERY_STAIRS,SCENERY_METAL_SURFACE_FLAGS,0,0},
+    {1511,1516,"Stone Stairs",SCENERY_STAIRS,SCENERY_STONE_SURFACE_FLAGS,0,0},
+    {1523,1523,"Cloud Parapet",SCENERY_PARAPET,SCENERY_CLOUD_SURFACE_FLAGS,2,1},
+    {1524,1531,"Cloud Wall",SCENERY_WALL,SCENERY_CLOUD_WALL_FLAGS,0,0},
+    {1532,1532,"Cloud Parapet",SCENERY_PARAPET,SCENERY_CLOUD_SURFACE_FLAGS,2,1},
+    {1534,1541,"Earth Wall",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1542,1550,"Earth Rampart (Light Cover)",SCENERY_PARAPET,SCENERY_STONE_SURFACE_FLAGS,1,1},
+    {1590,1597,"Stone Wall",SCENERY_WALL,SCENERY_STONE_WALL_FLAGS,0,0},
+    {1634,1634,"Cabbage",SCENERY_OTHER,0,0,0},
 };
+
+static int testFieldSceneryStandable(const TestFieldSceneryType *type) {
+    return type->role == SCENERY_PARAPET || type->role == SCENERY_STAIRS;
+}
+
 static int testFieldSceneryRequest = -1;
 static const char *testFieldSceneryRequestName;
 
@@ -24,14 +78,23 @@ static TestFieldCall testFieldSceneryLookupCall = {
 };
 
 // Returns the verified constructor argument for this loaded definition.
+static int testFieldSceneryTypeMatches(const TestFieldSceneryType *type, int id) {
+    if (!isUsedMonster(id) || !isMonsterSpriteValid(id) || monsterMadeByName(id) ||
+        monsterTokenWidth(id) != 1 || monsterTokenHeight(id) != 1) return 0;
+    const unsigned char *record = monsterRecord(id);
+    unsigned long long flags;
+    memcpy(&flags, record + (RVA_MONSTER_FLAGS - RVA_MONSTER_TABLE), sizeof flags);
+    return !strncmp((const char *)record, type->name, MONSTER_NAME_SIZE) &&
+        (!type->flags || flags == type->flags) &&
+        monsterAbility(id, MONSTER_ABILITY_WALL_COVER) == type->cover &&
+        monsterAbility(id, MONSTER_ABILITY_WALL_RANGE_BONUS) == type->rangeBonus;
+}
+
 static const TestFieldSceneryType *testFieldSceneryType(int id) {
     for (size_t i = 0; i < sizeof testFieldSceneryTypes / sizeof *testFieldSceneryTypes; i++) {
-        if (testFieldSceneryTypes[i].monster != id) continue;
-        const char *name = testFieldSceneryTypes[i].name;
-        if (!isUsedMonster(id) || !isMonsterSpriteValid(id) || monsterMadeByName(id) ||
-            strncmp((const char *)monsterRecord(id), name, MONSTER_NAME_SIZE) ||
-            monsterTokenWidth(id) != 1 || monsterTokenHeight(id) != 1) return NULL;
-        return &testFieldSceneryTypes[i];
+        const TestFieldSceneryType *type = &testFieldSceneryTypes[i];
+        if (id >= type->first && id <= type->last)
+            return testFieldSceneryTypeMatches(type, id) ? type : NULL;
     }
     return NULL;
 }
@@ -60,18 +123,22 @@ static int lTestFieldSceneryTypes(lua_State *L) {
     lua_newtable(L);
     int count = 0;
     for (size_t i = 0; version && i < sizeof testFieldSceneryTypes / sizeof *testFieldSceneryTypes; i++) {
-        int id = testFieldSceneryTypes[i].monster;
-        const TestFieldSceneryType *type = testFieldSceneryType(id);
-        if (!type) continue;
-        lua_createtable(L, 0, 6);
-        setIntField(L, "monster", id);
-        setIntField(L, "owner", 31);
-        setIntField(L, "width", 1);
-        setIntField(L, "height", 1);
-        setBoolField(L, "standable", type->standable);
-        lua_pushliteral(L, "object");
-        lua_setfield(L, -2, "layer");
-        lua_rawseti(L, -2, ++count);
+        const TestFieldSceneryType *type = &testFieldSceneryTypes[i];
+        static const char *const roles[] = {"other","wall","parapet","stairs"};
+        for (int id = type->first; id <= type->last; id++) {
+            if (!testFieldSceneryTypeMatches(type, id)) continue;
+            lua_createtable(L, 0, 7);
+            setIntField(L, "monster", id);
+            setIntField(L, "owner", 31);
+            setIntField(L, "width", 1);
+            setIntField(L, "height", 1);
+            setBoolField(L, "standable", testFieldSceneryStandable(type));
+            lua_pushstring(L, roles[type->role]);
+            lua_setfield(L, -2, "role");
+            lua_pushliteral(L, "object");
+            lua_setfield(L, -2, "layer");
+            lua_rawseti(L, -2, ++count);
+        }
     }
     lua_setfield(L, -2, "types");
     return 1;
@@ -160,7 +227,7 @@ static int lAddTestFieldScenery(lua_State *L) {
     int x = -1, y = -1, occupant = -1, actorX = -1, actorY = -1;
     if (!reason && (!readTestFieldInteger(L, 1, &monster) || monster < 0 || monster >= MONSTER_TABLE_MAX ||
         !(type = testFieldSceneryType((int)monster)))) reason = "unsupported_scenery";
-    if (!reason) reason = testFieldSceneryTarget(L, 2, &x, &y, type->standable ? &occupant : NULL);
+    if (!reason) reason = testFieldSceneryTarget(L, 2, &x, &y, testFieldSceneryStandable(type) ? &occupant : NULL);
     if (!reason && occupant >= 0 && !unitBattleCell(occupant, &actorX, &actorY)) reason = "unverified_occupant";
     if (!reason && !pointTestFieldCall(&testFieldSceneryLookupCall)) reason = "scenery_lookup_unavailable";
     if (reason) return refuseTestFieldRead(L, call, reason);
@@ -224,7 +291,7 @@ static int lAddTestFieldScenery(lua_State *L) {
     made->source = TEST_FIELD_OWNED_SCENERY;
     made->sceneryX = x;
     made->sceneryY = y;
-    made->sceneryStandable = type->standable;
+    made->sceneryStandable = testFieldSceneryStandable(type);
     memcpy(&made->scenerySlide, old + BATTLE_CELL_OBJECT_SLIDE, sizeof made->scenerySlide);
     testFieldInitialDeploymentReset();
     lua_pushinteger(L, unit);
