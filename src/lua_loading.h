@@ -32,6 +32,10 @@ static const luaL_Reg LUA_COE5[] = {
 #ifndef __APPLE__
     {"testFieldEnvironmentInfo", lTestFieldEnvironmentInfo}, {"testFieldEnvironmentState", lTestFieldEnvironmentState},
     {"testFieldWaterState", lTestFieldWaterState},
+    {"testFieldSceneryTypes", lTestFieldSceneryTypes}, {"testFieldSceneryState", lTestFieldSceneryState},
+    {"addTestFieldScenery", lAddTestFieldScenery}, {"moveTestFieldScenery", lMoveTestFieldScenery},
+    {"removeTestFieldScenery", lRemoveTestFieldScenery},
+    {"inspectTestFieldFeature", lInspectTestFieldFeature},
     {"setTestFieldDeployment", lSetTestFieldDeployment}, {"testFieldInitialDeployment", lTestFieldInitialDeployment},
     {"setTestFieldMultipleUnique", lSetTestFieldMultipleUnique},
     {"testFieldUnitName", lTestFieldUnitName}, {"setTestFieldUnitName", lSetTestFieldUnitName},
