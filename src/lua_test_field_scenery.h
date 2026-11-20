@@ -57,6 +57,28 @@ static const TestFieldSceneryType testFieldSceneryTypes[] = {
     {1634,1634,"Cabbage",SCENERY_OTHER,0,0,0},
 };
 
+#define SCENERY_FIRST_TEMPLATE 1393
+#define SCENERY_LAST_TEMPLATE 1634
+static struct {
+    int observed;
+    unsigned char record[MONSTER_SIZE];
+} testFieldSceneryBaseline[SCENERY_LAST_TEMPLATE - SCENERY_FIRST_TEMPLATE + 1];
+
+// Captures the verified stock definitions before the native level-2 mod pass.
+static void captureTestFieldSceneryTemplates(int level) {
+    if (level != 2 || !gameCodeMatches || !TEST_FIELD_VERIFIED_WINDOWS_ABI) return;
+    for (size_t n = 0; n < sizeof testFieldSceneryTypes / sizeof *testFieldSceneryTypes; n++) {
+        for (int id = testFieldSceneryTypes[n].first; id <= testFieldSceneryTypes[n].last; id++) {
+            const unsigned char *record = monsterRecord(id);
+            int index = id - SCENERY_FIRST_TEMPLATE;
+            if (!testFieldSceneryBaseline[index].observed && record && isUsedMonster(id)) {
+                memcpy(testFieldSceneryBaseline[index].record, record, MONSTER_SIZE);
+                testFieldSceneryBaseline[index].observed = 1;
+            }
+        }
+    }
+}
+
 static int testFieldSceneryStandable(const TestFieldSceneryType *type) {
     return type->role == SCENERY_PARAPET || type->role == SCENERY_STAIRS;
 }
@@ -86,11 +108,28 @@ static int testFieldSceneryLookupValid(void) {
     return call[0] == 0xe8 && call + 5 + relative == gameBase + testFieldSceneryLookupCall.targetRva;
 }
 
+// Restores the lookup only if its live redirect is still owned by this call.
+static int restoreTestFieldSceneryLookup(void) {
+    TestFieldCall *site = &testFieldSceneryLookupCall;
+    if (testFieldSceneryLookupValid()) {
+        site->on = 0;
+        return 1;
+    }
+    const unsigned char *call = gameBase + site->callRva;
+    int relative;
+    memcpy(&relative, call + 1, sizeof relative);
+    return site->on && call[0] == 0xe8 && call + 5 + relative == site->stub &&
+        restoreTestFieldCall(site) && testFieldSceneryLookupValid();
+}
+
 // Returns the verified constructor argument for this loaded definition.
 static int testFieldSceneryTypeMatches(const TestFieldSceneryType *type, int id) {
     if (!isUsedMonster(id) || !isMonsterSpriteValid(id) || monsterMadeByName(id) ||
         monsterTokenWidth(id) != 1 || monsterTokenHeight(id) != 1) return 0;
     const unsigned char *record = monsterRecord(id);
+    int index = id - SCENERY_FIRST_TEMPLATE;
+    if (!testFieldSceneryBaseline[index].observed ||
+        memcmp(record, testFieldSceneryBaseline[index].record, MONSTER_SIZE)) return 0;
     unsigned long long flags;
     memcpy(&flags, record + (RVA_MONSTER_FLAGS - RVA_MONSTER_TABLE), sizeof flags);
     return !strncmp((const char *)record, type->name, MONSTER_NAME_SIZE) &&
@@ -170,8 +209,8 @@ static const char *testFieldSceneryTarget(lua_State *L, int arg, int *x, int *y,
     return NULL;
 }
 
-// Confirms one owned generation and exactly one object-layer anchor.
-static int testFieldSceneryIdentity(int unit, unsigned long long generation, int x, int y) {
+// Verifies the live record and its expected object-layer cell.
+static int readTestFieldSceneryAt(int unit, unsigned long long generation, int x, int y, TestFieldUnitSnapshot *snapshot) {
     if (!isTestFieldUnit(unit) || testFieldLife.actors[unit].generation != generation) return 0;
     const TestFieldMadeUnit *made = &testFieldLife.actors[unit];
     TestFieldUnitSnapshot row = readTestFieldUnitSnapshot(unit);
@@ -182,10 +221,36 @@ static int testFieldSceneryIdentity(int unit, unsigned long long generation, int
         GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE_2)(unit) != 1 ||
         GAME_FN(int (*)(int), RVA_UNIT_BATTLE_SIZE)(unit) != 1) return 0;
     if (*(int *)(battleCell(x, y) + BATTLE_CELL_OBJECT) != unit) return 0;
+    if (snapshot) *snapshot = row;
+    return 1;
+}
+
+// Confirms that the verified object appears only at its expected anchor.
+static int testFieldSceneryIdentity(int unit, unsigned long long generation, int x, int y) {
+    if (!readTestFieldSceneryAt(unit, generation, x, y, NULL)) return 0;
+    int width = G32(RVA_BATTLE_WIDTH);
     for (int bx = 0; bx < width; bx++)
         for (int by = 0; by < BATTLE_ROWS; by++) {
             const unsigned char *cell = battleCell(bx, by);
             if (*(const int *)cell == unit || ((bx != x || by != y) && *(const int *)(cell + BATTLE_CELL_OBJECT) == unit))
+                return 0;
+        }
+    return 1;
+}
+
+// Checks every authored reference in both layers with one grid traversal.
+static int testFieldSceneryAnchorsValid(void) {
+    int width = G32(RVA_BATTLE_WIDTH);
+    if (width < 1 || width > BATTLE_COLUMNS_MAX) return 0;
+    for (int x = 0; x < width; x++)
+        for (int y = 0; y < BATTLE_ROWS; y++) {
+            const unsigned char *cell = battleCell(x, y);
+            int actor = *(const int *)cell, object = *(const int *)(cell + BATTLE_CELL_OBJECT);
+            if (actor >= 0 && actor < UNIT_TABLE_MAX && testFieldLife.actors[actor].source == TEST_FIELD_OWNED_SCENERY)
+                return 0;
+            if (object < 0 || object >= UNIT_TABLE_MAX) continue;
+            const TestFieldMadeUnit *made = &testFieldLife.actors[object];
+            if (made->source == TEST_FIELD_OWNED_SCENERY && (made->sceneryX != x || made->sceneryY != y))
                 return 0;
         }
     return 1;
@@ -196,6 +261,7 @@ static int lTestFieldSceneryState(lua_State *L) {
     const char *call = "coe5.testFieldSceneryState";
     const char *reason = testFieldSceneryProblem(L, call, 0);
     if (reason) return refuseTestFieldRead(L, call, reason);
+    if (!testFieldSceneryAnchorsValid()) return refuseTestFieldRead(L, call, "scenery_identity_unverified");
     lua_createtable(L, 0, 3);
     setIntField(L, "version", 1);
     setIntField(L, "session", (lua_Integer)testFieldLife.session);
@@ -204,9 +270,9 @@ static int lTestFieldSceneryState(lua_State *L) {
     for (int unit = 0; unit < UNIT_TABLE_MAX; unit++) {
         const TestFieldMadeUnit *made = &testFieldLife.actors[unit];
         if (made->source != TEST_FIELD_OWNED_SCENERY) continue;
-        if (!testFieldSceneryIdentity(unit, made->generation, made->sceneryX, made->sceneryY))
+        TestFieldUnitSnapshot row;
+        if (!readTestFieldSceneryAt(unit, made->generation, made->sceneryX, made->sceneryY, &row))
             return refuseTestFieldRead(L, call, "scenery_identity_unverified");
-        TestFieldUnitSnapshot row = readTestFieldUnitSnapshot(unit);
         lua_createtable(L, 0, 13);
         setIntField(L, "unit", unit);
         setIntField(L, "generation", (lua_Integer)made->generation);
@@ -242,6 +308,20 @@ static int testFieldSceneryBoardSame(const unsigned char *before, const unsigned
         !memcmp(before + offset + BATTLE_CELL_SIZE, cell + BATTLE_CELL_SIZE, boardBytes - offset - BATTLE_CELL_SIZE);
 }
 
+// Accepts only the object's departure and the known cleanup flag change.
+static int testFieldSceneryRetiredCell(const unsigned char *before, const unsigned char *after) {
+    unsigned char expected[BATTLE_CELL_SIZE];
+    const int empty = -1;
+    unsigned int flags;
+    memcpy(expected, before, sizeof expected);
+    memcpy(expected + BATTLE_CELL_OBJECT, &empty, sizeof empty);
+    if (!memcmp(expected, after, sizeof expected)) return 1;
+    memcpy(&flags, expected + BATTLE_CELL_FLAGS, sizeof flags);
+    flags &= ~0x101u;
+    memcpy(expected + BATTLE_CELL_FLAGS, &flags, sizeof flags);
+    return !memcmp(expected, after, sizeof expected);
+}
+
 // Calls the terrain constructor and publishes the verified exact object.
 static int lAddTestFieldScenery(lua_State *L) {
     const char *call = "coe5.addTestFieldScenery";
@@ -267,12 +347,10 @@ static int lAddTestFieldScenery(lua_State *L) {
     const int width = G32(RVA_BATTLE_WIDTH);
     size_t boardBytes = (size_t)width * BATTLE_ROWS * BATTLE_CELL_SIZE;
     if (actorAnchor && *(int *)actorAnchor != occupant) return refuseTestFieldRead(L, call, "unverified_occupant");
-    unsigned char *board = actorAnchor ? malloc(boardBytes) : NULL;
-    if (actorAnchor && !board) return refuseTestFieldRead(L, call, "out_of_memory");
-    if (board) {
-        memcpy(board, battleCell(0, 0), boardBytes);
-        memcpy(actorBody, actorRecord, sizeof actorBody);
-    }
+    unsigned char *board = malloc(boardBytes);
+    if (!board) return refuseTestFieldRead(L, call, "out_of_memory");
+    memcpy(board, battleCell(0, 0), boardBytes);
+    if (actorRecord) memcpy(actorBody, actorRecord, sizeof actorBody);
     if (!pointTestFieldCall(&testFieldSceneryLookupCall)) {
         free(board);
         return refuseTestFieldRead(L, call, "scenery_lookup_unavailable");
@@ -288,24 +366,33 @@ static int lAddTestFieldScenery(lua_State *L) {
     testFieldSceneryRequest = -1;
     testFieldSceneryRequestName = NULL;
     leaveTestFieldCode();
-    int lookupRestored = restoreTestFieldCall(&testFieldSceneryLookupCall) && testFieldSceneryLookupValid();
+    int lookupRestored = restoreTestFieldSceneryLookup();
     if (session != testFieldLife.session || width != G32(RVA_BATTLE_WIDTH)) {
         free(board);
         return refuseUnverifiedScenery(L, call, "scenery_creation_unverified");
     }
-    if (actorAnchor && *(int *)actorAnchor == -1) *(int *)actorAnchor = occupant;
-    int actorUnchanged = !board || (isTestFieldActor(occupant) && actorGeneration == testFieldLife.generations[occupant] &&
-        *(int *)actorAnchor == occupant && !memcmp(actorBody, actorRecord, sizeof actorBody) &&
-        testFieldSceneryBoardSame(board, cell, boardBytes));
-    if (!actorUnchanged || !lookupRestored) {
+    if (actorAnchor) {
+        if (!isTestFieldActor(occupant) || actorGeneration != testFieldLife.generations[occupant] ||
+            memcmp(actorBody, actorRecord, sizeof actorBody)) {
+            free(board);
+            return refuseUnverifiedScenery(L, call, "scenery_occupant_changed");
+        }
+        if (*(int *)actorAnchor == -1) *(int *)actorAnchor = occupant;
+        if (*(int *)actorAnchor != occupant) {
+            free(board);
+            return refuseUnverifiedScenery(L, call, "scenery_occupant_changed");
+        }
+    }
+    if (!lookupRestored || !testFieldSceneryBoardSame(board, cell, boardBytes)) {
         free(board);
-        return refuseUnverifiedScenery(L, call, actorUnchanged ? "scenery_creation_unverified" : "scenery_occupant_changed");
+        return refuseUnverifiedScenery(L, call, actorAnchor && lookupRestored ? "scenery_occupant_changed" : "scenery_creation_unverified");
     }
     if (unit < 0 && serial == testFieldLife.serial && !memcmp(old, cell, sizeof old) && !testFieldLife.failed) {
         free(board);
         return refuseTestFieldRead(L, call, "native_scenery_refused");
     }
-    if (unit < 0 && testFieldLife.serial == serial + 1) {
+    int nativeRefused = unit < 0;
+    if (nativeRefused && testFieldLife.serial == serial + 1) {
         for (int id = 0; id < UNIT_TABLE_MAX; id++)
             if (isTestFieldUnit(id) && testFieldLife.actors[id].generation == serial + 1) {
                 unit = id;
@@ -327,8 +414,8 @@ static int lAddTestFieldScenery(lua_State *L) {
         return refuseUnverifiedScenery(L, call, "scenery_creation_unverified");
     }
     int (*canStand)(int, int, int, int) = GAME_FN(int (*)(int, int, int, int), RVA_BATTLE_CAN_STAND);
-    int stood = occupant < 0 || (canStand(occupant, actorX, actorY, 0) && canStand(occupant, actorX, actorY, 4));
-    if (board && (session != testFieldLife.session || width != G32(RVA_BATTLE_WIDTH) ||
+    int stood = !nativeRefused && (occupant < 0 || (canStand(occupant, actorX, actorY, 0) && canStand(occupant, actorX, actorY, 4)));
+    if (actorAnchor && (session != testFieldLife.session || width != G32(RVA_BATTLE_WIDTH) ||
         !isTestFieldActor(occupant) || actorGeneration != testFieldLife.generations[occupant] ||
         memcmp(actorBody, actorRecord, sizeof actorBody) || memcmp(expected, cell, sizeof expected) ||
         !testFieldSceneryBoardSame(board, cell, boardBytes))) {
@@ -336,25 +423,16 @@ static int lAddTestFieldScenery(lua_State *L) {
         return refuseUnverifiedScenery(L, call, "scenery_occupant_changed");
     }
     if (!stood) {
-        if (!retireTestFieldUnit(unit) || !isTestFieldActor(occupant) ||
-            actorGeneration != testFieldLife.generations[occupant] || memcmp(actorBody, actorRecord, sizeof actorBody) ||
-            !testFieldSceneryBoardSame(board, cell, boardBytes)) {
-            free(board);
-            return refuseUnverifiedScenery(L, call, "cleanup_unverified");
-        }
-        const int empty = -1;
-        unsigned int flags;
-        memcpy(expected + BATTLE_CELL_OBJECT, &empty, sizeof empty);
-        memcpy(&flags, expected + BATTLE_CELL_FLAGS, sizeof flags);
-        flags &= ~0x101u;
-        memcpy(expected + BATTLE_CELL_FLAGS, &flags, sizeof flags);
-        if (memcmp(expected, cell, sizeof expected)) {
+        if (!retireTestFieldUnit(unit) || session != testFieldLife.session || width != G32(RVA_BATTLE_WIDTH) ||
+            (actorAnchor && (!isTestFieldActor(occupant) || actorGeneration != testFieldLife.generations[occupant] ||
+                memcmp(actorBody, actorRecord, sizeof actorBody))) ||
+            !testFieldSceneryBoardSame(board, cell, boardBytes) || !testFieldSceneryRetiredCell(expected, cell)) {
             free(board);
             return refuseUnverifiedScenery(L, call, "cleanup_unverified");
         }
         memcpy(cell, old, sizeof old);
         free(board);
-        return refuseTestFieldRead(L, call, "native_scenery_rejected");
+        return refuseTestFieldRead(L, call, nativeRefused ? "native_scenery_refused" : "native_scenery_rejected");
     }
     free(board);
     made->source = TEST_FIELD_OWNED_SCENERY;
@@ -425,15 +503,23 @@ static int lRemoveTestFieldScenery(lua_State *L) {
     if (!reason && testFieldTokenCovering(made->sceneryX, made->sceneryY, 0, -1, 1) >= 0) reason = "scenery_occupied";
     if (reason) return refuseTestFieldRead(L, call, reason);
     unsigned char *cell = battleCell(made->sceneryX, made->sceneryY);
-    unsigned char underlying[BATTLE_CELL_SIZE];
-    memcpy(underlying, cell, sizeof underlying);
-    memset(underlying + BATTLE_CELL_OBJECT, 0xff, sizeof(int));
-    memcpy(underlying + BATTLE_CELL_OBJECT_SLIDE, &made->scenerySlide, sizeof made->scenerySlide);
-    if (!retireTestFieldUnit(unit)) {
-        testFieldLife.pending = testFieldLife.failed = 1;
-        return refuseTestFieldRead(L, call, "cleanup_unverified");
+    const int width = G32(RVA_BATTLE_WIDTH);
+    const unsigned long long session = testFieldLife.session;
+    size_t boardBytes = (size_t)width * BATTLE_ROWS * BATTLE_CELL_SIZE;
+    unsigned char *board = malloc(boardBytes);
+    if (!board) return refuseTestFieldRead(L, call, "out_of_memory");
+    const unsigned char *before = board + (cell - battleCell(0, 0));
+    memcpy(board, battleCell(0, 0), boardBytes);
+    if (!retireTestFieldUnit(unit) || session != testFieldLife.session || width != G32(RVA_BATTLE_WIDTH) ||
+        !testFieldSceneryBoardSame(board, cell, boardBytes) || !testFieldSceneryRetiredCell(before, cell)) {
+        free(board);
+        return refuseUnverifiedScenery(L, call, "cleanup_unverified");
     }
-    memcpy(cell, underlying, sizeof underlying);
+    const int empty = -1;
+    memcpy(cell, before, BATTLE_CELL_SIZE);
+    memcpy(cell + BATTLE_CELL_OBJECT, &empty, sizeof empty);
+    memcpy(cell + BATTLE_CELL_OBJECT_SLIDE, &made->scenerySlide, sizeof made->scenerySlide);
+    free(board);
     made->cleanup = 1;
     made->source = TEST_FIELD_SCATTER;
     testFieldInitialDeploymentReset();
@@ -453,8 +539,9 @@ static int lInspectTestFieldFeature(lua_State *L) {
     const char *call = "coe5.inspectTestFieldFeature";
     checkLuaMainThread(L, call);
     LuaScript *script = checkLuaScript(L);
-    int final = lua_toboolean(L, 3);
+    int final = lua_isboolean(L, 3) && lua_toboolean(L, 3);
     const char *reason = final ? testFieldFinalReadProblem(script) : testFieldReadProblem(script);
+    if (!reason && !lua_isnoneornil(L, 3) && !lua_isboolean(L, 3)) reason = "bad_final";
     if (!reason && (!TEST_FIELD_VERIFIED_WINDOWS_ABI || !testField.editor || !testFieldLife.active ||
         testFieldLife.failed || testFieldLife.pending || testFieldLife.retiring || testField.fighting ||
         testField.activePlayer >= 0 ||
