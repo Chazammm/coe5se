@@ -43,7 +43,7 @@ static int readCopyAbilitySum(int u, int ability, int add) {
         unsigned long long resistances = GAME_FN(ReadCopyFlagsFn, RVA_UNIT_RESISTANCES)(u), benefits = GAME_FN(ReadCopyFlagsFn, RVA_UNIT_BENEFITS)(u);
         if ((resistances >> 14 & 1) || (benefits >> 16 & 1) || monsterAbility(monster, READ_COPY_ABILITY_BLESS_A) > 0 ||
             monsterAbility(monster, READ_COPY_ABILITY_BLESS_B) > 0)
-            total += slotBlessingOfCopy(owner, ability);
+            total += playerBlessingValueCopy(owner, ability);
     }
     int temporary = 0;
     for (int i = 0; i < READ_COPY_TEMP_ABILITIES; i++) {

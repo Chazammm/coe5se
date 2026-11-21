@@ -238,8 +238,8 @@ static const LuaSite luaSites[] = {
     {"MOVE_WANDERING_MONSTERS",       SITE_MOVE_WANDERING_MONSTERS,       K_OBSERVE, "x:"},
     {"MOVE_PLAYER_STUPIDS",           SITE_MOVE_PLAYER_STUPIDS,           K_OBSERVE, "x:"},
     {"OVERRUN_CHECK",                 SITE_OVERRUN_CHECK,                 K_OBSERVE, "i:iii"},
-    {"KILL_UNIT_999",                 SITE_KILL_UNIT_999,                 K_OBSERVE, "v:i"},
-    {"DAMAGE_UNIT_PLAIN",             SITE_DAMAGE_UNIT_PLAIN,             K_OBSERVE, "v:ii"},
+    {"KILL_UNIT",                     SITE_KILL_UNIT,                     K_OBSERVE, "v:i"},
+    {"SUBTRACT_UNIT_HP",              SITE_SUBTRACT_UNIT_HP,              K_OBSERVE, "v:ii"},
     {"CONTINUE_MOVE_ORDERS",          SITE_CONTINUE_MOVE_ORDERS,          K_OBSERVE, "i:ii"},
     {"HUMAN_MULTI_MOVE",              SITE_HUMAN_MULTI_MOVE,              K_OBSERVE, "i:iiii"},
     {"GROUP_MOVE",                    SITE_GROUP_MOVE,                    K_OBSERVE, "i:iii"},
@@ -587,8 +587,8 @@ static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
     {SITE_MOVE_WANDERING_MONSTERS, "", '-'},
     {SITE_MOVE_PLAYER_STUPIDS, "", '-'},
     {SITE_OVERRUN_CHECK, "pxy", 'k'},
-    {SITE_KILL_UNIT_999, "u", '-'},
-    {SITE_DAMAGE_UNIT_PLAIN, "u-", '-'},
+    {SITE_KILL_UNIT, "u", '-'},
+    {SITE_SUBTRACT_UNIT_HP, "u-", '-'},
     {SITE_CONTINUE_MOVE_ORDERS, "pc", '-'},
     {SITE_HUMAN_MULTI_MOVE, "cxyk", 'k'},
     {SITE_GROUP_MOVE, "kxy", 'k'},
@@ -1800,6 +1800,8 @@ static const struct { const char *name, *now; } LUA_SITE_FIRST_NAMES[] = {
     {"UNIT_STRENGTH", "UNIT_BATTLE_STRENGTH"},
     {"SQUARE_STRENGTH", "SQUARE_BATTLE_STRENGTH"},
     {"COMMANDER_STRENGTH", "COMMANDER_BATTLE_STRENGTH"},
+    {"KILL_UNIT_999", "KILL_UNIT"},
+    {"DAMAGE_UNIT_PLAIN", "SUBTRACT_UNIT_HP"},
 };
 
 static const LuaSite *luaSiteOfName(const char *name) {

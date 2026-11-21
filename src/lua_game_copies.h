@@ -132,7 +132,7 @@ static int squareHasSeenUnitCopy(int player, int x, int y) {
 
 // ---- Spells and rituals ---------------------------------------------------------------------------
 
-static int slotBlessingOfCopy(int player, int ability) {
+static int playerBlessingValueCopy(int player, int ability) {
     if (player < 0 || ability <= 0) return 0;
     for (int i = 0; i < 24; i++) {
         int id = PG32(RVA_PLAYER_BLESSINGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)i * 8);
@@ -563,7 +563,7 @@ static int moveEnchantsCopy(int fromX, int fromY, int toX, int toY) {
     }
     return moved;
 }
-static void damageUnitPlainCopy(int u, int damage) {
+static void subtractUnitHpCopy(int u, int damage) {
     if (u < 0) return;
     size_t at = (size_t)u * UNIT_SIZE;
     int x = G32(RVA_UNIT_X + at), y = G32(RVA_UNIT_X + 4 + at);

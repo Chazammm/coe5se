@@ -193,6 +193,10 @@ static int commanderCastScreenCheck(int commander, int ritual) { return ritualCa
 
 static int commanderCastOtherCheck(int commander, int ritual) { return ritualCanCastThrough(commander, ritual, 0); }
 
+static int commanderCastRepeatCheck(int commander, int ritual) {
+    return corpseNeedCheck(commander, ritual, ritualCanCastThrough(commander, ritual, 0));
+}
+
 // ---- The location check's site --------------------------------------------------------------------
 typedef int (*RitualLocationCheckFn)(int commander, int ritual, int x, int y, int *targets);
 static int luaSiteDepth[SITE_COUNT];
@@ -315,18 +319,32 @@ static void useCommanderCastsChunk(const SaveChunk *chunk, SaveFile kind) {
 #ifdef __APPLE__
 static int macRedirectCalls(unsigned int rva, void *hook, const char *name);
 
-static int pointCommanderCastChecks(void) { return macRedirectCalls(RVA_RITUAL_CAN_CAST, (void *)commanderCastOtherCheck, "ritual_can_cast") == 8; }
+// @platform-split repeat_can_cast_mac: four repeat calls on Mac, one on Windows
+static int pointCommanderCastChecks(void) {
+    static const CorpseCall REPEATS[] = {
+        {RVA_REPEAT_RITUAL_CAN_CAST_CALL, RVA_RITUAL_CAN_CAST, (void *)commanderCastRepeatCheck, "repeat_ritual_can_cast"},
+        {RVA_REPEAT_RITUAL_CAN_CAST_CALL_2, RVA_RITUAL_CAN_CAST, (void *)commanderCastRepeatCheck, "repeat_ritual_can_cast_2"},
+        {RVA_REPEAT_RITUAL_CAN_CAST_CALL_3, RVA_RITUAL_CAN_CAST, (void *)commanderCastRepeatCheck, "repeat_ritual_can_cast_3"},
+        {RVA_REPEAT_RITUAL_CAN_CAST_CALL_4, RVA_RITUAL_CAN_CAST, (void *)commanderCastRepeatCheck, "repeat_ritual_can_cast_4"},
+    };
+    int repeats = 0;
+    for (int i = 0; i < 4; i++) repeats += pointCorpseCall(&REPEATS[i], i);
+    return repeats == 4 && macRedirectCalls(RVA_RITUAL_CAN_CAST, (void *)commanderCastOtherCheck, "ritual_can_cast") == 4;
+}
 #else
 #define COMMANDER_CAST_STUB_SIZE 0x20
 
 static int pointCommanderCastChecks(void) {
     static const struct {
         unsigned int callRva;
+        void *hook;
         const char *name;
     } CALLS[] = {
-        {RVA_AI_RITUAL_CAN_CAST_CALL_A, "ai_apprspam_can_cast"}, {RVA_AI_RITUAL_CAN_CAST_CALL_B, "ai_plan_can_cast"},
-        {RVA_AI_RITUAL_CAN_CAST_CALL_C, "ai_has_plan_can_cast"},   {RVA_AI_RITUAL_CAN_CAST_CALL_D, "ai_always_can_cast"},
-        {RVA_REPEAT_RITUAL_CAN_CAST_CALL, "repeat_ritual_can_cast"},
+        {RVA_AI_RITUAL_CAN_CAST_CALL_A, (void *)commanderCastOtherCheck, "ai_apprspam_can_cast"},
+        {RVA_AI_RITUAL_CAN_CAST_CALL_B, (void *)commanderCastOtherCheck, "ai_plan_can_cast"},
+        {RVA_AI_RITUAL_CAN_CAST_CALL_C, (void *)commanderCastOtherCheck, "ai_has_plan_can_cast"},
+        {RVA_AI_RITUAL_CAN_CAST_CALL_D, (void *)commanderCastOtherCheck, "ai_always_can_cast"},
+        {RVA_REPEAT_RITUAL_CAN_CAST_CALL, (void *)commanderCastRepeatCheck, "repeat_ritual_can_cast"},
     };
     unsigned char *stubs = allocNear(gameBase + RVA_TEXT_SECTION);
     if (!stubs) {
@@ -336,8 +354,8 @@ static int pointCommanderCastChecks(void) {
     makePagesReadExecute(stubs, 0x1000);
     int ok = 0, count = (int)(sizeof CALLS / sizeof CALLS[0]);
     for (int i = 0; i < count; i++)
-        ok += redirectCall(CALLS[i].callRva, RVA_RITUAL_CAN_CAST, stubs + COMMANDER_CAST_STUB_SIZE * i, (void *)commanderCastOtherCheck,
-                           CALLS[i].name, NULL);
+        ok += redirectCall(CALLS[i].callRva, RVA_RITUAL_CAN_CAST, stubs + COMMANDER_CAST_STUB_SIZE * i, CALLS[i].hook, CALLS[i].name,
+                           NULL);
     return ok == count;
 }
 #endif

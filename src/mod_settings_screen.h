@@ -834,6 +834,7 @@ static void modsRunHook(int level) {
     transportsAfterPass(level);
     battleTokenSizesAfterPass(level);
     syncLuaScriptsAfterPass(level);
+    refuseFactionPlanesAfterScripts(level);
     fallbackFontsAfterPass(level);
     drawnTextAroundPass(level);
     modDescriptionsAfterPass(level);

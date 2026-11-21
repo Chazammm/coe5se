@@ -20,16 +20,19 @@ enum { FACTION_TERRAIN_ANY, FACTION_TERRAIN_MAGMA, FACTION_TERRAIN_ICE, FACTION_
 typedef struct {
     int min, use, chance, terrain;
     char group[FACTION_GROUP_SIZE];
+    int line;
 } FactionSpawn;
 
 typedef struct {
     char monster[MONSTER_NAME_SIZE], plane[PLANE_NAME_SIZE];
     int count, chance, terrain;
+    int line;
 } FactionUnits;
 
 typedef struct {
     char plane[PLANE_NAME_SIZE];
     int terrain;
+    int line;
 } FactionTake;
 
 typedef struct {
@@ -68,6 +71,7 @@ typedef struct {
     int unitCount, unitRoom;
     FactionTake takes[FACTION_TAKES_MAX];
     int takeCount;
+    int homeLine, spawnPlaneLine, eventPlaneLine, caravanPlaneLine, scriptLine;
     int fromPass;
     int scriptRestarting;
 } Faction;
@@ -103,21 +107,24 @@ static const char *factionPresetHome(int like) { return like == 28 ? "Inferno" :
 static int factionPresetActive(int like) { return like == 28 ? 1 : like == 29 ? 2 : FACTION_ACTIVE_ALWAYS; }
 static int factionPresetPopulate(int like) { return like == 24 || like == 26 || like == 27 || like == 28; }
 static int factionPresetWander(int like) { return like == 24 || like == 27 || like == 28 || like == 29 ? like : -1; }
+static int factionPresetSpawnSite(int like) { return like == 28 ? FACTION_SITE_OWN_CITADEL : like == 27 ? FACTION_SITE_MONUMENT : FACTION_SITE_NONE; }
+static const char *const FACTION_SITE_WORDS[] = {"none", "owncitadel", "monument"};
+static const char *const FACTION_TERRAIN_WORDS[] = {"magma", "ice", "waste"};
 
 static const FactionSpawn INFERNO_SPAWNS[] = {
-    {40, 40, 100, FACTION_TERRAIN_ANY, "c*Greater Devil & 1d3*Devil & 2d6*Hellhound & 2d6*Fiery Imp"},
-    {10, 10, 25, FACTION_TERRAIN_ANY, "c*Bone Devil & 1d4*Bone Imp & 1d6*Longdead"},
-    {10, 10, 100, FACTION_TERRAIN_MAGMA, "c*Devil & 1d6+1*Fiery Imp"},
-    {10, 10, 100, FACTION_TERRAIN_ICE, "c*Frost Fiend & 1d6+1*Ice Imp"},
-    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Demon Knight & 1d4+1*Bloodsworn"},
-    {10, 10, 100, FACTION_TERRAIN_ANY, "c*Disease Demon & 1d3*Spine Devil"},
+    {40, 40, 100, FACTION_TERRAIN_ANY, "c*Greater Devil & 1d3*Devil & 2d6*Hellhound & 2d6*Fiery Imp", 0},
+    {10, 10, 25, FACTION_TERRAIN_ANY, "c*Bone Devil & 1d4*Bone Imp & 1d6*Longdead", 0},
+    {10, 10, 100, FACTION_TERRAIN_MAGMA, "c*Devil & 1d6+1*Fiery Imp", 0},
+    {10, 10, 100, FACTION_TERRAIN_ICE, "c*Frost Fiend & 1d6+1*Ice Imp", 0},
+    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Demon Knight & 1d4+1*Bloodsworn", 0},
+    {10, 10, 100, FACTION_TERRAIN_ANY, "c*Disease Demon & 1d3*Spine Devil", 0},
 };
 static const FactionSpawn HADES_SPAWNS[] = {
-    {30, 30, 100, FACTION_TERRAIN_ANY, "c*Wraith & 1d2*Ghost & 3d6*Shade & 2d4*Shade Beast & 3d6*Ghost Warrior"},
-    {20, 20, 25, FACTION_TERRAIN_ANY, "c*Tartarian Spirit & 1d4*Shade Beast"},
-    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Bane Lord & 1d4*Bane"},
-    {10, 10, 25, FACTION_TERRAIN_ANY, "c*Wraith & 1d4*Umbral"},
-    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Shade Mage & 2d4*Shade"},
+    {30, 30, 100, FACTION_TERRAIN_ANY, "c*Wraith & 1d2*Ghost & 3d6*Shade & 2d4*Shade Beast & 3d6*Ghost Warrior", 0},
+    {20, 20, 25, FACTION_TERRAIN_ANY, "c*Tartarian Spirit & 1d4*Shade Beast", 0},
+    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Bane Lord & 1d4*Bane", 0},
+    {10, 10, 25, FACTION_TERRAIN_ANY, "c*Wraith & 1d4*Umbral", 0},
+    {10, 10, 50, FACTION_TERRAIN_ANY, "c*Shade Mage & 2d4*Shade", 0},
 };
 static const char *const HADES_MONUMENT_NEWS = "It is said that %s has started to construct the Monument of Hades. A construction that will draw "
                                                "the spirits of Hades to it and empower them to kill the living beings of Elysium. This "
@@ -254,7 +261,7 @@ static const char *declareFaction(const char *mod, Faction *draft) {
     if (!f->hasWorldEvents) f->worldEvents = f->like == 24;
     if (!f->hasConquest) f->conquestIndependent = f->like == 24;
     if (!f->hasStatue) f->statue = f->like == 30;
-    if (!f->hasSpawnSite) f->spawnSite = f->like == 28 ? FACTION_SITE_OWN_CITADEL : f->like == 27 ? FACTION_SITE_MONUMENT : FACTION_SITE_NONE;
+    if (!f->hasSpawnSite) f->spawnSite = factionPresetSpawnSite(f->like);
     if (!f->hasFuel) snprintf(f->fuel, sizeof f->fuel, "%s", f->like == 28 ? "Sinner" : f->like == 27 ? "Dispossessed Spirit" : "");
     if (!f->hasSpawns) factionPresetSpawns(f);
     if (!f->hasMonument) snprintf(f->monument, sizeof f->monument, "%s", f->like == 27 ? "Monument of Hades" : "");
@@ -333,16 +340,33 @@ static int factionPopulatesGamePlane(const Faction *d) {
     return d->hasPopulate && d->populate && vanillaPlaneNamed(d->hasHome ? d->home : factionPresetHome(d->like)) >= 0;
 }
 
+static int factionDraftSpawnSite(const Faction *d) { return d->hasSpawnSite ? d->spawnSite : factionPresetSpawnSite(d->like); }
+
+static int factionSpawnTerrainDead(const Faction *d, const FactionSpawn *s) {
+    return s->terrain != FACTION_TERRAIN_ANY && factionDraftSpawnSite(d) != FACTION_SITE_OWN_CITADEL;
+}
+
 static void finishFactionBlock(void) {
     if (!factionBlock.open) return;
     factionBlock.open = 0;
     if (factionBlock.refused) return;
     const char *mod = spellModName(factionBlock.mod);
-    if (factionPopulatesGamePlane(&factionBlock.draft)) {
-        refuseC5mLine("factionpopulate", mod, "game_plane", "line=%d faction=%s home=%s", factionBlock.line, factionBlock.draft.name,
-                      factionBlock.draft.hasHome ? factionBlock.draft.home : factionPresetHome(factionBlock.draft.like));
-        factionBlock.draft.populate = 0;
+    Faction *d = &factionBlock.draft;
+    if (factionPopulatesGamePlane(d)) {
+        refuseC5mLine("factionpopulate", mod, "game_plane", "line=%d faction=%s home=%s", factionBlock.line, d->name, d->hasHome ? d->home : factionPresetHome(d->like));
+        d->populate = 0;
     }
+    int kept = 0;
+    for (int i = 0; d->hasSpawns && i < d->spawnCount; i++) {
+        const FactionSpawn *spawn = &d->spawns[i];
+        if (factionSpawnTerrainDead(d, spawn)) {
+            refuseC5mLine("factionspawn", mod, "terrain_needs_owncitadel", "line=%d faction=%s terrain=%s site=%s", spawn->line, d->name,
+                          FACTION_TERRAIN_WORDS[spawn->terrain - FACTION_TERRAIN_MAGMA], FACTION_SITE_WORDS[factionDraftSpawnSite(d)]);
+            continue;
+        }
+        d->spawns[kept++] = *spawn;
+    }
+    if (d->hasSpawns) d->spawnCount = kept;
     const char *reason = declareFaction(mod, &factionBlock.draft);
     if (reason) refuseC5mLine(NEWFACTION_WORD, mod, reason, "line=%d name=%s", factionBlock.line, factionBlock.draft.name);
 }
@@ -398,6 +422,12 @@ static void factioncolorLine(const char *args, int mod, int level) {
     factionBlock.draft.hasColour = 1;
 }
 
+static int noteFactionPlaneName(const char *plane, int mod) {
+    if (!plane[0] || mod == FACTION_MOD_SCRIPT) return 0;
+    notePlaneName(plane, spellModName(mod));
+    return G32(RVA_MOD_LINE);
+}
+
 static void factionhomeLine(const char *args, int mod, int level) {
     if (!factionBlockTakes("factionhome", mod, level)) return;
     const char *p = args;
@@ -408,7 +438,7 @@ static void factionhomeLine(const char *args, int mod, int level) {
         return;
     }
     snprintf(factionBlock.draft.home, sizeof factionBlock.draft.home, "%.*s", (int)(sizeof factionBlock.draft.home) - 1, name);
-    factionBlock.draft.hasHome = 1;
+    factionBlock.draft.hasHome = 1, factionBlock.draft.homeLine = noteFactionPlaneName(factionBlock.draft.home, mod);
 }
 
 static void factionactiveLine(const char *args, int mod, int level) {
@@ -497,8 +527,7 @@ static void factionstatueLine(const char *args, int mod, int level) {
 
 static void factionspawnsiteLine(const char *args, int mod, int level) {
     if (!factionBlockTakes("factionspawnsite", mod, level)) return;
-    static const char *const SITES[] = {"none", "owncitadel", "monument"};
-    int site = factionWordChoice(args, SITES, 3);
+    int site = factionWordChoice(args, FACTION_SITE_WORDS, 3);
     char plane[PLANE_NAME_SIZE + 2] = "";
     if (site == FACTION_SITE_MONUMENT) {
         const char *p = args;
@@ -516,6 +545,7 @@ static void factionspawnsiteLine(const char *args, int mod, int level) {
     }
     factionBlock.draft.spawnSite = site, factionBlock.draft.hasSpawnSite = 1;
     snprintf(factionBlock.draft.spawnPlane, sizeof factionBlock.draft.spawnPlane, "%s", plane);
+    factionBlock.draft.spawnPlaneLine = noteFactionPlaneName(factionBlock.draft.spawnPlane, mod);
 }
 
 static void factionfuelLine(const char *args, int mod, int level) {
@@ -546,9 +576,8 @@ static void factionspawnLine(const char *args, int mod, int level) {
         else if (len >= FACTION_GROUP_SIZE) reason = "group_too_long";
     }
     if (!reason) {
-        static const char *const TERRAINS[] = {"magma", "ice", "waste"};
         while (*p == ' ' || *p == '\t') p++;
-        int terrain = *p && *p != '\r' && *p != '\n' && *p != '#' ? factionWordChoice(p, TERRAINS, 3) : -1;
+        int terrain = *p && *p != '\r' && *p != '\n' && *p != '#' ? factionWordChoice(p, FACTION_TERRAIN_WORDS, 3) : -1;
         if (terrain >= 0) spawn.terrain = terrain + FACTION_TERRAIN_MAGMA;
         else if (*p && *p != '\r' && *p != '\n' && *p != '#') reason = "bad_terrain";
     }
@@ -558,7 +587,7 @@ static void factionspawnLine(const char *args, int mod, int level) {
         return;
     }
     if (!f->hasSpawns) f->spawnCount = 0, f->hasSpawns = 1;
-    spawn.min = (int)min, spawn.use = (int)use, spawn.chance = (int)chance;
+    spawn.min = (int)min, spawn.use = (int)use, spawn.chance = (int)chance, spawn.line = mod == FACTION_MOD_SCRIPT ? 0 : G32(RVA_MOD_LINE);
     f->spawns[f->spawnCount++] = spawn;
 }
 
@@ -727,7 +756,7 @@ static void factionunitsLine(const char *args, int mod, int level) {
         refuseFactionLine("factionunits", mod, reason, "faction=%s text=%.60s", f->name, args);
         return;
     }
-    u.count = (int)count, u.chance = (int)chance;
+    u.count = (int)count, u.chance = (int)chance, u.line = noteFactionPlaneName(u.plane, mod);
     f->units[f->unitCount++] = u;
 }
 
@@ -745,6 +774,7 @@ static void factionpopulateterrainLine(const char *args, int mod, int level) {
         refuseFactionLine("factionpopulateterrain", mod, reason, "faction=%s text=%.60s", f->name, args);
         return;
     }
+    t.line = noteFactionPlaneName(t.plane, mod);
     f->takes[f->takeCount++] = t;
 }
 
@@ -782,6 +812,7 @@ static void factioncaravanLine(const char *args, int mod, int level) {
     }
     f->caravanTurn = (int)turn, f->caravanChance = (int)chance, f->caravanTerrain = (int)terrain, f->hasCaravan = 1;
     snprintf(f->caravanPlane, sizeof f->caravanPlane, "%.*s", (int)(sizeof f->caravanPlane) - 1, plane);
+    f->caravanPlaneLine = noteFactionPlaneName(f->caravanPlane, mod);
     snprintf(f->caravanGroup, sizeof f->caravanGroup, "%s", group);
     snprintf(f->caravanNews, sizeof f->caravanNews, "%s", news);
 }
@@ -814,6 +845,7 @@ static void factionmonumenteventLine(const char *args, int mod, int level) {
     }
     f->eventTurn = (int)turn, f->eventChance = (int)chance, f->eventTerrain = (int)terrain, f->hasEvent = 1;
     snprintf(f->eventPlane, sizeof f->eventPlane, "%.*s", (int)(sizeof f->eventPlane) - 1, plane);
+    f->eventPlaneLine = noteFactionPlaneName(f->eventPlane, mod);
     snprintf(f->eventUnfinished, sizeof f->eventUnfinished, "%.*s", (int)(sizeof f->eventUnfinished) - 1, unfinished);
     snprintf(f->eventNews, sizeof f->eventNews, "%s", news);
 }
@@ -1050,6 +1082,13 @@ static int lAddFaction(lua_State *L) {
         factionBlock.refused = 1;
         refuseLuaCall(addFactionMod, "coe5.addFaction", "game_plane", "field=populate faction=%s", name);
     }
+    const Faction *d = &factionBlock.draft;
+    for (int i = 0; !factionBlock.refused && d->hasSpawns && i < d->spawnCount; i++)
+        if (factionSpawnTerrainDead(d, &d->spawns[i])) {
+            factionBlock.refused = 1;
+            refuseLuaCall(addFactionMod, "coe5.addFaction", "terrain_needs_owncitadel", "field=spawns faction=%s spawn=%d terrain=%s site=%s", name, i + 1,
+                          FACTION_TERRAIN_WORDS[d->spawns[i].terrain - FACTION_TERRAIN_MAGMA], FACTION_SITE_WORDS[factionDraftSpawnSite(d)]);
+        }
     int refused = factionBlock.refused;
     factionBlock.open = 0, addFactionMod = NULL;
     if (!refused) {
@@ -1057,7 +1096,9 @@ static int lAddFaction(lua_State *L) {
         if (reason) refuseLuaCall(mod, "coe5.addFaction", reason, "field=name name=%.40s", name);
         else {
             Faction *added = findFaction(name);
+            lua_Debug caller;
             added->fromPass = FACTION_FROM_SCRIPT;
+            added->scriptLine = lua_getstack(L, 1, &caller) && lua_getinfo(L, "l", &caller) ? caller.currentline : 0;
             settleFactionMonsterNames(added);
         }
     }
@@ -1110,6 +1151,46 @@ static void factionWordsAfterPass(int level) {
         kept++;
     }
     factionCount = kept;
+}
+
+// ---- Plane names in the faction words ------------------------------------------------------------
+typedef void (*FactionPlaneNameFn)(const Faction *f, const char *word, const char *field, const char *plane, int line);
+static void eachFactionPlaneName(const Faction *f, FactionPlaneNameFn fn) {
+    if (f->hasHome) fn(f, "factionhome", "home", f->home, f->homeLine);
+    if (f->hasSpawnSite && f->spawnSite == FACTION_SITE_MONUMENT) fn(f, "factionspawnsite", "spawnPlane", f->spawnPlane, f->spawnPlaneLine);
+    if (f->hasEvent && f->eventTurn >= 0) fn(f, "factionmonumentevent", "monumentEvent", f->eventPlane, f->eventPlaneLine);
+    if (f->hasCaravan && f->caravanTurn >= 0) fn(f, "factioncaravan", "caravan", f->caravanPlane, f->caravanPlaneLine);
+    for (int i = 0; i < f->unitCount; i++) fn(f, "factionunits", "units", f->units[i].plane, f->units[i].line);
+    for (int i = 0; i < f->takeCount; i++) fn(f, "factionpopulateterrain", "populateTerrain", f->takes[i].plane, f->takes[i].line);
+}
+
+static void refuseUnknownFactionPlane(const Faction *f, const char *word, const char *field, const char *plane, int line) {
+    if (!plane[0] || !isPlaneNameMissing(plane)) return;
+    if (f->fromPass == FACTION_FROM_SCRIPT)
+        refuseLuaCall(f->mod, "coe5.addFaction", "unknown_plane", "field=%s faction=%s plane=%s line=%d", field, f->name, plane, f->scriptLine);
+    else refuseC5mLine(word, f->mod, "unknown_plane", "line=%d faction=%s plane=%s", line, f->name, plane);
+}
+
+static void refuseUnknownFactionPlanes(void) {
+    for (int i = 0; i < factionCount; i++)
+        if (factions[i].fromPass != FACTION_EARLIER_PASS) eachFactionPlaneName(&factions[i], refuseUnknownFactionPlane);
+}
+
+static void refuseFactionPlanesAfterScripts(int level) {
+    if (level != 2 || !startupFinished) return;
+    refuseUnknownFactionPlanes();
+}
+
+static void noteScriptFactionPlaneName(const Faction *f, const char *word, const char *field, const char *plane, int line) {
+    (void)word, (void)field, (void)line;
+    char file[MAX_PATH];
+    scriptPathOfMod(f->mod, file, sizeof file);
+    if (plane[0]) notePlaneNameAt(plane, f->mod, file, f->scriptLine, 1);
+}
+
+static void noteScriptFactionPlaneNames(void) {
+    for (int i = 0; i < factionCount; i++)
+        if (factions[i].fromPass == FACTION_FROM_SCRIPT) eachFactionPlaneName(&factions[i], noteScriptFactionPlaneName);
 }
 
 static void factionWordsInit(void) {

@@ -1038,6 +1038,8 @@ static int unitOwnerIsHuman(int unit) {
     return controller == CONTROLLER_HUMAN || controller == CONTROLLER_REMOTE_HUMAN;
 }
 
+static int ritualLinesShown(void) { return G32(RVA_TEST_GAME_FLAG) != 0; }
+
 static CorpseCast *currentCorpseCast(void) {
     return corpseCastDepth > 0 && corpseCastDepth <= CORPSE_CASTS_MAX ? &corpseCasts[corpseCastDepth - 1] : NULL;
 }
@@ -1171,7 +1173,7 @@ static void runWaitingRaiseCorpses(CorpseCast *cast, int type, int prior) {
 }
 
 static void showHeldCorpseFailure(const CorpseCast *cast) {
-    if (!cast->heldFailure || cast->raisedAny) return;
+    if (!cast->heldFailure || cast->raisedAny || !ritualLinesShown()) return;
     corpsePlaySample(RAISE_FAILED_SAMPLE, 0);
     corpseProgressText(4000, "Ritual failed due to no suitable corpses found.");
 }
@@ -1312,6 +1314,7 @@ static void farRaiseVanilla(CorpseCast *cast, const CorpseRule *r, int player, i
             cast->heldFailure = 1;
             return;
         }
+        if (!ritualLinesShown()) return;
         corpsePlaySample(RAISE_FAILED_SAMPLE, 0);
         corpseProgressText(4000, animals ? "Ritual failed due to no animal corpses found." : "Ritual failed due to no humanoid corpses found.");
         return;
@@ -1416,10 +1419,62 @@ static int ritualRaiseFindsCorpses(int commander, int ritual) {
     return !raises;
 }
 
-static int corpseScreenCanCast(int commander, int ritual) {
-    int result = nextCorpseCanCast(commander, ritual);
+static int corpseNeedCheck(int commander, int ritual, int result) {
     if (result < 1 || !corpseRuleCount || !ritualHasCorpseRule(ritual, CORPSE_RULE_NEED)) return result;
     return ritualRaiseFindsCorpses(commander, ritual) ? result : RITUAL_REASON_NOT_NOW;
+}
+
+static int corpseScreenCanCast(int commander, int ritual) { return corpseNeedCheck(commander, ritual, nextCorpseCanCast(commander, ritual)); }
+
+// ---- The AI's pointless check: CoE5SE's raises with no corpse ---------------------------------------
+typedef int (*RitualPointlessFn)(int, int);
+static RitualPointlessFn ritualPointlessGame, nextCorpseCandidatePointless;
+
+static const int RITUAL_TARGET_MOVERS[] = {RITUAL_FX_PLANELOC, RITUAL_FX_CHOOSETERRLOC, RITUAL_FX_RANDOMLOC, RITUAL_FX_CHOOSELOC,
+                                           RITUAL_FX_RANDTERRLOC, RITUAL_FX_RANDNEWLOC, RITUAL_FX_NEWLOCPLANES, RITUAL_FX_PORTALROOM,
+                                           RITUAL_FX_DIG_MOVE};
+
+static int ritualMovesTarget(int ritual) {
+    for (size_t i = 0; i < sizeof RITUAL_TARGET_MOVERS / sizeof RITUAL_TARGET_MOVERS[0]; i++)
+        if (ritualEffectCount(ritual, RITUAL_TARGET_MOVERS[i])) return 1;
+    return 0;
+}
+
+static int corpseRaisesFindNothing(int commander, int ritual) {
+    if (!corpseRuleCount) return 0;
+    short *corpses = commanderCorpses(commander);
+    if (!corpses) return 0;
+    int mask = 0, raises = 0, moved = -1;
+    for (int i = 0; i < corpseRuleCount; i++) {
+        const CorpseRule *r = &corpseRules[i];
+        if (r->ritual != ritual) continue;
+        int group = r->type == CORPSE_RULE_RAISE_CORPSES || r->type == CORPSE_RULE_FAR_RAISE_CORPSES ? CORPSE_MASK_ALL
+                  : r->type == CORPSE_RULE_FAR_RAISE_DEAD ? CORPSE_MASK_HUMANOID : r->type == CORPSE_RULE_FAR_RAISE_ANIMALS ? CORPSE_MASK_ANIMAL : 0;
+        if (!group) continue;
+        if (r->type != CORPSE_RULE_RAISE_CORPSES && (moved < 0 ? (moved = ritualMovesTarget(ritual)) : moved)) return 0;
+        mask |= group, raises++;
+    }
+    if (!raises) return 0;
+    if (ritualEffectCount(ritual, RITUAL_FX_RAISE_DEAD)) mask |= CORPSE_MASK_HUMANOID;
+    if (ritualEffectCount(ritual, RITUAL_FX_RAISE_ANIMALS)) mask |= CORPSE_MASK_ANIMAL;
+    return countSelectedCorpses(corpses, mask, -1) < 1;
+}
+
+static int corpseAiPointless(int commander, int ritual) {
+    int result = ritualPointlessGame(commander, ritual);
+    return result ? result : corpseRaisesFindNothing(commander, ritual);
+}
+
+static int corpseCandidatePointless(int commander, int ritual) {
+    int result = nextCorpseCandidatePointless(commander, ritual);
+    return result ? result : corpseRaisesFindNothing(commander, ritual);
+}
+
+static int wrapCorpseCandidatePointless(void) {
+    char owner[64];
+    moduleFileName((void *)corpseCandidatePointless, owner, sizeof owner);
+    return insertWrap(SITE_AI_RITUAL_CANDIDATE, (void *)corpseCandidatePointless, (void **)&nextCorpseCandidatePointless,
+                      (WrapPlace){.priority = INT_MIN}, owner, NULL);
 }
 
 static int lastCorpseUnit = -1, lastCorpseLeft = CORPSE_KIND_LEAVES_NONE;
@@ -1551,6 +1606,7 @@ static void corpseKindsInit(void) {
     corpseSendSquare = GAME_FN(void (*)(int, int, int), RVA_NET_SEND_SQUARE);
     corpseProgressText = GAME_FN(uint64_t (*)(int, const char *, ...), RVA_PROGRESS_TEXT);
     corpsePlaySample = GAME_FN(void (*)(int, int), RVA_PLAY_SAMPLE);
+    ritualPointlessGame = GAME_FN(RitualPointlessFn, RVA_RITUAL_POINTLESS);
     int words = apiAddModCommand("corpsetype", corpsetypeLine) + apiAddModCommand("corpsekind", corpsekindLine) +
                 apiAddModCommand("raisecorpses", raisecorpsesLine) + apiAddModCommand("newcorpsetype", newcorpsetypeLine) +
                 apiAddModCommand("newcorpsekind", newcorpsekindLine) + apiAddModCommand("needcorpses", needcorpsesLine) +
@@ -1565,14 +1621,19 @@ static void corpseKindsInit(void) {
         {RVA_RITUAL_PUT_CORPSES_TEXT_CALL, RVA_SQUARE_TEXT, (void *)corpsePutText, "ritual_put_corpses"},
         {RVA_PANEL_SENSEDEAD_TEXT_CALL, RVA_SENSEDEAD_TEXT, (void *)corpseSenseDeadText, "panel_sensedead_text"},
         {RVA_RITUAL_SENSEDEAD_TEXT_CALL, RVA_SENSEDEAD_TEXT, (void *)corpseSenseDeadText, "ritual_sensedead_text"},
+        {RVA_AI_APPRSPAM_POINTLESS_CALL, RVA_RITUAL_POINTLESS, (void *)corpseAiPointless, "ai_apprspam_pointless"},
+        {RVA_AI_PLAN_POINTLESS_CALL, RVA_RITUAL_POINTLESS, (void *)corpseAiPointless, "ai_plan_pointless"},
+        {RVA_AI_ALWAYS_POINTLESS_CALL, RVA_RITUAL_POINTLESS, (void *)corpseAiPointless, "ai_always_pointless"},
     };
-    int count = (int)(sizeof CALLS / sizeof CALLS[0]), calls = 0, cast = 0, newWorld = 0, canCast = 0;
+    int count = (int)(sizeof CALLS / sizeof CALLS[0]), calls = 0, cast = 0, newWorld = 0, canCast = 0, pointless = 0;
     if (checkGameFunction("corpse_kinds_check", "")) {
         for (int i = 0; i < count; i++) calls += pointCorpseCall(&CALLS[i], i);
         newWorld = wrapSite(SITE_PLAY_GAME_NEW_WORLD, (void *)customCorpsesNewWorldHook, (void **)&nextCustomCorpsesNewWorld);
         cast = wrapSite(SITE_EXECUTE_RITUAL, (void *)corpseExecuteRitual, (void **)&nextCorpseExecute);
         canCast = wrapSite(SITE_RITUAL_SCREEN_CAN_CAST, (void *)corpseScreenCanCast, (void **)&nextCorpseCanCast);
+        pointless = wrapCorpseCandidatePointless();
     }
-    writeResultLog(words == 11 && calls == count && cast && newWorld && canCast, "corpse_kinds_installed",
-                   "words=%d of 11 calls=%d of %d cast=%d new_world=%d can_cast=%d", words, calls, count, cast, newWorld, canCast);
+    writeResultLog(words == 11 && calls == count && cast && newWorld && canCast && pointless, "corpse_kinds_installed",
+                   "words=%d of 11 calls=%d of %d cast=%d new_world=%d can_cast=%d pointless=%d", words, calls, count, cast, newWorld, canCast,
+                   pointless);
 }

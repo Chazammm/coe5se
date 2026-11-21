@@ -35,7 +35,7 @@ static int isPersonalSite(CallSite site) {
     X(SITE_ORDER_SLAVE_HUNT, "c", '-') X(SITE_ORDER_EAT_VILLAGE, "c", '-') X(SITE_PLANESHIFT_UNIT, "u--", '-') \
     X(SITE_NEW_PORTAL_PAIR, "xyxy-", '-') X(SITE_GEN_FLOOD_PLANE, "-", '-') X(SITE_UNIT_ADD_XP, "u-", '-') \
     X(SITE_USE_SPECIAL_SITE, "xyc", '-') X(SITE_REMOVE_TEMP_MEN, "", '-') X(SITE_OVERRUN_CHECK, "-xy", '-') \
-    X(SITE_KILL_UNIT_999, "u", '-') X(SITE_CONTINUE_MOVE_ORDERS, "-c", '-') X(SITE_HUMAN_MULTI_MOVE, "cxy-", '-') \
+    X(SITE_KILL_UNIT, "u", '-') X(SITE_CONTINUE_MOVE_ORDERS, "-c", '-') X(SITE_HUMAN_MULTI_MOVE, "cxy-", '-') \
     X(SITE_GROUP_MOVE, "-xy", '-') X(SITE_MOVE_ORDER_ROUTE, "cxy", '-') X(SITE_UNIT_REMOVE_ITEM, "u-", '-') \
     X(SITE_MEMORIZE_SPELL, "u-", '-') X(SITE_LEARN_RANDOM_SPELL, "u--", '-') X(SITE_GET_START_RITUALS, "c", '-') \
     X(SITE_COMMANDER_LEARN_RITUAL, "c-", '-') X(SITE_BOLSTER_BLESSING, "---", '-') X(SITE_ADD_PLAYER_BLESSING, "----", '-') \
@@ -91,7 +91,7 @@ static int isPersonalSite(CallSite site) {
     X(SITE_POPULATE_CELESTIAL) X(SITE_POPULATE_SKY) X(SITE_POPULATE_AGARTHA) X(SITE_POPULATE_INFERNO) X(SITE_POPULATE_HADES) \
     X(SITE_POPULATE_AZTLAN) X(SITE_POPULATE_PRIMAL) X(SITE_POPULATE_ELEMENTAL) X(SITE_PLANE_RISE_TO_ELYSIUM) X(SITE_ENLARGE_PLANE) \
     X(SITE_ADDPLANE) X(SITE_LOAD_MAP_PLANE) X(SITE_LONER_STEP) X(SITE_MOVE_WANDERING_MONSTERS) X(SITE_MOVE_PLAYER_STUPIDS) \
-    X(SITE_DAMAGE_UNIT_PLAIN) X(SITE_PRIEST_FREESPAWN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_CONSCRIPTION) \
+    X(SITE_SUBTRACT_UNIT_HP) X(SITE_PRIEST_FREESPAWN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_CONSCRIPTION) \
     X(SITE_GAME_STATISTICS) X(SITE_MONTH_SQUARE_RESET) X(SITE_ROLL_CLASS) X(SITE_TEAM_START_LOCATIONS) X(SITE_TRIM_TEAM_LOCATIONS) \
     X(SITE_SWAP_TEAM_LOCATIONS) X(SITE_CREATE_CITADELS_STEP) X(SITE_FIX_PORTALS) X(SITE_VOID_FLUCTUATIONS) X(SITE_MIST_SPREAD) \
     X(SITE_TEMPERATURE_CHANGE) X(SITE_SPECIAL_SITE_POPULATE) X(SITE_UNIT_CATCH_FIRE) X(SITE_OVERPOP_CULL) X(SITE_MONKEY_CLOAK) \
@@ -145,7 +145,7 @@ static const char *const PERSONAL_CALLS[] = {
     "coe5.battleUnitDistance", "coe5.battleWallCover", "coe5.battleWinner", "coe5.builtinOfferChance",
     "coe5.builtinOffers", "coe5.canOwnSquare", "coe5.centerMap", "coe5.changedBy", "coe5.chooseLocation",
     "coe5.classAbilityNth", "coe5.classPicker", "coe5.classRecruits", "coe5.commanderApLeft",
-    "coe5.commanderKnowsRitual", "coe5.commanderLedCount", "coe5.commanderMayAct", "coe5.commanderTheName",
+    "coe5.commanderFullName", "coe5.commanderKnowsRitual", "coe5.commanderLedCount", "coe5.commanderMayAct",
     "coe5.confirm", "coe5.copyText", "coe5.countCommandersWithAp", "coe5.countFreeCommanders", "coe5.countKnownSpells",
     "coe5.countLandNear", "coe5.countMemorizedOfType", "coe5.countMemorizedSpells", "coe5.countPlayerPortals",
     "coe5.countSideUnits", "coe5.countSlotsWithController", "coe5.countSpells", "coe5.countTerrainCode",
@@ -154,23 +154,23 @@ static const char *const PERSONAL_CALLS[] = {
     "coe5.findMonster", "coe5.findRitual", "coe5.findSpell", "coe5.findUnitAt", "coe5.get", "coe5.goldBonusPercent",
     "coe5.groundFromNeighbours", "coe5.guildCount", "coe5.hideMainMenuButton", "coe5.illusionTerrain",
     "coe5.ironBonusPercent", "coe5.isSpellAttack", "coe5.itemAbility", "coe5.itemAbilityNth", "coe5.itemCastableSpell",
-    "coe5.listIni", "coe5.loadedContentOrigin", "coe5.localPlayer", "coe5.log", "coe5.loneHumanNow", "coe5.lookName", "coe5.magicPathWeight", "coe5.mapView",
+    "coe5.listIni", "coe5.loadedContentOrigin", "coe5.localPlayer", "coe5.log", "coe5.lookName", "coe5.magicPathWeight", "coe5.mapView",
     "coe5.mayEnterSquare", "coe5.memorizeAllowance", "coe5.memorizedSlot", "coe5.monsterHasRanged",
     "coe5.monsterNameType", "coe5.monsterPicker", "coe5.monsterVariant", "coe5.nearTerrainSquare",
     "coe5.nearestTerrainDistance", "coe5.nearestUnitAbilityIs", "coe5.netRole", "coe5.numberBox", "coe5.observe",
     "coe5.openArmyMenu", "coe5.openCeremonies", "coe5.openChopBurn", "coe5.openIncomeDetail", "coe5.openItemInfo",
     "coe5.openLibrary", "coe5.openPlaneInfo", "coe5.openRitualScreen", "coe5.openSlaveHunt", "coe5.openSquareInfo",
     "coe5.openWeaponInfo", "coe5.planeAbilitySum", "coe5.planeIndex", "coe5.planeIsReachable", "coe5.planeOrderStep",
-    "coe5.planeSameSpot", "coe5.planesAlike", "coe5.playSample", "coe5.playerClassAbility", "coe5.playerHasCitadel",
+    "coe5.planeSameSpot", "coe5.planesAlike", "coe5.playSample", "coe5.playerBlessingValue", "coe5.playerClassAbility", "coe5.playerHasCitadel",
     "coe5.playerHasCommander", "coe5.playerIncomeByType", "coe5.playerRitualFlags", "coe5.portalExits",
     "coe5.portalsLinkedTo", "coe5.randomEventsOff", "coe5.readIni", "coe5.rebindKey", "coe5.recruitSquares", "coe5.resetIncomeCaches",
     "coe5.ritualCastableAnywhere", "coe5.ritualEffectFirst", "coe5.ritualEffectOr", "coe5.ritualMayLearn",
     "coe5.ritualPointless", "coe5.route", "coe5.selectNextCommander", "coe5.selectPrevCommander", "coe5.set",
-    "coe5.setting", "coe5.shopOffers", "coe5.showMessageBox", "coe5.slotBlessingOf", "coe5.soullessForm",
-    "coe5.spellInfo", "coe5.spellPathWeight", "coe5.spellUseful", "coe5.squareDefaultGround",
-    "coe5.squareEffectiveTemp", "coe5.squareGoldIncome", "coe5.squareHasSeenUnit", "coe5.squareIncome",
+    "coe5.setting", "coe5.shopOffers", "coe5.showMessageBox", "coe5.soleHumanSlot", "coe5.soullessForm",
+    "coe5.spellInfo", "coe5.spellUseful", "coe5.squareDefaultGround",
+    "coe5.squareEffectiveTemperature", "coe5.squareGoldIncome", "coe5.squareHasSeenUnit", "coe5.squareIncome",
     "coe5.squareIsCoast", "coe5.squareIsNorth", "coe5.squareIsSky", "coe5.squareIsSouth", "coe5.squareIsWet",
-    "coe5.squareLifeforce", "coe5.squareMoveCost", "coe5.squareShownName", "coe5.squareSideBattleStrength", "coe5.squareSideStrength",
+    "coe5.squareLifeforce", "coe5.squareMoveCost", "coe5.squareShownName", "coe5.squareSideBattleStrength",
     "coe5.squareSideWater", "coe5.squareTeamAbilitySum", "coe5.squareUnits", "coe5.squareUnitsAbility",
     "coe5.startLikesFilter", "coe5.startPlacementScore", "coe5.startTune", "coe5.terrainBurnableAt",
     "coe5.terrainMatch", "coe5.terrainRuinForm", "coe5.tradeBonusPercent", "coe5.translate", "coe5.turn", "coe5.ui.bindEscape",
@@ -181,7 +181,7 @@ static const char *const PERSONAL_CALLS[] = {
     "coe5.ui.sectionBegin", "coe5.ui.sectionEnd", "coe5.ui.sectionHeader", "coe5.ui.setTextFocus", "coe5.ui.setupScreenWidth",
     "coe5.ui.takeTextEvents", "coe5.ui.text", "coe5.ui.textWidth", "coe5.ui.tooltip", "coe5.ui.wait", "coe5.unitAbilitySum", "coe5.unitAcidResistance",
     "coe5.unitAfflictionCount", "coe5.unitBattleFast", "coe5.unitBattleRank", "coe5.unitBattleSlowness",
-    "coe5.unitColdResistance", "coe5.unitFireResistance", "coe5.unitFirstMagicPath", "coe5.unitFirstSpellPath", "coe5.unitFlightKind", "coe5.unitFlightType",
+    "coe5.unitColdResistance", "coe5.unitFireResistance", "coe5.unitFirstMagicPath", "coe5.unitFlightType",
     "coe5.unitHasSpellAttack", "coe5.unitHasWaterMove", "coe5.unitHatesSquare", "coe5.unitInContact",
     "coe5.unitIncapacitated", "coe5.unitIsDemon", "coe5.unitIsHuge", "coe5.unitIsUndead", "coe5.unitLifeless",
     "coe5.unitLikesSquare", "coe5.unitLovesSquare", "coe5.unitMagicResistance", "coe5.unitMayBeOnLand",
@@ -197,13 +197,14 @@ static const char *const PERSONAL_CLOSED_CALLS[] = {
     "coe5.afflictionTurn", "coe5.afflictionValue", "coe5.aiBuyOffer", "coe5.aiConquerStep", "coe5.aiExploreStep",
     "coe5.aiFarExploreStep", "coe5.aiFriendlyMoveStep", "coe5.aiMakeDefenders", "coe5.aiMakeGuardsAt", "coe5.aiRallyStep",
     "coe5.aiRandomEnemy", "coe5.aiRedistributeItems", "coe5.aiShipDropCrew", "coe5.aiShipTakeBoat", "coe5.aiShipTakeCrew",
-    "coe5.aiShips", "coe5.aiUpdateBattleStrengthMemory", "coe5.aiUpdateStrengthMemory", "coe5.alterTerrain", "coe5.autoName", "coe5.battleBanishUnit", "coe5.battleCellToScreen",
+    "coe5.aiShips", "coe5.aiUpdateBattleStrengthMemory", "coe5.alterCommand", "coe5.alterCommandAfter",
+    "coe5.alterEventAction", "coe5.alterEventTrigger", "coe5.alterTerrain", "coe5.autoName", "coe5.battleBanishUnit", "coe5.battleCellToScreen",
     "coe5.battleScreenToCell", "coe5.battleSummon", "coe5.battleView", "coe5.bolsterBlessing", "coe5.changeLoyalty", "coe5.checkFollowerLinks",
     "coe5.chooseMemorized", "coe5.cleanSquare", "coe5.clearPlaneTint", "coe5.closeTestField", "coe5.commanderLearnRitual",
-    "coe5.commanderUseItems", "coe5.conscription", "coe5.cureAffliction", "coe5.damageUnitPlain", "coe5.declaredPlanes",
+    "coe5.commanderUseItems", "coe5.conscription", "coe5.cureAffliction", "coe5.declaredPlanes",
     "coe5.destroyEnchantsAt", "coe5.destroyGateway", "coe5.digTunnelSquare", "coe5.drawTestField", "coe5.endPreviewWorld",
-    "coe5.fightTestField", "coe5.fireTestField", "coe5.fixAction", "coe5.fixAfter", "coe5.fixCommand", "coe5.fixPortals",
-    "coe5.fixTrigger", "coe5.forestShepherdSpawn", "coe5.gameEvents", "coe5.gen.addGroundItems",
+    "coe5.fightTestField", "coe5.fireTestField", "coe5.fixPortals",
+    "coe5.forestShepherdSpawn", "coe5.gameEvents", "coe5.gen.addGroundItems",
     "coe5.gen.decorateSquare", "coe5.gen.drawRiver", "coe5.gen.findCaveSpot", "coe5.gen.findSpotByNeighbours",
     "coe5.gen.fixDiagonals", "coe5.gen.floodPlane", "coe5.gen.heatBlob", "coe5.gen.linkNewPortal", "coe5.gen.markAt",
     "coe5.gen.markBlob", "coe5.gen.markNearTerrain", "coe5.gen.markRect", "coe5.gen.markRiver", "coe5.gen.markVoidNear",
@@ -234,14 +235,14 @@ static const char *const PERSONAL_CLOSED_CALLS[] = {
     "coe5.setPreviewLineEdits", "coe5.setRandomEventsOff", "coe5.setSeenDisc", "coe5.setSetupAutomated",
     "coe5.setSquareOwner", "coe5.setTerrainLooks", "coe5.setTestFieldConfiguration", "coe5.setTestFieldTextFocus",
     "coe5.setupAutomated", "coe5.showSight", "coe5.spawnCommander", "coe5.spawnUnit", "coe5.spendAllApAt",
-    "coe5.squareHold", "coe5.startPreviewWorld", "coe5.stopTestFight", "coe5.stormSpawn", "coe5.swapLocations",
-    "coe5.swapSquares", "coe5.takeItem", "coe5.takePreviewFieldKeys", "coe5.takeTestFieldTextEvents",
+    "coe5.squareHold", "coe5.startPreviewWorld", "coe5.stopTestFight", "coe5.stormSpawn", "coe5.subtractUnitHp", "coe5.swapLocations",
+    "coe5.swapSquares", "coe5.takeItem", "coe5.takeItemNumber", "coe5.takePreviewFieldKeys", "coe5.takeTestFieldTextEvents",
     "coe5.teleportCommander", "coe5.teleportSquare", "coe5.teleportUnit", "coe5.testBattle",
     "coe5.testFieldEditorCapabilities", "coe5.testFieldFinalState", "coe5.testFieldFootprint", "coe5.testFieldLifecycle",
     "coe5.testFieldLoadoutState", "coe5.testFieldPlacementPreflight", "coe5.testFieldPointerButtons",
     "coe5.testFieldSpellState", "coe5.testFieldState", "coe5.testFieldTerrains", "coe5.testFieldUnitState",
     "coe5.toggleAutoRecruit", "coe5.transferFollower", "coe5.trollForestSpawn", "coe5.unitAddXp", "coe5.unitAfflictions",
-    "coe5.unitRandomAffliction", "coe5.unitRemoveItem", "coe5.unitRemoveTempAbility", "coe5.unmemorizeSpell",
+    "coe5.unitRandomAffliction", "coe5.unitRemoveTempAbility", "coe5.unmemorizeSpell",
     "coe5.useSpecialSite", "coe5.wildSpawn", "coe5.worldNews",
 };
 #define PERSONAL_CLOSED_CALL_COUNT ((int)(sizeof PERSONAL_CLOSED_CALLS / sizeof PERSONAL_CLOSED_CALLS[0]))
@@ -339,7 +340,7 @@ static int luaModCommandOpenFor(NetRole role, LuaClass cls, int level) {
     }
 }
 
-static int commandFixOpenFor(NetRole role, LuaClass cls) {
+static int commandAlterOpenFor(NetRole role, LuaClass cls) {
     switch (role) {
     case NET_ROLE_SINGLE: return 1;
     case NET_ROLE_HOST:
@@ -376,7 +377,7 @@ static const ClientWrite CLIENT_WRITE_CALLS[] = {
     WRITE_TRAVELS("coe5.alterTerrain", NONE, 0), WRITE_TRAVELS("coe5.battleBanishUnit", UNIT, 1), WRITE_TRAVELS("coe5.battleSummon", PLAYER, 2), WRITE_LOST("coe5.bolsterBlessing"), WRITE_LOST("coe5.changeLoyalty"),
     WRITE_TRAVELS("coe5.checkFollowerLinks", COMMANDER, 1), WRITE_TRAVELS("coe5.chooseMemorized", UNIT, 1), WRITE_LOST("coe5.cleanSquare"),
     WRITE_TRAVELS("coe5.commanderLearnRitual", COMMANDER, 1), WRITE_TRAVELS("coe5.commanderUseItems", COMMANDER, 1),
-    WRITE_TRAVELS("coe5.cureAffliction", NONE, 0), WRITE_TRAVELS("coe5.damageUnitPlain", UNIT, 1), WRITE_LOST("coe5.destroyEnchantsAt"),
+    WRITE_TRAVELS("coe5.cureAffliction", NONE, 0), WRITE_LOST("coe5.destroyEnchantsAt"),
     WRITE_TRAVELS("coe5.destroyGateway", NONE, 0), WRITE_TRAVELS("coe5.digTunnelSquare", NONE, 0), WRITE_LOST("coe5.fixPortals"),
     WRITE_TRAVELS("coe5.getStartRituals", COMMANDER, 1), WRITE_TRAVELS("coe5.giveAffliction", NONE, 0),
     WRITE_TRAVELS("coe5.giveItem", UNIT, 1), WRITE_TRAVELS("coe5.giveRandomItem", UNIT, 1), WRITE_LOST("coe5.initSquareCorpses"),
@@ -395,10 +396,10 @@ static const ClientWrite CLIENT_WRITE_CALLS[] = {
     WRITE_LOST("coe5.setRandomEventsOff"), WRITE_LOST("coe5.setSeenDisc"), WRITE_LOST("coe5.setSquareOwner"),
     WRITE_TRAVELS("coe5.spawnCommander", PLAYER, 1), WRITE_TRAVELS("coe5.spawnUnit", PLAYER, 1),
     WRITE_TRAVELS("coe5.spendAllApAt", PLAYER, 1), WRITE_TRAVELS("coe5.squareHold", PLAYER, 1),
-    WRITE_TRAVELS("coe5.swapLocations", NONE, 0), WRITE_LOST("coe5.swapSquares"), WRITE_TRAVELS("coe5.takeItem", UNIT, 1),
-    WRITE_TRAVELS("coe5.teleportCommander", COMMANDER, 1), WRITE_TRAVELS("coe5.teleportSquare", NONE, 0),
+    WRITE_TRAVELS("coe5.subtractUnitHp", UNIT, 1), WRITE_TRAVELS("coe5.swapLocations", NONE, 0), WRITE_LOST("coe5.swapSquares"), WRITE_TRAVELS("coe5.takeItem", UNIT, 1),
+    WRITE_TRAVELS("coe5.takeItemNumber", UNIT, 1), WRITE_TRAVELS("coe5.teleportCommander", COMMANDER, 1), WRITE_TRAVELS("coe5.teleportSquare", NONE, 0),
     WRITE_TRAVELS("coe5.teleportUnit", UNIT, 1), WRITE_TRAVELS("coe5.unitAddXp", UNIT, 1),
-    WRITE_TRAVELS("coe5.unitRandomAffliction", UNIT, 1), WRITE_TRAVELS("coe5.unitRemoveItem", UNIT, 1),
+    WRITE_TRAVELS("coe5.unitRandomAffliction", UNIT, 1),
     WRITE_TRAVELS("coe5.unitRemoveTempAbility", UNIT, 1), WRITE_TRAVELS("coe5.unmemorizeSpell", UNIT, 1),
     WRITE_TRAVELS("coe5.useSpecialSite", COMMANDER, 3), WRITE_LOST("coe5.worldNews"),
 };

@@ -9,6 +9,7 @@
 
 static void finishPlaneBlock(void);
 static void notePlaneName(const char *name, const char *mod);
+static void noteScriptFactionPlaneNames(void);
 static void noteRefusedPlane(const char *name, const char *mod, const char *reason, const char *source, int line);
 
 // ---- Reading the words ----------------------------------------------------------------------------
@@ -558,16 +559,21 @@ static void notePlaneName(const char *name, const char *mod) {
     notePlaneNameAt(name, mod, (const char *)GAME_PTR(RVA_EVENT_FILE), G32(RVA_MOD_LINE), 0);
 }
 
+static void scriptPathOfMod(const char *mod, char *file, size_t size) {
+    int index = modIndexByName(mod);
+    if (index >= 0) snprintf(file, size, "%.200s/%.48s.lua", modFolder(index), mod);
+    else snprintf(file, size, "%.48s.lua", mod);
+}
+
 static void noteScriptPlaneNames(void) {
     for (int i = 0; i < planeShapeDeclarationCount; i++) {
         const PlaneShapeDeclaration *d = &planeShapeDeclarations[i];
         if (d->monsterIndex >= 0) continue;
-        int mod = modIndexByName(d->mod);
         char file[MAX_PATH];
-        if (mod >= 0) snprintf(file, sizeof file, "%.200s/%.48s.lua", modFolder(mod), d->mod);
-        else snprintf(file, sizeof file, "%.48s.lua", d->mod);
+        scriptPathOfMod(d->mod, file, sizeof file);
         notePlaneNameAt(d->plane, d->mod, file, d->line, 1);
     }
+    noteScriptFactionPlaneNames();
 }
 
 typedef struct {

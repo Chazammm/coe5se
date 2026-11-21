@@ -32,7 +32,6 @@
     X(unitIncapacitated, MAC_COPY_CALL(RVA_UNIT_INCAPACITATED, unitIncapacitatedCopy), "u", 'B') \
     X(unitSpeedClass, BOTH_BUILDS_CALL(RVA_UNIT_SPEED_CLASS), "u", 'i') \
     X(unitFlightType, BOTH_BUILDS_CALL(RVA_UNIT_FLIGHT_KIND), "u", 'k') \
-    X(unitFlightKind, BOTH_BUILDS_CALL(RVA_UNIT_FLIGHT_KIND), "u", 'k') \
     X(unitHasWaterMove, BOTH_BUILDS_CALL(RVA_UNIT_HAS_WATER_MOVE), "u", 'B') \
     X(unitNoLand, MAC_COPY_CALL(RVA_UNIT_NOLAND, unitNoLandCopy), "u", 'B') \
     X(unitMindless, BOTH_BUILDS_CALL(RVA_UNIT_MINDLESS), "u", 'B') \
@@ -54,7 +53,6 @@
     X(countFreeCommanders, MAC_COPY_CALL(RVA_COUNT_FREE_COMMANDERS, countFreeCommandersCopy), "pi", 'i') \
     X(squareHasSeenUnit, MAC_COPY_CALL(RVA_SQUARE_HAS_SEEN_UNIT, squareHasSeenUnitCopy), "pxy", 'B') \
     X(squareSideBattleStrength, BOTH_BUILDS_CALL(RVA_SQUARE_SIDE_STRENGTH), "Pxyi", 'i') \
-    X(squareSideStrength, BOTH_BUILDS_CALL(RVA_SQUARE_SIDE_STRENGTH), "Pxyi", 'i') \
     X(squareMoveCost, BOTH_BUILDS_CALL(RVA_SQUARE_MOVE_COST), "cxyi", 'i') \
     X(weaponRangeFor, BOTH_BUILDS_CALL(RVA_WEAPON_RANGE_FOR), "uiw", 'i') \
     X(unitLovesSquare, BOTH_BUILDS_CALL(RVA_INDEP_LOVED_TERRAIN), "uxy", 'B') \
@@ -63,8 +61,8 @@
     X(wandererAt, BOTH_BUILDS_CALL(RVA_WANDERER_AT), "xy", 'B') \
     X(teleportUnit, MAC_COPY_CALL(RVA_TELEPORT_UNIT, teleportUnitCopy), "uxy", 'v') \
     X(unitAddXp, MAC_COPY_CALL(RVA_UNIT_ADD_XP, unitAddXpCopy), "ui", 'v') \
-    X(unitRemoveItem, RVA_UNIT_REMOVE_ITEM, "uT", 'i') \
-    X(damageUnitPlain, MAC_COPY_CALL(RVA_DAMAGE_UNIT_PLAIN, damageUnitPlainCopy), "ui", 'v') \
+    X(takeItemNumber, RVA_UNIT_REMOVE_ITEM, "uT", 'i') \
+    X(subtractUnitHp, MAC_COPY_CALL(RVA_DAMAGE_UNIT_PLAIN, subtractUnitHpCopy), "ui", 'v') \
     X(squareHold, MAC_COPY_CALL(RVA_SET_HOLDIT, squareHoldCopy), "pxy", 'i') \
     X(spendAllApAt, BOTH_BUILDS_CALL(RVA_SPEND_ALL_AP_AT), "Pxy", 'v') \
     X(commanderUseItems, MAC_COPY_CALL(RVA_COMMANDER_USE_ITEMS, commanderUseItemsCopy), "c", 'i') \
@@ -80,9 +78,8 @@
     X(ritualEffectOr, MAC_COPY_CALL(RVA_RITUAL_FX_FIRST_OR, ritualEffectOrCopy), "rai", 'i') \
     X(ritualPointless, BOTH_BUILDS_CALL(RVA_RITUAL_POINTLESS), "cr", 'B') \
     X(ritualCastableAnywhere, BOTH_BUILDS_CALL(RVA_RITUAL_CASTABLE_ANYWHERE), "cr", 'B') \
-    X(slotBlessingOf, MAC_COPY_CALL(RVA_PLAYER_BLESSING_VALUE, slotBlessingOfCopy), "pa", 'i') \
+    X(playerBlessingValue, MAC_COPY_CALL(RVA_PLAYER_BLESSING_VALUE, playerBlessingValueCopy), "pa", 'i') \
     X(magicPathWeight, MAC_COPY_CALL(RVA_PATH_STRENGTH_WEIGHT, spellPathWeightCopy), "i", 'i') \
-    X(spellPathWeight, MAC_COPY_CALL(RVA_PATH_STRENGTH_WEIGHT, spellPathWeightCopy), "i", 'i') \
     X(unitPathBonus, BOTH_BUILDS_CALL(RVA_UNIT_PATH_BONUS), "ui", 'i') \
     X(unitSpellWeaponLevel, BOTH_BUILDS_CALL(RVA_UNIT_SPELL_WEAPON_LEVEL), "ui", 'i') \
     X(memorizeAllowance, MAC_COPY_CALL(RVA_MEMORIZE_ALLOWANCE, memorizeAllowanceCopy), "ui", 'i') \
@@ -94,7 +91,6 @@
     X(countMemorizedOfType, MAC_COPY_CALL(RVA_COUNT_MEMORIZED_OF_TYPE, countMemorizedOfTypeCopy), "uii", 'i') \
     X(countSpells, MAC_COPY_CALL(RVA_COUNT_SPELLS, countSpellsCopy), "ii", 'i') \
     X(unitFirstMagicPath, BOTH_BUILDS_CALL(RVA_UNIT_FIRST_SPELL_PATH), "u", 'i') \
-    X(unitFirstSpellPath, BOTH_BUILDS_CALL(RVA_UNIT_FIRST_SPELL_PATH), "u", 'i') \
     X(randomMemorizedSpell, BOTH_BUILDS_CALL(RVA_RANDOM_MEMORIZED_SPELL), "ui", 'i') \
     X(itemCastableSpell, BOTH_BUILDS_CALL(RVA_ITEM_CASTABLE_SPELL), "u", 'i') \
     X(spellUseful, BOTH_BUILDS_CALL(RVA_SPELL_USEFUL), "uS0", 'b') \
@@ -158,7 +154,7 @@
     X(countLandNear, BOTH_BUILDS_CALL(RVA_COUNT_LAND_NEAR), "xy", 'i') \
     X(squareDefaultGround, BOTH_BUILDS_CALL(RVA_SQUARE_DEFAULT_GROUND), "xy", 'i') \
     X(squareIsCoast, BOTH_BUILDS_CALL(RVA_SQUARE_IS_COAST), "xy", 'b') \
-    X(squareEffectiveTemp, BOTH_BUILDS_CALL(RVA_SQUARE_EFFECTIVE_TEMP), "xy", 'i') \
+    X(squareEffectiveTemperature, BOTH_BUILDS_CALL(RVA_SQUARE_EFFECTIVE_TEMP), "xy", 'i') \
     X(swapSquares, BOTH_BUILDS_CALL(RVA_SWAP_SQUARES), "xyxy", PER_BUILD('i', 'v')) \
     X(teleportSquare, MAC_COPY_CALL(RVA_TELEPORT_SQUARE, teleportSquareCopy), "xyxy", 'v') \
  \
@@ -178,7 +174,6 @@
     X(aiThreatNear, MAC_COPY_CALL(RVA_AI_THREAT_NEAR, aiThreatNearCopy), "pxyi", 'B') \
     X(aiCountAllyTargetsNear, MAC_COPY_CALL(RVA_AI_COUNT_ALLY_TARGETS_NEAR, aiCountAllyTargetsNearCopy), "pxyci", 'i') \
     X(aiUpdateBattleStrengthMemory, BOTH_BUILDS_CALL(RVA_AI_UPDATE_STRENGTH_MEMORY), "p", 'v') \
-    X(aiUpdateStrengthMemory, BOTH_BUILDS_CALL(RVA_AI_UPDATE_STRENGTH_MEMORY), "p", 'v') \
     X(aiMakeGuardsAt, BOTH_BUILDS_CALL(RVA_AI_MAKE_GUARDS_AT), "pxyi", 'v') \
     X(aiMakeDefenders, MAC_COPY_CALL(RVA_AI_MAKE_DEFENDERS, aiMakeDefendersCopy), "p", 'v') \
     X(aiCountTroops, BOTH_BUILDS_CALL(RVA_AI_COUNT_TROOPS), "pxyOOO", 'w') \
@@ -265,7 +260,7 @@
     X(countUnits, BOTH_BUILDS_CALL(RVA_COUNT_UNITS), "PLs", 'i') \
     X(nearestUnitAbilityIs, BOTH_COPY_CALL(RVA_NEAREST_UNIT_ABILITY_IS, nearestUnitAbilityIsCopy), "Lxyaii", 'i') \
     X(armyAtForPlayer, MAC_COPY_CALL(RVA_ARMY_AT_FOR_PLAYER, armyAtForPlayerCopy), "Pxy", 'b') \
-    X(commanderTheName, MAC_COPY_CALL(RVA_COMMANDER_THE_NAME, commanderTheName), "c", 'z') \
+    X(commanderFullName, MAC_COPY_CALL(RVA_COMMANDER_THE_NAME, commanderTheName), "c", 'z') \
     X(playerRitualFlags, MAC_COPY_CALL(RVA_PLAYER_RITUAL_FLAGS, playerRitualFlagsCopy), "p", 'i') \
     X(countSlotsWithController, MAC_COPY_CALL(RVA_COUNT_SLOTS_WITH_CONTROLLER, countSlotsWithControllerCopy), "i", 'i') \
     X(findClass, BOTH_BUILDS_CALL(RVA_FIND_CLASS), "s", 'i') \
@@ -298,5 +293,5 @@
     X(findAfflictedUnitAt, BOTH_BUILDS_CALL(RVA_FIND_AFFLICTED_UNIT_AT), "PxyiUU", 'i') \
     X(classAbilityNth, BOTH_BUILDS_CALL(RVA_CLASS_ABILITY_NTH), "Cai", 'i') \
     X(countSideUnits, MAC_COPY_CALL(RVA_COUNT_SIDE_UNITS, countSideUnitsCopy), "pxy", 'i') \
-    X(loneHumanNow, BOTH_BUILDS_CALL(RVA_BEFORE_GAME_START), "", 'i') \
+    X(soleHumanSlot, BOTH_BUILDS_CALL(RVA_BEFORE_GAME_START), "", 'i') \
 

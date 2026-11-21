@@ -311,8 +311,9 @@ static UNUSED size_t buildItemCardWriteStub(unsigned char *code, const unsigned 
 static UNUSED size_t buildItemCardInfoStub(unsigned char *code, const unsigned char *stub, const void *slot, const unsigned char *moved,
                                            int movedSize, int idBase, int firstExtraId, const unsigned char *back, const unsigned char *skip) {
     if (idBase < 0 || idBase > 127 || firstExtraId < 0 || firstExtraId > 127) return 0;
-    const unsigned char guard[] = {0x83, 0xfb, (unsigned char)firstExtraId};
-    const unsigned char args[] = {0x44, 0x89, 0xe1, 0x8d, 0x53, (unsigned char)-idBase};
+    const unsigned char guard[] = {0x8b, 0xc3, 0xf7, 0xd8, 0x0f, 0x4c, 0xc3,
+                                   0x83, 0xf8, (unsigned char)firstExtraId};
+    const unsigned char args[] = {0x44, 0x89, 0xe1, 0x8d, 0x50, (unsigned char)-idBase};
     static const unsigned char TEST[] = {0x85, 0xc0};
     static const unsigned char JL[] = {0x0f, 0x8c};
     static const unsigned char RESULT[] = {0x89, 0xc1};

@@ -18,8 +18,8 @@ static int settingValueNow(const ModSetting *s) {
 }
 
 static void noteModEventLine(const char *line, int level, const char *mod, const char *file);
-static const char *fixEventCommandLine(const char *line, int level, const char *mod, char **fixed);
-static void runFixedEventLine(const char *line, int level, const char *mod);
+static const char *alterEventCommandLine(const char *line, int level, const char *mod, char **altered);
+static void runAlteredEventLine(const char *line, int level, const char *mod);
 static void readEventLine(const char *line, int level, const char *mod, const char *file, const char *base);
 static void eventLineHook(const char *line, int level) {
     const char *file = (const char *)(gameBase + RVA_EVENT_FILE), *slash = strrchr(file, '/'), *back = strrchr(file, '\\');
@@ -32,10 +32,10 @@ static void eventLineHook(const char *line, int level) {
     else if (len > side && !_stricmp(base + len - side, SIDECAR_SUFFIX)) snprintf(mod, sizeof mod, "%.*s", (int)(len - side), base);
     noteModLine(mod, level);
     noteModEventLine(line, level, mod, file);
-    char *fixed = NULL;
-    line = fixEventCommandLine(line, level, mod, &fixed);
+    char *altered = NULL;
+    line = alterEventCommandLine(line, level, mod, &altered);
     if (line) readEventLine(line, level, mod, file, base);
-    free(fixed);
+    free(altered);
 }
 
 static void readEventLine(const char *line, int level, const char *mod, const char *file, const char *base) {
@@ -52,7 +52,7 @@ static void readEventLine(const char *line, int level, const char *mod, const ch
         previewEventLineBefore(level);
         int stateBefore = G32(RVA_EVENT_STATE);
         eventFindersLineBegin();
-        runFixedEventLine(line, level, mod);
+        runAlteredEventLine(line, level, mod);
         eventFindersLineEnd();
         if (level == 3) previewNoteEventLine(mod, base, line, stateBefore);
         eventLogicAfterLine(line, level);

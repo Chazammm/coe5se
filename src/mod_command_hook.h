@@ -109,18 +109,18 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     if (len == sizeof "newmonster" - 1 && !strncmp(line, "newmonster", len)) noteMonsterMade(mod);
 }
 
-static const char *fixContentCommandLine(const char *line, int mod, int level, char **fixed);
-static void fixAfterContentLine(const char *line, int mod, int level);
+static const char *alterContentCommandLine(const char *line, int mod, int level, char **altered);
+static void alterCommandAfterLine(const char *line, int mod, int level);
 static void runModCommandLine(const char *line, int mod, int level) {
-    char *fixed = NULL;
-    line = fixContentCommandLine(line, mod, level, &fixed);
+    char *altered = NULL;
+    line = alterContentCommandLine(line, mod, level, &altered);
     if (line) {
         void *token = beginContentOriginLine(line, mod, level);
         runModCommandLineBody(line, mod, level);
         endContentOriginLine(token);
-        fixAfterContentLine(line, mod, level);
+        alterCommandAfterLine(line, mod, level);
     }
-    free(fixed);
+    free(altered);
 }
 
 // @platform-split preview_world: Windows only for now; on Mac coe5.setPreviewLineEdits doesn't exist, so nothing is ever armed

@@ -78,7 +78,21 @@ static const luaL_Reg LUA_COE5[] = {
     {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
     {"afflictionValue", lAfflictionValue}, {"setAfflictionTurn", lSetAfflictionTurn}, {"setAfflictionValue", lSetAfflictionValue},
     {"removeAffliction", lRemoveAffliction}, {"afflictionEffect", lAfflictionEffect},
-    {"addModCommand", lAddModCommand}, {"fixCommand", lFixCommand}, {"fixTrigger", lFixTrigger}, {"fixAction", lFixAction}, {"fixAfter", lFixAfter}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
+    {"addModCommand", lAddModCommand}, {"alterCommand", lAlterCommand}, {"alterEventTrigger", lAlterEventTrigger}, {"alterEventAction", lAlterEventAction}, {"alterCommandAfter", lAlterCommandAfter}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
+};
+
+static const struct { const char *name, *now; } LUA_CALL_FIRST_NAMES[] = {
+    {"unitFlightKind", "unitFlightType"},
+    {"squareSideStrength", "squareSideBattleStrength"},
+    {"spellPathWeight", "magicPathWeight"},
+    {"unitFirstSpellPath", "unitFirstMagicPath"},
+    {"aiUpdateStrengthMemory", "aiUpdateBattleStrengthMemory"},
+    {"damageUnitPlain", "subtractUnitHp"},
+    {"commanderTheName", "commanderFullName"},
+    {"unitRemoveItem", "takeItemNumber"},
+    {"slotBlessingOf", "playerBlessingValue"},
+    {"squareEffectiveTemp", "squareEffectiveTemperature"},
+    {"loneHumanNow", "soleHumanSlot"},
 };
 static const luaL_Reg LUA_UI[] = {
     {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
@@ -225,12 +239,12 @@ static int lXpcall(lua_State *L) {
 
 static int lRequire(lua_State *L);
 static int luaCommandsFileCall(const luaL_Reg *fn) {
-    return fn->func == lAddModCommand || fn->func == lFixCommand || fn->func == lFixTrigger || fn->func == lFixAction || fn->func == lFixAfter ||
+    return fn->func == lAddModCommand || fn->func == lAlterCommand || fn->func == lAlterEventTrigger || fn->func == lAlterEventAction || fn->func == lAlterCommandAfter ||
            fn->func == lLog || fn->func == lRequire;
 }
 
 static const char *const PREVIEW_WORLD_CALLS[] = {
-    "spawnUnit", "spawnCommander", "newUnits", "teleportUnit", "teleportCommander", "killUnit", "killSquare", "damageUnitPlain", "giveItem", "takeItem", "giveRandomItem", "unitRemoveItem",
+    "spawnUnit", "spawnCommander", "newUnits", "teleportUnit", "teleportCommander", "killUnit", "killSquare", "subtractUnitHp", "giveItem", "takeItem", "giveRandomItem", "takeItemNumber",
     "unitAddXp", "addAffliction", "unitRandomAffliction", "planeShiftUnit", "randomTeleport", "popHorrors", "releaseFollower", "transferFollower", "removeBadFollowers", "heroArrival",
     "aiMakeGuardsAt", "aiMakeDefenders", "conscription", "priestFreespawn", "inquisitionSpawn", "trollForestSpawn", "stormSpawn", "wildSpawn", "revelsSpawn", "forestShepherdSpawn",
     "alterTerrain", "ruinSquare", "digTunnelSquare", "illusionTerrain", "destroyGateway", "putRareSquare", "groveReversion", "swapSquares", "teleportSquare", "swapLocations", "moveEnchants",
@@ -293,7 +307,7 @@ static const char *clientWriteRefusalNow(lua_State *L, const char *name, int inT
     if (netReplayRunning() && writeUndoneInReplay(name)) w.kind = CLIENT_WRITE_STAYS;
     int own = -1;
     if (w.kind == CLIENT_WRITE_TRAVELS && w.owner != WRITE_OWNER_NONE) own = clientWriteOwnerNow(L, &w) == G32(RVA_ACTIVE_PLAYER);
-    if (w.kind == CLIENT_WRITE_TRAVELS && !strcmp(name, "coe5.damageUnitPlain") && lua_isinteger(L, 1) && lua_isinteger(L, 2) &&
+    if (w.kind == CLIENT_WRITE_TRAVELS && !strcmp(name, "coe5.subtractUnitHp") && lua_isinteger(L, 1) && lua_isinteger(L, 2) &&
         lua_tointeger(L, 2) >= garrisonUnitHp((int)lua_tointeger(L, 1)))
         w.kind = CLIENT_WRITE_LOST;
     return clientWriteRefusalFor(w.kind, inTurn, own, netReplayRunning());
@@ -364,6 +378,13 @@ static void addGatedFunctions(lua_State *L, const luaL_Reg *fns, const char *pre
         lua_pushfstring(L, "%s%s", prefix, fns->name);
         lua_pushcclosure(L, luaGate, 2);
         lua_setfield(L, -2, fns->name);
+    }
+}
+
+static void addCallFirstNames(lua_State *L) {
+    for (size_t i = 0; i < sizeof LUA_CALL_FIRST_NAMES / sizeof LUA_CALL_FIRST_NAMES[0]; i++) {
+        lua_getfield(L, -1, LUA_CALL_FIRST_NAMES[i].now);
+        lua_setfield(L, -2, LUA_CALL_FIRST_NAMES[i].name);
     }
 }
 
@@ -441,6 +462,7 @@ static int openLuaSandbox(lua_State *L) {
     }
     lua_newtable(L);
     addGatedFunctions(L, LUA_COE5, "coe5.");
+    addCallFirstNames(L);
     lua_newtable(L);
     addGatedFunctions(L, LUA_UI, "coe5.ui.");
     lua_setfield(L, -2, "ui");
@@ -798,7 +820,7 @@ static void retireLuaScript(LuaScript *s, const char *reason) {
         modCommands[kept++] = modCommands[i];
     }
     modCommandCount = kept;
-    dropCommandFixesOf(s);
+    dropCommandAltersOf(s);
     writeLog("lua_script_turned_off", "mod=%s reason=%s", s->mod, reason);
     closeDeadLuaScript(s);
 }

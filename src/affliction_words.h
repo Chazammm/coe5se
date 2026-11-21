@@ -301,6 +301,7 @@ static int afflictionEventSquare(int word, int square, int player, int k) {
     int unit = pickAfflictedUnitAt(player, square / MAP_COLUMN_SQUARES, square % MAP_COLUMN_SQUARES, k);
     if (unit < 0) return 0;
     ((int *)GAME_PTR(RVA_SQUARE_EVENT_B))[square] = unit;
+    noteEventUnitWrite((size_t)square);
     return 1;
 }
 

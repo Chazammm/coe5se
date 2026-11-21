@@ -251,11 +251,15 @@ static void factionTurnSpawn(int slot, const Faction *f, int home, int active) {
     else if (f->spawnSite == FACTION_SITE_MONUMENT) factionMonumentSpawns(slot, f);
 }
 
+static void storeFactionMonth(int slot, int home, int active) {
+    factionTurns[slot - PLAYER_SLOTS_GAME].active = active;
+    factionGates[slot].home = home, factionGates[slot].active = active;
+}
+
 static void factionInfernoMove(int slot, const Faction *f, void (*moveArmies)(int)) {
     int home = factionHomePlane(f), portals = 0;
     int active = home >= 0 && factionInfernoActive(slot, f, home, &portals);
-    factionTurns[slot - PLAYER_SLOTS_GAME].active = active;
-    factionGates[slot].home = home, factionGates[slot].active = active;
+    storeFactionMonth(slot, home, active);
     GAME_FN(void (*)(const char *, ...), RVA_TRACE)("runinfernoplayer %d, portals %d, active %d\n", slot, portals, active);
     writeLog("faction_turn", "slot=%d preset=Inferno home=%d portals=%d active=%d", slot, home, portals, active);
     factionMonumentSteps(slot, f, home, factionMonumentCount(f, factionMonumentPlane(f), -1));
@@ -580,8 +584,7 @@ static int factionCelestialActive(int slot, const Faction *f, int home, int *por
 static void factionCelestialMove(int slot, const Faction *f, void (*moveArmies)(int)) {
     int home = factionHomePlane(f), portals = 0;
     int active = home >= 0 && factionCelestialActive(slot, f, home, &portals);
-    factionTurns[slot - PLAYER_SLOTS_GAME].active = active;
-    factionGates[slot].home = home, factionGates[slot].active = active;
+    storeFactionMonth(slot, home, active);
     GAME_FN(void (*)(const char *, ...), RVA_TRACE)("runcelplayer %d, portals %d, active %d\n", slot, portals, active);
     writeLog("faction_turn", "slot=%d preset=Celestial home=%d portals=%d active=%d", slot, home, portals, active);
     factionMonumentSteps(slot, f, home, factionMonumentCount(f, factionMonumentPlane(f), -1));
@@ -921,13 +924,15 @@ static void factionCaravan(int slot, const Faction *f) {
 }
 
 static void factionHadesMove(int slot, const Faction *f, void (*moveArmies)(int)) {
-    int home = factionHomePlane(f);
+    int home = factionHomePlane(f), portals = 0;
+    int active = home >= 0 && factionInfernoActive(slot, f, home, &portals);
+    storeFactionMonth(slot, home, active);
     int monuments = factionMonumentCount(f, factionMonumentPlane(f), -1);
     GAME_FN(void (*)(const char *, ...), RVA_TRACE)("runhadesplayer %d, monuments %d\n", slot, monuments);
-    writeLog("faction_turn", "slot=%d preset=Hades home=%d monuments=%d", slot, home, monuments);
+    writeLog("faction_turn", "slot=%d preset=Hades home=%d monuments=%d portals=%d active=%d", slot, home, monuments, portals, active);
     factionMonumentSteps(slot, f, home, monuments);
     moveArmies(slot);
-    factionTurnSpawn(slot, f, home, 1);
+    factionTurnSpawn(slot, f, home, active);
 }
 
 static void factionMonumentSpawns(int slot, const Faction *f) {
@@ -1042,13 +1047,17 @@ static void moveAllIndependentsHook(int player) {
     if (f && f->like == 28) factionInfernoMove(player, f, gameMoveAllIndependents);
     else if (f && f->like == 29) factionCelestialMove(player, f, gameMoveAllIndependents);
     else if (f && f->like == 27) factionHadesMove(player, f, gameMoveAllIndependents);
+    else if (!f) gameMoveAllIndependents(player);
     else {
-        int home = f ? factionHomePlane(f) : -1;
-        if (f) factionMonumentSteps(player, f, home, factionMonumentCount(f, factionMonumentPlane(f), -1));
+        int home = factionHomePlane(f), portals = 0, spawnPortals = 0;
+        int active = home >= 0 && factionInfernoActive(player, f, home, &portals);
+        storeFactionMonth(player, home, active);
+        factionMonumentSteps(player, f, home, factionMonumentCount(f, factionMonumentPlane(f), -1));
         gameMoveAllIndependents(player);
-        if (!f || f->spawnSite == FACTION_SITE_NONE) return;
-        int portals = 0;
-        factionTurnSpawn(player, f, home, home >= 0 && factionInfernoActive(player, f, home, &portals));
+        int spawnActive = f->spawnSite != FACTION_SITE_NONE && home >= 0 && factionInfernoActive(player, f, home, &spawnPortals);
+        writeLog("faction_turn", "slot=%d preset=%s home=%d portals=%d active=%d spawn_active=%d", player, FACTION_PRESET_NAMES[f->like - 24], home, portals,
+                 active, spawnActive);
+        factionTurnSpawn(player, f, home, spawnActive);
     }
 }
 
