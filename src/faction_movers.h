@@ -1209,7 +1209,7 @@ static void populateFactions(void) {
     if (!any) return;
     unsigned char *mark = calloc((size_t)MAP_COLUMNS_MAX * MAP_COLUMN_SQUARES, 1);
     if (!mark) {
-        writeLogError("faction_population_skipped", "reason=out_of_memory");
+        writeLogError("faction_population_skipped", "reason=out_of_memory factions=%d", factionCount);
         return;
     }
     PieceTools t = pieceTools();

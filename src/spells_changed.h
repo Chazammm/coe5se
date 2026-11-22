@@ -9,7 +9,7 @@
 #define SPELLS_CHANGED_NO_SPELL           "no spell"
 #define SPELLS_CHANGED_OTHER_MOD          "%.47s (%.79s)"
 #define SPELLS_CHANGED_UNKNOWN_MOD        "an unknown mod"
-#define SPELLS_CHANGED_MORE               "And %d more."
+#define SPELLS_CHANGED_MORE               "...and %d more."
 #define SPELLS_CHANGED_END                "Previous mod version keeps compatibility."
 #define SPELLS_CHANGED_LOAD               "Load anyway"
 #define SPELLS_CHANGED_BACK               "Back to the menu"

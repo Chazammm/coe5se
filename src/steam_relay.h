@@ -16,7 +16,9 @@ static void drawSteamCodeCursor(void) {}
 #define STEAM_SERVER_TEXT              "LAN: players connect by IP address, with the port open.\nSteam: players connect by Steam code, with no port open."
 #define STEAM_SERVER_LAN               "LAN (open port)"
 #define STEAM_SERVER_STEAM             "Steam"
-#define STEAM_SERVER_NO_STEAM          "Steam not available.\nA Steam game server needs the game started through Steam."
+#define STEAM_SERVER_NO_STEAM          "Steam not available.\nStart CoE5 through Steam to host over Steam."
+#define STEAM_OFFLINE_TEXT             "Steam is offline."
+#define STEAM_UNAVAILABLE_TEXT         "Steam relay unavailable.\nSee coe5mod.log."
 #define STEAM_SERVER_FAILED            "Steam game server failed"
 #define STEAM_JOIN_TITLE               "CoE5SE: Connect"
 #define STEAM_JOIN_TEXT                "IP address: the server's address and port.\nSteam code: the code on the server's screen."
@@ -161,6 +163,13 @@ static int startSteamRelayThread(const char *role) {
     return 0;
 }
 
+static const char *steamUnavailableText(const char *reason, const char *notStartedText) {
+    if (!strcmp(reason, "own_code")) return "Steam code belongs to this account.";
+    if (!strcmp(reason, "steam_offline")) return STEAM_OFFLINE_TEXT;
+    if (!strcmp(reason, "steam_not_connected") || !strcmp(reason, "no_steam_api")) return notStartedText;
+    return STEAM_UNAVAILABLE_TEXT;
+}
+
 static int openSteamRelayHost(int port) {
     if (isOfficialGame()) {
         writeLog("steam_relay_unavailable", "role=host reason=official_game");
@@ -168,7 +177,7 @@ static int openSteamRelayHost(int port) {
     }
     const char *reason = bindSteam();
     if (reason) {
-        writeLog("steam_relay_unavailable", "role=host reason=%s", reason);
+        writeLogWarning("steam_relay_unavailable", "role=host reason=%s", reason);
         return 0;
     }
     stopSteamRelay();
@@ -196,9 +205,8 @@ static int openSteamRelayClient(uint64_t host, const char *secret) {
     const char *reason = isOfficialGame() ? "official_game" : bindSteam();
     if (!reason && host == steamApi.self) reason = "own_code";
     if (reason) {
-        writeLog("steam_relay_unavailable", "role=client reason=%s", reason);
-        okBox(STEAM_CONNECT_TITLE, !strcmp(reason, "own_code") ? "Connect code of this Steam account" :
-                                   "Steam not available.\nA connect code needs the game started through Steam.");
+        writeLogWarning("steam_relay_unavailable", "role=client reason=%s", reason);
+        okBox(STEAM_CONNECT_TITLE, steamUnavailableText(reason, "Steam not available.\nStart CoE5 through Steam to use a connect code."));
         return 0;
     }
     stopSteamRelay();
@@ -262,8 +270,8 @@ static int setupServerPortBoxHook(const char *title, const char *prompt, unsigne
             writeLog("steam_relay_server_choice", "choice=steam port=%d", freePort);
             return freePort;
         }
-        writeLog("steam_relay_unavailable", "role=host reason=%s", reason);
-        okBox(STEAM_SERVER_TITLE, strcmp(reason, "no_free_port") ? STEAM_SERVER_NO_STEAM : STEAM_SERVER_FAILED);
+        writeLogWarning("steam_relay_unavailable", "role=host reason=%s", reason);
+        okBox(STEAM_SERVER_TITLE, !strcmp(reason, "no_free_port") ? STEAM_SERVER_FAILED : steamUnavailableText(reason, STEAM_SERVER_NO_STEAM));
     }
 }
 
@@ -495,7 +503,7 @@ static int steamCodeBox(int maxLen) {
             return -1;
         }
         if (!isCode) {
-            writeLog("steam_relay_unavailable", "role=client reason=not_a_code");
+            writeLogWarning("steam_relay_unavailable", "role=client reason=not_a_code");
             okBox(STEAM_CODE_BOX_TITLE, STEAM_CODE_NOT_A_CODE);
             continue;
         }

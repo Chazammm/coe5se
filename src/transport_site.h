@@ -157,7 +157,7 @@ static int carriedMatchAs(int code, int x, int y, int terrain) {
 }
 
 static int carriedSourceOffers(const CarriedSquare *c, int source, int player, int offer) {
-    int code = PG32(RVA_SHOP_OFFER_TERRAIN + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)offer * 4);
+    int code = PSLOT32(RVA_SHOP_OFFER_TERRAIN + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
     return !code || carriedMatchAs(code, c->x, c->y, carriedSourceTerrain(c, source));
 }
 
@@ -231,9 +231,8 @@ static void carriedSitesOut(void) {
 
 // ---- Orders that follow their vehicle -----------------------------------------------------------
 static short *carriedOrderField(int player, int i, int field) {
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    if (field < 2) return &PG16(RVA_AUTO_RECRUIT_SQUARES + block + (size_t)i * 4 + (size_t)field * 2);
-    return &PG16(RVA_AUTO_RECRUIT_MONSTERS + block + (size_t)i * 2);
+    if (field < 2) return &PSLOT16(RVA_AUTO_RECRUIT_SQUARES + (size_t)i * 4 + (size_t)field * 2, player, PLAYER_BLOCK_SIZE);
+    return &PSLOT16(RVA_AUTO_RECRUIT_MONSTERS + (size_t)i * 2, player, PLAYER_BLOCK_SIZE);
 }
 
 static void carriedDropOrder(int player, int i) {
@@ -245,10 +244,9 @@ static void carriedDropOrder(int player, int i) {
 }
 
 static int carriedOfferOf(int player, int monster) {
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int last = PG32(RVA_SHOP_LAST + block);
+    int last = PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE);
     for (int e = 0; e <= last && e < SHOP_OFFERS_MAX; e++)
-        if (PG32(RVA_SHOP_OFFERS + block + (size_t)e * 4) == monster && PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)e * 4) > 0) return e;
+        if (PSLOT32(RVA_SHOP_OFFERS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE) == monster && PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE) > 0) return e;
     return -1;
 }
 
@@ -395,7 +393,7 @@ static int carriedAutoOfferHook(int player, int offer, int x, int y) {
     int square = player == carriedSites.player ? carriedSquareIndex(x, y) : -1, used = 0;
     int source = square >= 0 ? carriedBuySource(square, player, offer, &used) : -2;
     if (source == -2) return carriedOfferTest(-1, 0, player, offer, x, y);
-    int flags = PG32(RVA_SHOP_OFFER_FLAGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)offer * 4);
+    int flags = PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
     if (used && !(flags & SHOP_FLAG_EXTRA)) return -3;
     return carriedOfferTest(square, source, player, offer, x, y);
 }
@@ -419,7 +417,7 @@ static int carriedRecruitBuyHook(int player, int offer, int x, int y) {
     carriedSitesOut();
     int r;
     if (source >= 0 && offer >= 0 && offer < SHOP_OFFERS_MAX) {
-        int *flags = &PG32(RVA_SHOP_OFFER_FLAGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)offer * 4), was = *flags;
+        int *flags = &PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE), was = *flags;
         int unit = carriedSites.vehicles[source].unit;
         *flags |= SHOP_FLAG_EXTRA;
         r = nextCarriedRecruitBuy(player, offer, x, y);

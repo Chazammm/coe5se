@@ -101,9 +101,9 @@ static int itemStatBlessing(int player, int ability) {
     // @platform-split item_stat_blessing: Mac inlines RVA_PLAYER_BLESSING_VALUE, so CoE5SE reads the 24 pairs itself
     if (player < 0 || ability <= 0) return 0;
     for (int i = 0; i < 24; i++) {
-        int id = PG32(RVA_PLAYER_BLESSINGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)i * 8);
+        int id = PSLOT32(RVA_PLAYER_BLESSINGS + (size_t)i * 8, player, PLAYER_BLOCK_SIZE);
         if (!id) return 0;
-        if (id == ability) return PG32(RVA_PLAYER_BLESSINGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)i * 8 + 4);
+        if (id == ability) return PSLOT32(RVA_PLAYER_BLESSINGS + (size_t)i * 8 + 4, player, PLAYER_BLOCK_SIZE);
     }
     return 0;
 #endif

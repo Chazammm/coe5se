@@ -314,12 +314,12 @@ static int afflictionEventLine(const char *line, int level, const char *mod) {
     const char *p = line + len, *name = word == 2 ? "+hasaffunithere" : word ? "cureoneaff" : "makeaff";
     long long player = -1;
     if (word == 2 && !readSpellNumber(&p, &player)) {
-        refuseC5mLine(name, mod, "bad_value", "line=%.60s", line);
+        refuseC5mLine(name, mod, "bad_value", "line=%d file=%.200s text=%.60s", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line);
         G32(RVA_EVENT_STATE) = EVENT_FAILED;
         return 1;
     }
     int k = readAfflictionName(&p, name, mod, line);
-    if (k >= 0 && !isLineEnd(p)) refuseC5mLine(name, mod, "bad_value", "line=%.60s", line), k = -1;
+    if (k >= 0 && !isLineEnd(p)) refuseC5mLine(name, mod, "bad_value", "line=%d file=%.200s text=%.60s", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line), k = -1;
     if (k < 0) {
         if (word == 2) G32(RVA_EVENT_STATE) = EVENT_FAILED;
         return 1;

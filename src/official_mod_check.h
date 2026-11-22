@@ -177,24 +177,24 @@ static __attribute__((unused)) void officialFailedModsText(const OfficialModChec
         written = snprintf(rows + used, sizeof rows - used, "%s%.48s", i ? "\n" : "", f->mod);
         if (written > 0) used += (size_t)written;
     }
-    if (used < sizeof rows && modCheck->failureCount > shown) snprintf(rows + used, sizeof rows - used, "\nand %d more", modCheck->failureCount - shown);
+    if (used < sizeof rows && modCheck->failureCount > shown) snprintf(rows + used, sizeof rows - used, "\n...and %d more.", modCheck->failureCount - shown);
     officialWrapBoxText(rows, OFFICIAL_BOX_WIDTH, out, size);
 }
 
 static __attribute__((unused)) const char *officialNotReadWords(const char *reason) {
     static const struct { const char *reason, *words; } WORDS[] = {
-        {"time_limit", "no answer from CoE5 in time."},
-        {"no_mod_check_text", "no text only mode in this CoE5 patch."},
+        {"time_limit", "No answer from CoE5 in time."},
+        {"no_mod_check_text", "No --textonly mode in this CoE5 patch."},
         {"no_end_text", "CoE5 stopped before the last mod."},
-        {"error_outside_a_mod", "a Mod Error outside any mod."},
-        {"named_mod_not_on_list", "a Mod Error in a disabled mod."},
-        {"named_mod_already_off", "a Mod Error with the mod disabled."},
+        {"error_outside_a_mod", "Mod Error outside any mod."},
+        {"named_mod_not_on_list", "Mod Error in a disabled mod."},
+        {"named_mod_already_off", "Mod Error with the mod disabled."},
         {"coe5se_turned_on", "CoE5SE enabled during the mod check."},
         {"start_failed", "CoE5 didn't start."},
     };
     for (size_t i = 0; i < sizeof WORDS / sizeof WORDS[0]; i++)
         if (!strcmp(WORDS[i].reason, reason)) return WORDS[i].words;
-    return "the mod list couldn't be changed.";
+    return "Mod list could not be changed.";
 }
 
 static __attribute__((unused)) void officialNotReadText(const char *reason, char *out, size_t size) {

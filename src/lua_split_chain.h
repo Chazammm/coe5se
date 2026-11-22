@@ -378,6 +378,29 @@ static SplitCall *splitCallHere(StepContext *ctx, int row) {
     return c && c->row == row && c->site == SPLIT_STEPS_MAC[row].site && c->frameSp == ctx->sp ? c : NULL;
 }
 
+static void applySplitSkips(StepContext *ctx, const SplitStepMac *m, u64 comstr) {
+    unsigned char *sp = (unsigned char *)(uintptr_t)ctx->sp;
+    for (int k = 0; k < SPLIT_SKIPS_MAX && m->skip[k].op != SKIP_NONE; k++) {
+        const SplitSkip *s = &m->skip[k];
+        switch (s->op) {
+        case SKIP_REG: ctx->x[s->reg] = (uint64_t)s->value; break;
+        case SKIP_REG_GAME: ctx->x[s->reg] = (uint64_t)(uintptr_t)playerTableAddress((unsigned int)s->value); break;
+        case SKIP_REG_SP64: ctx->x[s->reg] = *(uint64_t *)(sp + s->at); break;
+        case SKIP_SP32_REG: *(uint32_t *)(sp + s->at) = (uint32_t)ctx->x[s->reg]; break;
+        case SKIP_SP32_COMSTR: *(uint32_t *)(sp + s->at) = (uint32_t)comstr << s->value; break;
+        case SKIP_SP64_RECORD: *(uint64_t *)(sp + s->at) = (uint64_t)(uintptr_t)playerTableAddress((unsigned int)s->value) + ctx->x[s->reg] * (uint64_t)s->stride; break;
+        case SKIP_REG_SP32: ctx->x[s->reg] = *(uint32_t *)(sp + s->at); break;
+        case SKIP_REG_SPADD: ctx->x[s->reg] = (uint64_t)(uintptr_t)(sp + s->at); break;
+        case SKIP_X29_PAIR: {
+            int *pair = (int *)(uintptr_t)(ctx->x[29] + (int64_t)s->at);
+            pair[0] = pair[1] = (int)s->value;
+            break;
+        }
+        default: break;
+        }
+    }
+}
+
 static void carriedSplitPoint(CallSite site, int start);
 static int splitStartRow(StepContext *ctx, int i) {
     const SplitStepMac *m = &SPLIT_STEPS_MAC[i];
@@ -404,26 +427,7 @@ static int splitStartRow(StepContext *ctx, int i) {
             if (out.a[k] != in.a[k]) putSplitArgAll(ctx, m, k, out.a[k]);
         return 0;
     }
-    unsigned char *sp = (unsigned char *)(uintptr_t)ctx->sp;
-    for (int k = 0; k < SPLIT_SKIPS_MAX && m->skip[k].op != SKIP_NONE; k++) {
-        const SplitSkip *s = &m->skip[k];
-        switch (s->op) {
-        case SKIP_REG: ctx->x[s->reg] = (uint64_t)s->value; break;
-        case SKIP_REG_GAME: ctx->x[s->reg] = (uint64_t)(uintptr_t)(gameBase + s->value); break;
-        case SKIP_REG_SP64: ctx->x[s->reg] = *(uint64_t *)(sp + s->at); break;
-        case SKIP_SP32_REG: *(uint32_t *)(sp + s->at) = (uint32_t)ctx->x[s->reg]; break;
-        case SKIP_SP32_COMSTR: *(uint32_t *)(sp + s->at) = (uint32_t)in.a[1] << s->value; break;
-        case SKIP_SP64_RECORD: *(uint64_t *)(sp + s->at) = (uint64_t)(uintptr_t)(gameBase + s->value) + ctx->x[s->reg] * (uint64_t)s->stride; break;
-        case SKIP_REG_SP32: ctx->x[s->reg] = *(uint32_t *)(sp + s->at); break;
-        case SKIP_REG_SPADD: ctx->x[s->reg] = (uint64_t)(uintptr_t)(sp + s->at); break;
-        case SKIP_X29_PAIR: {
-            int *pair = (int *)(uintptr_t)(ctx->x[29] + (int64_t)s->at);
-            pair[0] = pair[1] = (int)s->value;
-            break;
-        }
-        default: break;
-        }
-    }
+    applySplitSkips(ctx, m, in.a[1]);
     putSplitResult(ctx, m, c->result, c->squareX, c->squareY);
     ctx->pc = splitEndHooksMac[i].resume;
     releaseSplitCall(c);

@@ -48,7 +48,7 @@ static void noteModEventLine(const char *line, int level, const char *mod, const
     int start = eventWordIs(line, "playerevent") ? PLAYER_EVENT : eventWordIs(line, "squareevent") ? SQUARE_EVENT : 0;
     if (start) {
         if (!growList((void **)&modEvents, &modEventCapacity, modEventCount + 1, sizeof modEvents[0])) {
-            writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=no_memory", mod, G32(RVA_MOD_LINE));
+            writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=out_of_memory", mod, G32(RVA_MOD_LINE));
             modEventOpen = 0;
             return;
         }
@@ -60,13 +60,13 @@ static void noteModEventLine(const char *line, int level, const char *mod, const
         e->firstLine = modEventLineCount;
         e->fileOffset = keepModEventText(file);
         modEventOpen = e->fileOffset >= 0 && keepModEventLine(line);
-        if (!modEventOpen) writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=no_memory", mod, e->line);
+        if (!modEventOpen) writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=out_of_memory", mod, e->line);
         return;
     }
     if (!modEventOpen) return;
     ModEvent *e = &modEvents[modEventCount];
     if (!keepModEventLine(line)) {
-        writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=no_memory", e->mod, e->line);
+        writeLogWarning("mod_event_dropped", "mod=%s line=%d reason=out_of_memory", e->mod, e->line);
         modEventLineCount = e->firstLine;
         modEventOpen = 0;
         return;

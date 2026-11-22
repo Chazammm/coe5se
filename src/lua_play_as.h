@@ -20,8 +20,8 @@ static int lRunAiTurn(lua_State *L) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    short controller = PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)player);
-    PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)player) = CONTROLLER_AI;
+    short controller = PSLOT16(RVA_SLOT_CONTROLLER, player, 2);
+    PSLOT16(RVA_SLOT_CONTROLLER, player, 2) = CONTROLLER_AI;
 #ifdef __APPLE__
     G8(RVA_TEST_GAME_FLAG) = 0;
 #else
@@ -31,7 +31,7 @@ static int lRunAiTurn(lua_State *L) {
     writeLog("ai_turn_run", "mod=%s player=%lld turn=%d", s ? s->mod : "?", (long long)player, G32(RVA_TURN));
     void (*move)(int) = (void (*)(int))siteEntry(SITE_AI_TURN, GAME_PTR(RVA_AI_MOVE));
     move((int)player);
-    if (PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)player) == CONTROLLER_AI) PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)player) = controller;
+    if (PSLOT16(RVA_SLOT_CONTROLLER, player, 2) == CONTROLLER_AI) PSLOT16(RVA_SLOT_CONTROLLER, player, 2) = controller;
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -126,10 +126,9 @@ static void humanBuyAfter(int player, int x, int y) {
 static const char *humanBuyRefusal(const AiRecruitCalls *g, int player, int offer, int x, int y) {
     const HumanBuyCalls *h = humanBuyGame();
     if (!h) return "windows_only";
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)offer * 4);
-    int flags = PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)offer * 4);
-    const int *costs = (const int *)(gameBase + RVA_SHOP_COSTS + block + (size_t)offer * SHOP_COST_COUNT * 4);
+    int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int flags = PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    const int *costs = (const int *)playerSlotAddress(RVA_SHOP_COSTS + (size_t)offer * SHOP_COST_COUNT * 4, player, PLAYER_BLOCK_SIZE);
     int available = g->offerAvailable(player, offer, x, y);
     size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
     if ((G32(RVA_SQUARE_FLAGS + square) & SQUARE_FLAG_RECRUITED) && !(flags & SHOP_FLAG_EXTRA)) return "square_used";
@@ -152,7 +151,7 @@ static int aiBuyHumanTurn(int *x, int *y, AiBuySquareRule *rule, AiBuyAfter *aft
     RecruitScreen r;
     if (isNetworkGame() || !recruitScreenNow(&r)) return -1;
     if (r.player < 0 || r.player >= PLAYER_SLOTS || r.player != G32(RVA_ACTIVE_PLAYER)) return -1;
-    if (PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)r.player) != CONTROLLER_HUMAN) return -1;
+    if (PSLOT16(RVA_SLOT_CONTROLLER, r.player, 2) != CONTROLLER_HUMAN) return -1;
     *x = r.x, *y = r.y;
     *rule = humanBuyRefusal;
     *after = humanBuyAfter;

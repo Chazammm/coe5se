@@ -105,13 +105,13 @@ static char replayDiffersText[POPUP_TEXT_SIZE];
 static void replayDiffersMessage(char *text, size_t size, const char (*mods)[MOD_NAME_MAX], int count, int more) {
     size_t n = 0;
     text[0] = '\0';
-    appendText(text, size, &n, "Battle replay differs from the fight.\n\nBattle scripts: ");
+    appendText(text, size, &n, "Battle replay out of sync.\n\nBattle scripts: ");
     for (int i = 0; i < count; i++) {
         char name[MOD_NAME_MAX];
         luaNoticeName(mods[i], name, sizeof name);
         appendText(text, size, &n, "%s%.60s", i ? ", " : "", name);
     }
-    if (!count) appendText(text, size, &n, "none here");
+    if (!count) appendText(text, size, &n, "none");
     if (more) appendText(text, size, &n, ", +%d", more);
 }
 

@@ -442,7 +442,7 @@ static UNUSED void previewLinesStartTry(void) {
     if (!previewUnitsSeen) previewUnitsSeen = malloc(sizeof *previewUnitsSeen * UNIT_TABLE_MAX);
     if (!previewUnitLastChange) previewUnitLastChange = malloc(sizeof *previewUnitLastChange * UNIT_TABLE_MAX);
     if (!previewTerrainSeen || !previewUnitSources || !previewUnitsSeen || !previewUnitLastChange) {
-        writeLogError("preview_sources_short", "reason=out_of_memory");
+        writeLogError("preview_sources_short", "reason=out_of_memory stage=init");
         return;
     }
     memset(previewTerrainSeen, 0xff, sizeof *previewTerrainSeen * MAP_COLUMNS_MAX * MAP_COLUMN_SQUARES);
@@ -696,7 +696,7 @@ static void previewTallyLostWrites(void) {
         free(lastAt);
         free(takenBy);
         free(counted);
-        writeLogError("preview_sources_short", "reason=out_of_memory");
+        writeLogError("preview_sources_short", "reason=out_of_memory stage=count rows=%d", previewLineRowCount);
         return;
     }
     memset(lastAt, 0xff, sizeof *lastAt * MAP_COLUMNS_MAX * MAP_COLUMN_SQUARES);
@@ -1251,7 +1251,7 @@ static int previewTallyEventActions(int plane, PreviewActionTally *tally, Previe
         free(written);
         free(changed);
         free(stand);
-        writeLogError("preview_sources_short", "reason=out_of_memory");
+        writeLogError("preview_sources_short", "reason=out_of_memory stage=build writes=%d kills=%d", writes, kills);
         return 0;
     }
     int standCount = 0, standMost = (last + 2) * 4, writtenCount = 0, changedCount = 0;

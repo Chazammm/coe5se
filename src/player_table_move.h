@@ -56,6 +56,14 @@ static unsigned char *playerSlotAddress(unsigned int rva0, int player, int entry
 
 static int playerSlotCount(void) { return playerTableMoved ? PLAYER_SLOTS_MOVED : PLAYER_SLOTS_GAME; }
 
+#ifndef __APPLE__
+static unsigned char *playerBlocksNow;
+static unsigned char **playerBlocksNowCell(void) {
+    if (!playerBlocksNow) playerBlocksNow = playerTableAddress(RVA_SLOT_NAME);
+    return &playerBlocksNow;
+}
+#endif
+
 static int movedPlayerBound(int game) { return game + FACTION_SLOT_TARGET; }
 
 #define PLAYER_SLOTS_PADDED 64
@@ -200,6 +208,7 @@ static int installPlayerTableMove(void) {
     closeGameCode();
     for (int g = 0; g < PLAYER_GROUP_COUNT; g++) movedPlayerTables[g] = tables[g];
     playerTableMoved = 1;
+    playerBlocksNow = tables[PLAYER_GROUP_BLOCKS];
     writeLog("player_table_moved", "from=%p to=%p slots=%d sites=%d of %d", (void *)playerTableOld(PLAYER_GROUP_BLOCKS), (void *)block,
              PLAYER_SLOTS_MOVED, matched, PLAYER_MOVE_SITE_COUNT);
     adjustSaveCastCountRead();

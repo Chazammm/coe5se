@@ -102,12 +102,17 @@ static unsigned char *buildCeremonyRowStub(const CeremonyRowCopy *copy, unsigned
         emitCeremonyGameInt(&p, IMUL_EAX, sizeof IMUL_EAX, RVA_SEALS_BROKEN);
         emitCeremonyGameInt(&p, ADD_EAX, sizeof ADD_EAX, RVA_CEREMONY_COST_SEAL_BASE);
         break;
-    case CEREMONY_COST_FAVOR:
-        emitCeremonyBytes(&p, (const unsigned char[]){0x43, 0x8b, 0x84, 0x37}, 4);
-        emitCeremonyInt(&p, (int)RVA_PLAYER_DIVINE_FAVOR);
+    case CEREMONY_COST_FAVOR: {
+        unsigned long long cell = (unsigned long long)(uintptr_t)playerBlocksNowCell();
+        emitCeremonyBytes(&p, (const unsigned char[]){0x48, 0xb8}, 2);
+        emitCeremonyBytes(&p, &cell, 8);
+        emitCeremonyBytes(&p, (const unsigned char[]){0x48, 0x8b, 0x00}, 3);
+        emitCeremonyBytes(&p, (const unsigned char[]){0x42, 0x8b, 0x84, 0x38}, 4);
+        emitCeremonyInt(&p, (int)(RVA_PLAYER_DIVINE_FAVOR - RVA_SLOT_NAME));
         emitCeremonyBytes(&p, (const unsigned char[]){0xff, 0xc0}, 2);
         emitCeremonyGameInt(&p, IMUL_EAX, sizeof IMUL_EAX, RVA_CEREMONY_COST_FAVOR_STEP);
         break;
+    }
     default:
         emitCeremonyBytes(&p, (const unsigned char[]){0x31, 0xc0}, 2);
         break;

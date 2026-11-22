@@ -309,7 +309,7 @@ static void placeTransportDecks(int sx, int sy) {
         if (p.hearts) {
             p.offField = p.keptOff = setTempAbility(u, ABILITY_SHIP_SIZE, 1);
             if (!p.offField) writeLogWarning("transport_vehicle_on_field", "reason=temp_abilities_full vehicle=%d", u);
-        } else if (d->heart >= 0) writeLogWarning("transport_heart_not_placed", "reason=no_cell vehicle=%d heart=%d", u, d->heart);
+        } else if (d->heart >= 0) writeLogWarning("transport_heart_not_placed", "reason=no_square vehicle=%d heart=%d", u, d->heart);
         deckBattle.decks[deckBattle.count++] = p;
         writeLog("transport_deck_placed", "vehicle=%d monster=%d side=%d x=%d y=%d left=%d bottom=%d parts=%d of %d hearts=%d sea=%d tag=%d", u, monster, side, sx, sy,
                  p.left, p.bottom, p.parts, d->count, p.hearts, sea, p.tag);
@@ -453,6 +453,50 @@ static int deckObjectCell(int unit, int *x, int *y) {
 }
 
 // ---- After the fight -----------------------------------------------------------------------------
+typedef struct {
+    int unit, monster, x, y;
+} LootedVehicle;
+static struct {
+    int count, capacity;
+    LootedVehicle *list;
+} deckLoot;
+
+static void removeDeckVehicle(int v) {
+    int x = G32(RVA_UNIT_X + (size_t)v * UNIT_SIZE), y = G32(RVA_UNIT_X + 4 + (size_t)v * UNIT_SIZE);
+    if (deckRemoveForTests) deckRemoveForTests(v);
+    else GAME_FN(void (*)(int), RVA_REMOVE_UNIT)(v);
+    if (!growList((void **)&deckLoot.list, &deckLoot.capacity, deckLoot.count + 1, sizeof *deckLoot.list)) {
+        writeLogError("transport_vehicle_not_looted", "reason=out_of_memory vehicle=%d", v);
+        return;
+    }
+    G32(RVA_UNIT_X + (size_t)v * UNIT_SIZE) = x, G32(RVA_UNIT_X + 4 + (size_t)v * UNIT_SIZE) = y;
+    deckLoot.list[deckLoot.count++] = (LootedVehicle){.unit = v, .monster = unitMonsterNumber(v), .x = x, .y = y};
+}
+
+static int deckVehicleHoldsItem(int u) {
+    for (int p = 0; p < ITEM_POSITION_MAX; p++)
+        if (unitItemAt(u, p) >= 0) return 1;
+    return 0;
+}
+
+static void releaseLootedVehicles(int late) {
+    int kept = 0;
+    for (int i = 0; i < deckLoot.count; i++) {
+        LootedVehicle l = deckLoot.list[i];
+        size_t at = (size_t)l.unit * UNIT_SIZE;
+        if (deckUnitHp(l.unit) > 0 || unitMonsterNumber(l.unit) != l.monster || G32(RVA_UNIT_X + at) != l.x || G32(RVA_UNIT_X + 4 + at) != l.y) continue;
+        int holds = deckVehicleHoldsItem(l.unit);
+        if (holds && !late) {
+            deckLoot.list[kept++] = l;
+            continue;
+        }
+        G32(RVA_UNIT_X + at) = G32(RVA_UNIT_X + 4 + at) = -1;
+        if (holds) writeLogWarning("transport_vehicle_not_looted", "reason=no_loot_before_next_fight vehicle=%d monster=%d x=%d y=%d", l.unit, l.monster, l.x, l.y);
+        else writeLog("transport_vehicle_looted", "vehicle=%d monster=%d x=%d y=%d", l.unit, l.monster, l.x, l.y);
+    }
+    deckLoot.count = kept;
+}
+
 static int deckHeartLives(const PlacedDeck *p) {
     int heart = transportDecks[p->deck].heart;
     for (int u = 0; u <= G32(RVA_UNIT_COUNT) && u < UNIT_TABLE_MAX; u++)
@@ -481,8 +525,7 @@ static void judgeTransportDecks(void) {
             continue;
         }
         writeLog("transport_vehicle_removed", "vehicle=%d monster=%d tag=%d x=%d y=%d", p->vehicle, unitMonsterNumber(p->vehicle), p->tag, deckBattle.x, deckBattle.y);
-        if (deckRemoveForTests) deckRemoveForTests(p->vehicle);
-        else GAME_FN(void (*)(int), RVA_REMOVE_UNIT)(p->vehicle);
+        removeDeckVehicle(p->vehicle);
     }
     deckBattle.active = deckBattle.count = 0;
 }
@@ -545,6 +588,7 @@ static u64 deckSpreadHook(u64 x, u64 y, u64 a3, u64 a4, u64 a5, u64 monster, u64
 
 static u64 (*nextDeckFight)(u64, u64);
 static u64 deckFightHook(u64 x, u64 y) {
+    if (deckLoot.count) releaseLootedVehicles(1);
     int count = 0, *off = deckBattle.active && deckBattle.count ? malloc((size_t)deckBattle.count * sizeof *off) : NULL;
     if (deckBattle.active && deckBattle.count && !off) writeLogError("transport_vehicles_unjudged", "reason=out_of_memory decks=%d", deckBattle.count);
     for (int i = 0; off && i < deckBattle.count; i++)
@@ -557,11 +601,16 @@ static u64 deckFightHook(u64 x, u64 y) {
         int v = off[i];
         if (deckUnitHp(v) <= 0 || playerSameTeam(w, deckUnitPlayer(v))) continue;
         writeLog("transport_vehicle_removed", "vehicle=%d monster=%d reason=side_lost winner=%d x=%d y=%d", v, unitMonsterNumber(v), w, (int)x, (int)y);
-        if (deckRemoveForTests) deckRemoveForTests(v);
-        else GAME_FN(void (*)(int), RVA_REMOVE_UNIT)(v);
+        removeDeckVehicle(v);
     }
     free(off);
     return winner;
+}
+
+static u64 (*nextDeckDeadPlayers)(void);
+static u64 deckDeadPlayersHook(void) {
+    if (deckLoot.count) releaseLootedVehicles(0);
+    return nextDeckDeadPlayers();
 }
 
 static u64 (*nextDeckRemoveTempMen)(void);
@@ -580,8 +629,9 @@ static int installTransportDeckHooks(void) {
              insertWrap(SITE_REMOVE_TEMP_MEN, (void *)deckRemoveTempMenHook, (void **)&nextDeckRemoveTempMen, place, owner, NULL) +
              insertWrap(SITE_DAMAGE_UNIT, (void *)deckDamageUnitHook, (void **)&nextDeckDamageUnit, place, owner, NULL) +
              insertWrap(SITE_BATTLE_TURN_EFFECTS, (void *)deckTurnEffectsHook, (void **)&nextDeckTurnEffects, place, owner, NULL) +
-             insertWrap(SITE_BATTLE_SPREAD_COLLAPSE, (void *)deckSpreadHook, (void **)&nextDeckSpread, place, owner, NULL);
-    transportDeckHooks = ok == 6 ? 1 : -1;
-    writeInstallLog("transport_deck_hooks_installed", ok, 6);
+             insertWrap(SITE_BATTLE_SPREAD_COLLAPSE, (void *)deckSpreadHook, (void **)&nextDeckSpread, place, owner, NULL) +
+             insertWrap(SITE_REMOVE_DEAD_PLAYERS, (void *)deckDeadPlayersHook, (void **)&nextDeckDeadPlayers, place, owner, NULL);
+    transportDeckHooks = ok == 7 ? 1 : -1;
+    writeInstallLog("transport_deck_hooks_installed", ok, 7);
     return transportDeckHooks > 0;
 }

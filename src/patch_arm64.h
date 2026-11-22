@@ -348,7 +348,7 @@ static int putStepEntryMac(unsigned char *at, unsigned char *entry, const StepHo
     uint32_t code[STEP_ENTRY_WORDS], branch = 0x14000000u | ((uint32_t)((entry - at) >> 2) & 0x3ffffffu);
     writeStepEntryMac(code, entry, jump, index);
     if (!writeGameCode(entry, code, sizeof code) || !writeGameCode(at, &branch, 4)) {
-        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
+        writeLogError("site_failed", "site=%s reason=code_unwritable address=%p", name, (void *)at);
         return 0;
     }
     return 1;
@@ -376,7 +376,7 @@ static int putStepHookMac(unsigned int rva, StepHook *hook, const char *name, in
     }
     hook->resume = (uint64_t)(uintptr_t)tramp;
     if (!writeGameCode(tramp, trampCode, sizeof trampCode)) {
-        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
+        writeLogError("site_failed", "site=%s reason=code_unwritable address=%p", name, (void *)at);
         return 0;
     }
     return putStepEntryMac(at, entry, hook, name);
@@ -401,7 +401,7 @@ static int putStepResumeMac(unsigned int rva, StepHook *hook, const char *name) 
         return 0;
     }
     if (!writeGameCode(tramp, trampCode, sizeof trampCode)) {
-        writeLogError("site_failed", "site=%s reason=write address=%p", name, (void *)at);
+        writeLogError("site_failed", "site=%s reason=code_unwritable address=%p", name, (void *)at);
         return 0;
     }
     hook->resume = (uint64_t)(uintptr_t)tramp;
@@ -523,7 +523,7 @@ static int installCeremonyCostsMac(void) {
     }
     uint32_t call = blTo(screenCall, screenStub);
     written &= writeGameCode(screenCall, &call, 4);
-    if (!written) writeLogError("site_failed", "site=ceremony_costs reason=write");
+    if (!written) writeLogError("site_failed", "site=ceremony_costs reason=code_unwritable");
     return written;
 }
 
@@ -608,7 +608,7 @@ static int installSealEventMac(void) {
     *siteHead(SITE_SEAL_EVENT) = siteGameFunction(SITE_SEAL_EVENT);
     uint32_t branch = 0x14000000u | ((uint32_t)((stub - at) >> 2) & 0x3ffffffu);
     if (!writeGameCode(stub, code, sizeof code) || !writeGameCode(at, &branch, 4)) {
-        writeLogError("site_failed", "site=seal_event reason=write");
+        writeLogError("site_failed", "site=seal_event reason=code_unwritable");
         return 0;
     }
     siteInstalled[SITE_SEAL_EVENT] = 1;
@@ -622,17 +622,17 @@ static void initParticipantsMac(int mode) {
     PG16(RVA_SLOT_CONTROLLER) = 0;
     PG16(RVA_SLOT_CLASS) = -1;
     for (int i = 1; i <= slots; i++) {
-        PG16(RVA_SLOT_CLASS + (size_t)i * 2) = -1;
-        PG16(RVA_SLOT_CONTROLLER + (size_t)i * 2) = G16(RVA_INIT_PARTICIPANTS_CONTROLLERS + (size_t)(i - 1) * 2);
+        PSLOT16(RVA_SLOT_CLASS, i, 2) = -1;
+        PSLOT16(RVA_SLOT_CONTROLLER, i, 2) = G16(RVA_INIT_PARTICIPANTS_CONTROLLERS + (size_t)(i - 1) * 2);
     }
     for (int i = 1; i <= slots; i++) {
-        PG16(RVA_SLOT_TEAM + (size_t)i * PLAYER_BLOCK_SIZE) = -1;
-        PG16(RVA_SLOT_AI + (size_t)i * PLAYER_BLOCK_SIZE) = 2;
+        PSLOT16(RVA_SLOT_TEAM, i, PLAYER_BLOCK_SIZE) = -1;
+        PSLOT16(RVA_SLOT_AI, i, PLAYER_BLOCK_SIZE) = 2;
     }
     if (mode) PG32(RVA_SLOT_CONTROLLER) = (int)0xfffefffe;
     if (*(const unsigned char *)GAME_PTR(RVA_TWO_PLAYER_TEAMS) == 1) {
         static const short TEAMS[8] = {1, 1, 2, 2, 3, 3, 4, 4};
-        for (int i = 0; i < 8; i++) PG16(RVA_SLOT_TEAM + (size_t)i * PLAYER_BLOCK_SIZE) = TEAMS[i];
+        for (int i = 0; i < 8; i++) PSLOT16(RVA_SLOT_TEAM, i, PLAYER_BLOCK_SIZE) = TEAMS[i];
     }
 }
 
@@ -714,7 +714,7 @@ static int installParticipantsMac(void) {
     *siteHead(SITE_NEW_WORLD_INIT_PARTICIPANTS) = siteGameFunction(SITE_NEW_WORLD_INIT_PARTICIPANTS);
     uint32_t branch = 0x14000000u | ((uint32_t)((stub - at) >> 2) & 0x3ffffffu);
     if (!writeGameCode(stub, code, sizeof code) || !writeGameCode(at, &branch, 4)) {
-        writeLogError("site_failed", "site=new_world_init_participants reason=write");
+        writeLogError("site_failed", "site=new_world_init_participants reason=code_unwritable");
         return 0;
     }
     siteInstalled[SITE_NEW_WORLD_INIT_PARTICIPANTS] = 1;
@@ -796,7 +796,7 @@ static int installSite(CallSite site) {
         unsigned char *call = gameBase + info->rvas[i];
         uint32_t insn = blTarget(call) ? blTo(call, trampoline) : 0x14000000u | ((uint32_t)((trampoline - call) >> 2) & 0x3ffffffu);
         if (!writeGameCode(call, &insn, 4)) {
-            writeLogError("site_failed", "site=%s reason=write address=%p", info->name, call);
+            writeLogError("site_failed", "site=%s reason=code_unwritable address=%p", info->name, call);
             return 0;
         }
     }

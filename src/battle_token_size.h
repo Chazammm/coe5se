@@ -531,7 +531,7 @@ static int buildBattleTokenSitesMac(void) {
     size_t bytes = ((size_t)BATTLE_TOKEN_MAC_SITE_COUNT * BATTLE_STUB_WORDS * 4 + MAC_PAGE_MASK) & ~(size_t)MAC_PAGE_MASK;
     unsigned char *page = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (page == MAP_FAILED) {
-        writeLogError("battle_size_sites_built", "ok=0 reason=no_memory");
+        writeLogError("battle_size_sites_built", "ok=0 reason=out_of_memory bytes=%zu", bytes);
         return 0;
     }
     uint32_t sharedCode[6];
@@ -565,7 +565,7 @@ static int buildBattleTokenSitesMac(void) {
             memcpy(exits, game, sizeof game);
         }
         if (!writeGameCode(in, entry, (size_t)entryBytes) || (s->saveScratch && !writeGameCode(outAt, out, sizeof out))) {
-            writeLogError("battle_size_sites_built", "ok=0 reason=write site=0x%x", s->site);
+            writeLogError("battle_size_sites_built", "ok=0 reason=code_unwritable site=0x%x", s->site);
             munmap(page, bytes);
             return 0;
         }
@@ -575,7 +575,7 @@ static int buildBattleTokenSitesMac(void) {
         battleTokenSiteJump[i] = a64B(site, in);
     }
     if (mprotect(page, bytes, PROT_READ | PROT_EXEC)) {
-        writeLogError("battle_size_sites_built", "ok=0 reason=protect");
+        writeLogError("battle_size_sites_built", "ok=0 reason=code_unwritable bytes=%zu", bytes);
         munmap(page, bytes);
         return 0;
     }

@@ -108,5 +108,6 @@ static void requiresLine(const char *args, int mod, int level) {
 }
 
 static void loadOrderInit(void) {
-    writeLog("load_order_installed", "requires=%d", api->addModCommand("requires", requiresLine));
+    int ok = api->addModCommand("requires", requiresLine);
+    writeResultLog(ok, "load_order_installed", "requires=%d", ok);
 }

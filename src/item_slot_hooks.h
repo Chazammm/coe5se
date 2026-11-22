@@ -136,7 +136,7 @@ static int canEquipItemHook(int unit, int item, int any) {
     return -1;
 }
 
-static int enforceItemsHook(int unit) {
+static int enforceItemsPositions(int unit) {
     if (!unitNeedsItemSlots(unit)) return gameEnforceItems(unit);
     if (unit < 0) return 0;
     int removed = 0;
@@ -151,6 +151,22 @@ static int enforceItemsHook(int unit) {
         writeLog("item_slots_enforced", "unit=%d position=%d item=%d", unit, p, item);
     }
     return removed;
+}
+
+static int enforceItemsHook(int unit) {
+    short kept[ITEM_POSITION_MAX];
+    keptItemsBefore(unit, kept);
+    int removed = enforceItemsPositions(unit);
+    if (removed > 0) keptItemsAfter(unit, kept);
+    return removed;
+}
+
+static int enforceHookState;
+static int installEnforceItemsHook(void) {
+    if (enforceHookState) return enforceHookState > 0;
+    void *target = gameBase + RVA_ENFORCE_ITEMS;
+    enforceHookState = fanpatchHookCreate(target, (void *)enforceItemsHook, (void **)&gameEnforceItems) && fanpatchHookEnable(target, 1) ? 1 : -1;
+    return enforceHookState > 0;
 }
 
 static int unitRemoveItemHook(int unit, int item) {
@@ -426,7 +442,6 @@ static int installItemSlotHooks(void) {
     struct { unsigned int rva; void *hook; void **game; } hooks[] = {
         {RVA_GIVE_ITEM, (void *)giveItemHook, (void **)&gameGiveItem},
         {RVA_CAN_EQUIP_ITEM, (void *)canEquipItemHook, (void **)&gameCanEquipItem},
-        {RVA_ENFORCE_ITEMS, (void *)enforceItemsHook, (void **)&gameEnforceItems},
         {RVA_UNIT_REMOVE_ITEM, (void *)unitRemoveItemHook, (void **)&gameUnitRemoveItem},
         {RVA_TAKE_ITEM_BY_NAME, (void *)takeItemByNameHook, (void **)&gameTakeItemByName},
         {RVA_UNIT_NTH_ITEM_OF_KIND, (void *)unitNthItemOfKindHook, (void **)&gameUnitNthItemOfKind},
@@ -444,9 +459,10 @@ static int installItemSlotHooks(void) {
         void *target = gameBase + hooks[i].rva;
         ok += fanpatchHookCreate(target, hooks[i].hook, hooks[i].game) && fanpatchHookEnable(target, 1);
     }
+    ok += store && installEnforceItemsHook();
     int sites = store && installUnitLifeHooks();
-    itemSlotHooksInstalled = ok == count && sites ? 1 : -1;
-    writeInstallLogFields("item_slot_hooks_installed", ok + sites, count + 1, "hooks=%d sites=%d", ok, sites);
+    itemSlotHooksInstalled = ok == count + 1 && sites ? 1 : -1;
+    writeInstallLogFields("item_slot_hooks_installed", ok + sites, count + 2, "hooks=%d sites=%d", ok, sites);
     return itemSlotHooksInstalled > 0;
 }
 

@@ -62,7 +62,7 @@ static int runOfficialModCheck(void) {
     HMODULE loader = GetModuleHandleA(LOADER_DLL_NAME);
     int (*run)(const OfficialModCheckUi *) = loader ? (int (*)(const OfficialModCheckUi *))(void *)GetProcAddress(loader, "coe5seRunModCheck") : NULL;
     if (!run) {
-        writeLogError("official_mod_check_started", "reason=loader_has_no_mod_check");
+        writeLogError("official_mod_check_failed", "reason=loader_has_no_mod_check");
         return 0;
     }
     return run(&UI);

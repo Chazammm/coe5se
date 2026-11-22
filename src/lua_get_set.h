@@ -1729,7 +1729,7 @@ static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int
         contentValueRange(v, &min, &max);
         if (value < min || value > max) return refuseSetValue(L, "out_of_range", v, value, min, max);
     }
-    if (!p) return shape.list != LIST_NONE ? luaL_error(L, "%s: the list ends before that index", v->name)
+    if (!p) return shape.list != LIST_NONE ? luaL_error(L, "%s: index %d past end of list", v->name, v->count2 > 1 ? at2 : index)
                                            : luaL_error(L, "%s: index %d out of range", v->name, index);
     if (!record) return luaL_error(L, "%s: index %d out of range", v->name, index);
     int offset = (int)(p - record);
@@ -1784,7 +1784,7 @@ static int setContentValue(lua_State *L, const GameVar *v, unsigned char *p, int
     }
     case T_MONSTER_ATTACK: {
         int end = monsterAttackEnd(record), field = (int)(v->addr - (RVA_MONSTER_TABLE + MONSTER_ATTACKS));
-        if (at2 > end) return luaL_error(L, "%s: the list ends before that index", v->name);
+        if (at2 > end) return luaL_error(L, "%s: index %d past end of list", v->name, at2);
         long long wide = value;
         reason = writeContent(kind, index, MONSTER_ATTACKS + at2 * MONSTER_ATTACK_SIZE + field, &wide, 8);
         if (!reason && at2 == end && monsterAttackEnd(record) > end && end + 1 < MONSTER_ATTACK_MAX && monsterAttackEnd(record) > end + 1) {
@@ -1864,7 +1864,7 @@ static int lSet(lua_State *L) {
             return 0;
         }
     }
-    if (pastListEnd) return luaL_error(L, "%s: the list ends before that index", v->name);
+    if (pastListEnd) return luaL_error(L, "%s: index %d past end of list", v->name, (int)lua_tointeger(L, arg - 1));
     int oldLeader = !strcmp(v->name, "unitCommander") ? *(int *)p : -1;
     short endMark = 0;
     int appends = listEndMark(v->name, &endMark) && *(short *)p <= endMark;

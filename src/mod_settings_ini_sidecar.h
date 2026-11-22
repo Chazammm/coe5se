@@ -137,7 +137,7 @@ static int readSidecarBlockLine(IniSection *s, const BlockLine *b, SettingProble
     IniKey k = sidecarKeyNamed(b->word);
     if (k == INI_KEY_OPTION && s->type != SECTION_CHOICE) return settingProblem(p, "unknown_key", "option is for a choice");
     if (k == INI_KEY_OPTION_TIP && s->type != SECTION_CHOICE) return settingProblem(p, "unknown_key", "optiontip is for a choice");
-    if (k == INI_KEY_TIP && s->type == SECTION_CHOICE) return settingProblem(p, "unknown_key", "a choice has no tip: give each option its own with optiontip");
+    if (k == INI_KEY_TIP && s->type == SECTION_CHOICE) return settingProblem(p, "unknown_key", "choices use optiontip instead of tip");
     if ((k == INI_KEY_GROUP || k == INI_KEY_FIXED) && s->type != SECTION_KEY) return settingProblem(p, "unknown_key", "%s is for a key", b->word);
     int option = -1;
     if (k == INI_KEY_OPTION || k == INI_KEY_OPTION_TIP) {
@@ -146,9 +146,9 @@ static int readSidecarBlockLine(IniSection *s, const BlockLine *b, SettingProble
             return settingProblem(p, "too_many_options", "%s %d: a choice has options 0 to %d", b->word, option, SETTING_OPTIONS_MAX - 1);
     }
     int *seen = iniKeyLine(s, k, option);
-    if (!seen) return settingProblem(p, "unknown_key", "%s doesn't go in this block", b->word);
-    if (*seen && option >= 0) return settingProblem(p, "duplicate_key", "%s %d is there twice (line %d)", b->word, option, *seen);
-    if (*seen) return settingProblem(p, "duplicate_key", "%s is there twice (line %d)", b->word, *seen);
+    if (!seen) return settingProblem(p, "unknown_key", "%s not allowed in this block", b->word);
+    if (*seen && option >= 0) return settingProblem(p, "duplicate_key", "%s %d set twice (line %d)", b->word, option, *seen);
+    if (*seen) return settingProblem(p, "duplicate_key", "%s set twice (line %d)", b->word, *seen);
     *seen = b->line;
     if (b->hashInText) return settingProblem(p, "hash_in_text", "text can't hold #: the game reads it as a comment");
     char value[INI_LINE_MAX + 1];
@@ -183,7 +183,7 @@ static void finishSidecarBlock(IniParse *r) {
             int type = settingKindType(b->word);
             if (!type) continue;
             if (kindLine) {
-                settingProblem(&p, "two_kinds", "%s: the setting's kind is on line %d", b->word, kindLine);
+                settingProblem(&p, "two_kinds", "%s: setting type already set on line %d", b->word, kindLine);
                 iniLineProblem(r, s, b->line, &p, b->source);
                 continue;
             }

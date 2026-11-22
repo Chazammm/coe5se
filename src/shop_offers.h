@@ -345,20 +345,20 @@ static void rollShopRow(const ShopRow *r, int player) {
 }
 
 // ---- After the build: the replaced lines' entries and their message lines ----------------------
-static int entryIsBuiltinLine(size_t block, int e, const BuiltinOffer *o) {
-    int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)e * 4);
+static int entryIsBuiltinLine(int player, int e, const BuiltinOffer *o) {
+    int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE);
     if (count != o->count) return 0;
-    if (PG32(RVA_SHOP_OFFER_TERRAIN + block + (size_t)e * 4) != o->terrain) return 0;
-    if (PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)e * 4) != shopAddFlags(o->kind, o->importance)) return 0;
+    if (PSLOT32(RVA_SHOP_OFFER_TERRAIN + (size_t)e * 4, player, PLAYER_BLOCK_SIZE) != o->terrain) return 0;
+    if (PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE) != shopAddFlags(o->kind, o->importance)) return 0;
     if (count == -1) return 1;
-    const unsigned char *m = monsterRecord(PG32(RVA_SHOP_OFFERS + block + (size_t)e * 4));
+    const unsigned char *m = monsterRecord(PSLOT32(RVA_SHOP_OFFERS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE));
     return m && recordNameIs(m, MONSTER_NAME_SIZE, o->name);
 }
 static unsigned char *shopMessage(int m) { return GAME_PTR(RVA_MESSAGE_TABLE) + (size_t)m * MESSAGE_SIZE; }
 
-static const char *shopOfferLine(size_t block, int e, char *line, size_t size) {
-    int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)e * 4), what = PG32(RVA_SHOP_OFFERS + block + (size_t)e * 4);
-    int gold = PG32(RVA_SHOP_COSTS + block + (size_t)e * SHOP_COST_COUNT * 4);
+static const char *shopOfferLine(int player, int e, char *line, size_t size) {
+    int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE), what = PSLOT32(RVA_SHOP_OFFERS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE);
+    int gold = PSLOT32(RVA_SHOP_COSTS + (size_t)e * SHOP_COST_COUNT * 4, player, PLAYER_BLOCK_SIZE);
     if (count == -1) {
         snprintf(line, size, "%.40s for %d gold.", (const char *)tableAddress(TABLE_ITEM) + (size_t)what * ITEM_SIZE, gold);
         return "Magic Item for Sale";
@@ -416,12 +416,11 @@ static void mergeShopMessages(int player) {
 }
 
 static void emptyReplacedOffers(int player) {
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int last = PG32(RVA_SHOP_LAST + block), line = 0;
+    int last = PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE), line = 0;
     for (int e = 0; e <= last && e < SHOP_OFFERS_MAX; e++) {
         if (shopBuild.entryFromRecords[e]) continue;
         int l = line;
-        while (l < BUILTIN_OFFER_COUNT && !entryIsBuiltinLine(block, e, &BUILTIN_OFFERS[l])) l++;
+        while (l < BUILTIN_OFFER_COUNT && !entryIsBuiltinLine(player, e, &BUILTIN_OFFERS[l])) l++;
         if (l == BUILTIN_OFFER_COUNT) {
             writeLog("shop_offer_unmatched", "player=%d entry=%d", player, e);
             return;
@@ -430,9 +429,9 @@ static void emptyReplacedOffers(int player) {
         const BuiltinOffer *o = &BUILTIN_OFFERS[l];
         if (!builtinOfferReplaced(l)) continue;
         char text[160];
-        const char *title = shopOfferLine(block, e, text, sizeof text);
+        const char *title = shopOfferLine(player, e, text, sizeof text);
         int dropped = o->message && dropShopOfferLine(player, title, text);
-        PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)e * 4) = 0;
+        PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)e * 4, player, PLAYER_BLOCK_SIZE) = 0;
         writeLog("shop_offer_replaced", "player=%d offer=%s entry=%d message_line=%d", player, o->name, e, dropped);
     }
 }
@@ -446,8 +445,7 @@ static uintptr_t shopProcessOfferHook(int player, void *record, int temples, int
 typedef void (*ShopProcessOfferFn)(int, void *, int, int, int);
 static void shopProcessOfferHook(int player, void *record, int temples, int libraries, int terrain) {
 #endif
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int entry = PG32(RVA_SHOP_LAST + block);
+    int entry = PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE);
     unsigned char copy[CLASS_RECRUIT_SIZE];
     int bonus = recBonusOfferCopy(player, record, copy);
     recBonusRoll.record = record, recBonusRoll.rolled = bonus ? copy : record;
@@ -458,7 +456,7 @@ static void shopProcessOfferHook(int player, void *record, int temples, int libr
     recBonusRoll.record = recBonusRoll.rolled = NULL;
     if (bonus) recBonusAfterRoll(player, record, copy, entry);
     if (shopBuild.active && shopBuild.player == player) {
-        for (int e = entry + 1; e <= PG32(RVA_SHOP_LAST + block) && e < SHOP_OFFERS_MAX; e++) shopBuild.entryFromRecords[e] = 1;
+        for (int e = entry + 1; e <= PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE) && e < SHOP_OFFERS_MAX; e++) shopBuild.entryFromRecords[e] = 1;
     }
 #ifndef __APPLE__
     return result;

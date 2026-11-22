@@ -65,7 +65,7 @@ static int readLanLobbyMessage(const char *message, int lists) {
         char *end = NULL;
         unsigned long seed = strtoul(body, &end, 16);
         if (end != body + 8 || *end) {
-            writeLogWarning("lan_script_seed_dropped", "reason=bad_text");
+            writeLogWarning("lan_script_seed_dropped", "reason=bad_text text=%.60s", body);
             return 1;
         }
         if (netRoleNow() != NET_ROLE_CLIENT || (lanScriptSeedKnown && lanScriptSeed == (unsigned)seed)) return 1;
@@ -89,7 +89,7 @@ static int readLanLobbyMessage(const char *message, int lists) {
         u64 slots = strtoull(body, &end, 16);
         int platform = end == body + 16 && *end == ':' ? atoi(end + 1) : -1;
         if (platform < 0 || platform >= LAN_PLATFORMS) {
-            writeLogWarning("lan_build_dropped", "reason=bad_text");
+            writeLogWarning("lan_build_dropped", "reason=bad_text text=%.60s", body);
             return 1;
         }
         readyLanSlotBuilds();

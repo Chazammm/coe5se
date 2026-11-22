@@ -1218,12 +1218,12 @@ function require(name) end
 ---@field gold integer costs[0]; shop: rolled with the die when the offer came
 ---@field iron integer costs[1]
 ---@field goldDie? integer class: the open-ended die added to gold each time the offer comes
----@field chance? integer class: percent a month (before temples, libraries, and the AI level)
----@field flags integer the offer's flag bits
+---@field chance? integer class: percent a month (before temples, libraries, the AI level, and the flags below)
+---@field flags integer the offer's flag bits: 1 chance not 100, 4 mercenary or commander, 0x8 nogathererrec, 0x20 templerec, 0x40 libraryrec, 0x80 and 0x100 priestrec 2 and 3, 0x200 the AI's first turns, 0x400 to 0x10000 a terrain group (0x1000 to 0x8000 the gem locations), 0x20000 and towers (towerrec), 0x40000 atavirec, 0x80000 humanrec
 ---@field oncePerOffer? boolean shop: bought once, then gone
 ---@field extra? boolean shop: a buy leaves the square's recruitment for the turn unused (mercenaries, commanders)
 ---@field aiNever? boolean shop: the game's AI never buys it, and coe5.aiBuyOffer refuses it
----@field terrain integer the terrain it is recruited on (recterr), -1 or 0 for any
+---@field terrain integer the terrain it is recruited on (recterr), -1 or 0 for any; class: a record with a terrain group bit in flags gets its place from that bit, not from this -1
 ---@field limiter? string shop: its "=" limiter ("=Soulless": it upgrades those units)
 ---@field limiters? string[] class: its reclimiter lines ("-Baron", "+Goblin Chieftain", "=Soulless")
 ---@field moves integer the monster's action points a turn: 4 fast, 2 slow, else 3

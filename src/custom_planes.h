@@ -327,7 +327,7 @@ static void drawCustomPlaneProblems(void) {
     char line[512];
     for (int i = 0; i < customPlaneCount; i++) {
         if (!customPlanes[i].skipped) continue;
-        snprintf(line, sizeof line, "%.31s (%.200s): no room in the last world", customPlanes[i].name, customPlanes[i].mod);
+        snprintf(line, sizeof line, "%.31s (%.200s): did not fit during world generation", customPlanes[i].name, customPlanes[i].mod);
         textButton(0, line);
         tooltip("A plane goes beside the others up to 1000 columns, then under a smaller plane. A smaller map or fewer planes leave room.");
     }

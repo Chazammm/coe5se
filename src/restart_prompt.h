@@ -196,7 +196,7 @@ static u64 modsScreenWrapper(u64 a1, u64 a2, u64 a3, u64 a4) {
     spellsAfterModsScreen(spellPassesBefore);
     if (!codeModsChanged()) return result;
     writeLog("mods_with_code_changed", "count=%d", codeModCount);
-    if (messageBox("CoE5SE: Restart needed", "Mod with DLL turned on or off.\nRestart required. Restart now?",
+    if (messageBox("CoE5SE: Restart needed", "Mod with DLL enabled or disabled.\nTakes effect after restart. Restart now?",
                    "Yes", "No", 0, 0, 0) == 1)
         relaunchGame("mods_with_code_changed");
     takeCodeModSnapshot();

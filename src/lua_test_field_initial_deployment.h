@@ -35,8 +35,8 @@ static int testFieldInitialDeploymentContextSame(const LuaScript *script) {
     return testFieldDeploymentContextSame(script,s) &&
         G32(RVA_BATTLE_PLAYER_A)==testFieldInitialDeployment.battlePlayerA &&
         G32(RVA_BATTLE_PLAYER_B)==testFieldInitialDeployment.battlePlayerB &&
-        G16(RVA_SLOT_TEAM)==testFieldInitialDeployment.slotTeamA &&
-        G16(RVA_SLOT_TEAM+(size_t)TEST_BATTLE_ENEMY_PLAYER*PLAYER_BLOCK_SIZE)==testFieldInitialDeployment.slotTeamB &&
+        PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE)==testFieldInitialDeployment.slotTeamA &&
+        PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE)==testFieldInitialDeployment.slotTeamB &&
         *(const unsigned char *)GAME_PTR(RVA_IN_BATTLE)==testFieldInitialDeployment.rawInBattle;
 }
 
@@ -88,8 +88,8 @@ static void testFieldInitialDeploymentCapture(const LuaScript *script) {
     memcpy(s->square,testFieldSquare(),SQUARE_SIZE);
     testFieldInitialDeployment.battlePlayerA=G32(RVA_BATTLE_PLAYER_A);
     testFieldInitialDeployment.battlePlayerB=G32(RVA_BATTLE_PLAYER_B);
-    testFieldInitialDeployment.slotTeamA=G16(RVA_SLOT_TEAM);
-    testFieldInitialDeployment.slotTeamB=G16(RVA_SLOT_TEAM+(size_t)TEST_BATTLE_ENEMY_PLAYER*PLAYER_BLOCK_SIZE);
+    testFieldInitialDeployment.slotTeamA=PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE);
+    testFieldInitialDeployment.slotTeamB=PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
     testFieldInitialDeployment.rawInBattle=*(const unsigned char *)GAME_PTR(RVA_IN_BATTLE);
     testFieldInitialDeployment.lastCommander=G32(RVA_LAST_COMMANDER);
     int records=testFieldInitialDeployment.monsterRecords=tableRecords(TABLE_MONSTER);

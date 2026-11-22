@@ -66,8 +66,7 @@ static void appendPlaneProblems(char *text, size_t size, size_t *n, int *count) 
     for (int k = 0; k < 2; k++)
         for (int i = 0; i < planeProblemCount[k]; i++) {
             const PlaneProblem *p = &planeProblems[k][i];
-            if ((*count)++ == MISSING_PLANE_ENTRIES) appendText(text, size, n, "\n\n...and others.");
-            if (*count > MISSING_PLANE_ENTRIES) continue;
+            if ((*count)++ >= MISSING_PLANE_ENTRIES) continue;
             appendText(text, size, n, "%sError in %s '%s' at line %d\n\n%s", *n ? "\n\n" : "", p->script ? "script" : "mod", p->file, p->line, p->text);
         }
 }

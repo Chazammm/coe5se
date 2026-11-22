@@ -116,7 +116,7 @@ static int installFireCopiesMac(void) {
     for (int i = 0; i < FIRE_COPY_CALL_COUNT; i++) {
         uint32_t word = blTo(gameBase + FIRE_COPY_CALLS_MAC[i], trampoline);
         if (!writeGameCode(gameBase + FIRE_COPY_CALLS_MAC[i], &word, 4)) {
-            writeLogError("site_failed", "site=unit_fire_resistance reason=write address=%p", (void *)(gameBase + FIRE_COPY_CALLS_MAC[i]));
+            writeLogError("site_failed", "site=unit_fire_resistance reason=code_unwritable address=%p", (void *)(gameBase + FIRE_COPY_CALLS_MAC[i]));
             return 0;
         }
     }

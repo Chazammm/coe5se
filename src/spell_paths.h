@@ -94,7 +94,7 @@ static int spellPathWordTakes(const char *word, int mod) {
     const char *reason = !spellPathTableReady() ? "table_unexpected" : !spellPathTableWritable() ? "table_not_writable" : NULL;
     if (!reason) return 1;
     refuseC5mLine(word, spellModName(mod), reason, "line=%d", G32(RVA_MOD_LINE));
-    noteSpellProblem(mod, G32(RVA_MOD_LINE), "CoE5SE couldn't change the spell path names");
+    noteSpellProblem(mod, G32(RVA_MOD_LINE), "failed to update magic path names");
     return 0;
 }
 
@@ -113,7 +113,7 @@ static void newspellpathLine(const char *args, int mod, int level) {
     int number = VANILLA_SPELL_PATH_COUNT + spellPaths.added;
     if (number >= spellPathCount()) {
         refuseC5mLine(NEWSPELLPATH_WORD, spellModName(mod), "no_free_path", "line=%d name=%s", G32(RVA_MOD_LINE), name);
-        noteSpellProblem(mod, G32(RVA_MOD_LINE), "no free spell path for %s", name);
+        noteSpellProblem(mod, G32(RVA_MOD_LINE), "no free magic path slot for %s", name);
         return;
     }
     const char *kept = keptSpellName(name);
@@ -217,7 +217,7 @@ static const char *spellPathLineHook(const char *line, size_t len, int mod, int 
     int number = nameLen > 0 && nameLen <= SPELL_PATH_NAME_MAX ? spellPathByName(name) : -1;
     if (number < 0) {
         refuseC5mLine(word, spellModName(mod), "unknown_path", "line=%d text=%.60s", G32(RVA_MOD_LINE), args);
-        noteSpellProblem(mod, G32(RVA_MOD_LINE), "%s: no spell path named %.40s", word, name);
+        noteSpellProblem(mod, G32(RVA_MOD_LINE), "%s: no magic path named '%.40s'", word, name);
         return NULL;
     }
     int n = snprintf(spellPaths.line, sizeof spellPaths.line, "%s %d%s", word, number, rest);

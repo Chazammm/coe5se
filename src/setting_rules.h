@@ -59,14 +59,14 @@ static int checkSettingChoice(int optionCount, int defaultIndex, SettingProblem 
         return settingProblem(p, "too_many_options", "needs %d to %d options, has %d", SETTING_OPTIONS_MIN, SETTING_OPTIONS_MAX,
                               optionCount);
     if (defaultIndex < 0 || defaultIndex >= optionCount)
-        return settingProblem(p, "default_out_of_range", "default %d is not an option (0 to %d)", defaultIndex,
+        return settingProblem(p, "default_out_of_range", "default %d out of range (0 to %d)", defaultIndex,
                               optionCount - 1);
     return 0;
 }
 
 static int checkSettingOnOffDefault(int defaultValue, SettingProblem *p) {
     if (defaultValue != 0 && defaultValue != 1)
-        return settingProblem(p, "default_out_of_range", "default %d is not 0 or 1", defaultValue);
+        return settingProblem(p, "default_out_of_range", "default %d must be 0 or 1", defaultValue);
     return 0;
 }
 

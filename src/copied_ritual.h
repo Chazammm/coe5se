@@ -16,6 +16,7 @@ static void carryCopiedRitualWords(int source, int mod) {
     int ok = copyNoExplodeStrings(source, target);
     ok &= copyCorpseRules(source, target);
     ok &= copyRandomEquipLines(source, target);
+    ok &= copyItemScryRitual(source, target);
     ok &= copyCasterMaxCast(source, target);
     ok &= copyRitualMenu(source, target);
     ok &= copyFactionRefs(FACTION_REF_RITUAL, source, target);

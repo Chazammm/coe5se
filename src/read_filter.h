@@ -55,9 +55,9 @@ static signed char readSquareSeen(int player, int x, int y) {
 
 static int readViewer(void) {
     int active = G32(RVA_ACTIVE_PLAYER);
-    if (active >= 0 && active < PLAYER_SLOTS && PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)active) == SLOT_CONTROLLER_MINE) return active;
+    if (active >= 0 && active < PLAYER_SLOTS && PSLOT16(RVA_SLOT_CONTROLLER, active, 2) == SLOT_CONTROLLER_MINE) return active;
     for (int slot = 0; slot < PLAYER_SLOTS; slot++)
-        if (PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)slot) == SLOT_CONTROLLER_MINE) return slot;
+        if (PSLOT16(RVA_SLOT_CONTROLLER, slot, 2) == SLOT_CONTROLLER_MINE) return slot;
     return -1;
 }
 
@@ -93,7 +93,7 @@ static int readArmiesBuild(int viewer) {
     if (!readArmies.squares) {
         readArmies.squares = malloc(squares * sizeof *readArmies.squares);
         if (!readArmies.squares) {
-            writeLogError("read_filter_out_of_memory", "reason=out_of_memory");
+            writeLogError("read_filter_out_of_memory", "reason=out_of_memory squares=%zu", squares);
             return 0;
         }
         readArmies.count = squares;
@@ -159,7 +159,7 @@ static ReadVerdict readCheck(lua_State *L, ReadRule rule, int at, int viewer) {
     case READ_SLOT_HOME: {
         if (!readPlayerArgument(L, at, &a) || a < 0 || a >= PLAYER_SLOTS) return READ_PASSES;
         if (a == viewer) return READ_PASSES;
-        int x = PG16(RVA_PLAYER_HOME_X + 2 * (size_t)a), y = PG16(RVA_PLAYER_HOME_Y + 2 * (size_t)a);
+        int x = PSLOT16(RVA_PLAYER_HOME_X, a, 2), y = PSLOT16(RVA_PLAYER_HOME_Y, a, 2);
         if (viewer < 0 || !readSquareInArrays(x, y)) return READ_UNSEEN;
         return readSquareSeen(viewer, x, y) >= SQUARE_SEEN_BEFORE && !readIllusion(viewer, x, y, NULL) ? READ_PASSES : READ_UNSEEN;
     }

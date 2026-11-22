@@ -265,7 +265,7 @@ static void startIniSection(IniParse *r, IniSection *s, const char *text, int li
     if (!close) {
         s->type = SECTION_UNKNOWN;
         snprintf(s->word, sizeof s->word, "-");
-        settingProblem(&p, "unclosed_section", "[ with no ] to end the section");
+        settingProblem(&p, "unclosed_section", "unclosed [section] header");
         iniSectionProblem(r, s, &p);
         return;
     }
@@ -361,7 +361,7 @@ static int iniKeyRefused(const IniSection *s, const char *key, IniKey k, int opt
     if (k == INI_KEY_OPTION && option >= SETTING_OPTIONS_MAX)
         return settingProblem(p, "too_many_options", "%.16s: a choice has option0 to option%d", key, SETTING_OPTIONS_MAX - 1);
     if (!seen) return settingProblem(p, "unknown_key", "unknown key %.24s", key);
-    if (*seen) return settingProblem(p, "duplicate_key", "%.16s is set twice (line %d)", key, *seen);
+    if (*seen) return settingProblem(p, "duplicate_key", "%.16s set twice (line %d)", key, *seen);
     return 0;
 }
 
@@ -370,7 +370,7 @@ static int storeIniKey(IniSection *s, const char *key, IniKey k, int option, con
     case INI_KEY_DEFAULT:
         if (s->type == SECTION_KEY) {
             s->hasDefault = keyValueFromName(value, &s->defaultValue);
-            return s->hasDefault ? 0 : settingProblem(p, "not_a_key", "default %.20s is not a key name", value);
+            return s->hasDefault ? 0 : settingProblem(p, "not_a_key", "unknown default key %.20s", value);
         }
         s->hasDefault = parseWholeNumber(value, &s->defaultValue);
         return s->hasDefault ? 0 : settingProblem(p, "not_a_number", "default is not a whole number");

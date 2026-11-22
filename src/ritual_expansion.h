@@ -148,7 +148,7 @@ static void *movedCastCounts(void *counts, int *player) {
     return castCounts + offset;
 }
 
-static unsigned char *castCountsBase(void) { return ritualExpansionActive && castCounts ? castCounts : gameBase + RVA_CAST_COUNTS; }
+static unsigned char *castCountsBase(void) { return ritualExpansionActive && castCounts ? castCounts : playerTableAddress(RVA_CAST_COUNTS); }
 
 static short *extraCastCounts(int player) {
     return (short *)(castCounts + (size_t)player * PLAYER_BLOCK_SIZE) + VANILLA_RITUAL_SLOTS;
@@ -297,12 +297,12 @@ static size_t ritualsLeftOutText(char *text, size_t size) {
     size_t n = 0;
     char label[80];
     text[0] = '\0';
-    appendText(text, size, &n, "Rituals left out (no room):\n");
+    appendText(text, size, &n, "No free ritual slots:\n");
     for (int i = 0; i < ritualsLeftOut.count && i < RITUALS_LEFT_OUT_LINES; i++) {
         modDisplayName(ritualsLeftOut.mods[i], label, sizeof label);
         appendText(text, size, &n, "\n%s", label);
     }
-    if (ritualsLeftOut.count > RITUALS_LEFT_OUT_LINES) appendText(text, size, &n, "\n...and others.");
+    if (ritualsLeftOut.count > RITUALS_LEFT_OUT_LINES) appendText(text, size, &n, "\n...and %d more.", ritualsLeftOut.count - RITUALS_LEFT_OUT_LINES);
     return n;
 }
 
@@ -330,11 +330,14 @@ static void drawRitualsLeftOut(void) {
     for (int i = 0; i < ritualsLeftOut.count && i < RITUALS_LEFT_OUT_ROWS; i++) {
         modDisplayName(ritualsLeftOut.mods[i], label, sizeof label);
         textButton(0, label);
-        snprintf(tip, sizeof tip, "%.79s has more rituals than fit, so its last rituals were left out. coe5mod.log has each "
-                 "as c5m_refused.", label);
+        snprintf(tip, sizeof tip, "%.79s exceeded ritual slot limit; excess rituals left out. See coe5mod.log.", label);
         tooltip(tip);
     }
-    if (ritualsLeftOut.count > RITUALS_LEFT_OUT_ROWS) textButton(0, "...and others. coe5mod.log has each as c5m_refused.");
+    if (ritualsLeftOut.count > RITUALS_LEFT_OUT_ROWS) {
+        char more[80];
+        snprintf(more, sizeof more, "...and %d more. See coe5mod.log.", ritualsLeftOut.count - RITUALS_LEFT_OUT_ROWS);
+        textButton(0, more);
+    }
     sectionEnd();
 }
 
@@ -570,7 +573,7 @@ static int installRitualExpansion(void) {
     castCounts = memory + castsAt;
     memcpy(ritualTable, oldTable, (size_t)VANILLA_RITUAL_SLOTS * RITUAL_SIZE);
     for (int p = 0; p < PLAYER_SLOTS; p++)
-        memcpy(castCounts + (size_t)p * PLAYER_BLOCK_SIZE, gameBase + RVA_CAST_COUNTS + (size_t)p * PLAYER_BLOCK_SIZE,
+        memcpy(castCounts + (size_t)p * PLAYER_BLOCK_SIZE, playerSlotAddress(RVA_CAST_COUNTS, p, PLAYER_BLOCK_SIZE),
                VANILLA_RITUAL_SLOTS * sizeof(short));
     for (int i = 0; i < ritualWriteCount; i++) {
         if (writeGameCode(ritualWrites[i].at, ritualWrites[i].bytes, (size_t)ritualWrites[i].size)) continue;
@@ -935,7 +938,7 @@ static int installRitualExpansion(void) {
     castCounts = blocks + CAST_COUNTS_OFFSET;
     memcpy(ritualTable, oldTable, (size_t)VANILLA_RITUAL_SLOTS * RITUAL_SIZE);
     for (int p = 0; p < PLAYER_SLOTS; p++)
-        memcpy(castCounts + (size_t)p * PLAYER_BLOCK_SIZE, gameBase + RVA_CAST_COUNTS + (size_t)p * PLAYER_BLOCK_SIZE,
+        memcpy(castCounts + (size_t)p * PLAYER_BLOCK_SIZE, playerSlotAddress(RVA_CAST_COUNTS, p, PLAYER_BLOCK_SIZE),
                VANILLA_RITUAL_SLOTS * sizeof(short));
     for (int i = 0; i < ritualWriteCount; i++) {
         if (writeGameCode(ritualWrites[i].at, &ritualWrites[i].word, 4)) continue;

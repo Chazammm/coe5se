@@ -664,7 +664,7 @@ static void writeTranslatorReport(FILE *f, const char *pick, int reads, int from
     else fprintf(f, "Language: %s%s\n", pick, fromDefault ? ", the enabled translation mods' language (Default on CoE5SE's page in Mod Settings)" : "");
     fprintf(f, "Mods: %d. Written at each mods pass while the game runs with --dumpstrings.\n", translators.modCount);
     fprintf(f, "Missing: no translation line. Not used: the game ignores the line, its %% codes differ from the text's.\n");
-    fprintf(f, "Too long: the screen cuts the translation. Not in any enabled mod: a translation of the game's own text, or of a text a mod no longer has.\n");
+    fprintf(f, "Too long: the screen cuts the translation. Not in any enabled mod: vanilla text, or text removed from a mod.\n");
     int lettersChecked = 1;
     for (int m = 0; m < translators.modCount; m++) {
         int texts = 0, translated = 0;

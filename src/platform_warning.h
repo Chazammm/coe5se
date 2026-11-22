@@ -106,10 +106,8 @@ static void drawModsMissingPlugins(int count) {
         modDisplayName(m->mod, label, sizeof label);
         textButtonAsIs(0, formatLookedUp(row, sizeof row, "%s (no " HERE_PLATFORM " version of its DLL)", translateText(label, shown, sizeof shown)));
         formatLookedUp(tip, sizeof tip,
-                       "This mod has no " HERE_PLATFORM " version of its DLL. Its folder has only the " OTHER_PLATFORM
-                       " version (%.300s; " HERE_PLATFORM " needs %.300s). Without its DLL, the mod won't work as its author "
-                       "meant. Don't play it this way: disable it on the Mods screen, or ask its author for a " HERE_PLATFORM
-                       " version.\nFolder: %.200s",
+                       "Only " OTHER_PLATFORM " DLL found (%.300s; " HERE_PLATFORM " needs %.300s). Mod incomplete without it. "
+                       "Disable on the Mods screen.\nFolder: %.200s",
                        m->files, m->missing, m->folder);
         tooltipAsIs(tip);
     }

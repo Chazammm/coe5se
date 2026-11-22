@@ -135,9 +135,9 @@ static int squareHasSeenUnitCopy(int player, int x, int y) {
 static int playerBlessingValueCopy(int player, int ability) {
     if (player < 0 || ability <= 0) return 0;
     for (int i = 0; i < 24; i++) {
-        int id = PG32(RVA_PLAYER_BLESSINGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)i * 8);
+        int id = PSLOT32(RVA_PLAYER_BLESSINGS + (size_t)i * 8, player, PLAYER_BLOCK_SIZE);
         if (!id) return 0;
-        if (id == ability) return PG32(RVA_PLAYER_BLESSINGS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)i * 8 + 4);
+        if (id == ability) return PSLOT32(RVA_PLAYER_BLESSINGS + (size_t)i * 8 + 4, player, PLAYER_BLOCK_SIZE);
     }
     return 0;
 }
@@ -252,7 +252,7 @@ static int playerHasCommanderCopy(int player) {
 }
 static int playerClassAbilityCopy(int player, int ability) {
     if (player < 0) return 0;
-    int cls = PG16(RVA_SLOT_CLASS + (size_t)player * 2);
+    int cls = PSLOT16(RVA_SLOT_CLASS, player, 2);
     if (cls < 0 || cls > G32(RVA_CLASS_COUNT) || cls >= tableRecords(TABLE_CLASS)) return 0;
     const int *pairs = (const int *)(tableAddress(TABLE_CLASS) + (size_t)cls * CLASS_SIZE + CLASS_ABILITIES);
     for (int i = 0; i <= 0x1e && pairs[i]; i += 2)
@@ -298,8 +298,8 @@ static int copyIncomeBonusPercent(int player, int ability, int fx, unsigned long
 static int ironBonusPercentCopy(int player) { return copyIncomeBonusPercent(player, COPY_ABILITY_IRONBONUS, COPY_RITUAL_FX_IRONBONUS, COPY_TERRAIN_IRON_BONUS); }
 static int countSlotsWithControllerCopy(int controller) {
     int count = 0;
-    for (int p = 0; p < playerSlotCount(); p++)
-        if (PG16(RVA_SLOT_CONTROLLER + (size_t)p * 2) == controller) count++;
+    for (int p = 0; p < PLAYER_SLOTS_GAME; p++)
+        if (PSLOT16(RVA_SLOT_CONTROLLER, p, 2) == controller) count++;
     return count;
 }
 
@@ -488,15 +488,16 @@ static void selectedCommanderDoneCopy(void) {
 static int toggleAutoRecruitCopy(int player, int x, int y, int monster) {
     GAME_FN(void (*)(const char *, ...), RVA_TRACE)("toggleautorec p%d %d,%d mnr %d\n", player, x, y, monster);
     if (player < 0 || x < 0 || y < 0 || monster <= 0) return -1;
-    size_t squares = RVA_AUTO_RECRUIT_SQUARES + (size_t)player * PLAYER_BLOCK_SIZE, monsters = RVA_AUTO_RECRUIT_MONSTERS + (size_t)player * PLAYER_BLOCK_SIZE;
+    short *squares = (short *)playerSlotAddress(RVA_AUTO_RECRUIT_SQUARES, player, PLAYER_BLOCK_SIZE);
+    short *monsters = (short *)playerSlotAddress(RVA_AUTO_RECRUIT_MONSTERS, player, PLAYER_BLOCK_SIZE);
     for (int i = 0; i < 64; i++)
-        if (PG16(squares + (size_t)i * 4) == x && PG16(squares + (size_t)i * 4 + 2) == y && PG16(monsters + (size_t)i * 2) == monster) {
-            PG16(squares + (size_t)i * 4) = 0, PG16(squares + (size_t)i * 4 + 2) = 0, PG16(monsters + (size_t)i * 2) = 0;
+        if (squares[2 * i] == x && squares[2 * i + 1] == y && monsters[i] == monster) {
+            squares[2 * i] = 0, squares[2 * i + 1] = 0, monsters[i] = 0;
             return 0;
         }
     for (int i = 0; i < 64; i++)
-        if (!PG16(squares + (size_t)i * 4) && !PG16(squares + (size_t)i * 4 + 2)) {
-            PG16(squares + (size_t)i * 4) = (short)x, PG16(squares + (size_t)i * 4 + 2) = (short)y, PG16(monsters + (size_t)i * 2) = (short)monster;
+        if (!squares[2 * i] && !squares[2 * i + 1]) {
+            squares[2 * i] = (short)x, squares[2 * i + 1] = (short)y, monsters[i] = (short)monster;
             return 1;
         }
     return -1;
@@ -575,9 +576,9 @@ static void subtractUnitHpCopy(int u, int damage) {
     if (damage != 9999) GAME_FN(void (*)(int), RVA_UNIT_LEAVE_CORPSE)(u);
     for (int c = 0; c <= G32(RVA_LAST_COMMANDER); c++) {
         if (G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) != u) continue;
-        for (int p = 0; p < 32; p++)
-            if (PG16(RVA_SLOT_CONTROLLER + (size_t)p * 2) >= 0 && PG32(RVA_PLAYER_LEADER + (size_t)p * PLAYER_BLOCK_SIZE) == c) {
-                PG32(RVA_PLAYER_LEADER + (size_t)p * PLAYER_BLOCK_SIZE) = -1;
+        for (int p = 0; p < playerSlotCount(); p++)
+            if (PSLOT16(RVA_SLOT_CONTROLLER, p, 2) >= 0 && PSLOT32(RVA_PLAYER_LEADER, p, PLAYER_BLOCK_SIZE) == c) {
+                PSLOT32(RVA_PLAYER_LEADER, p, PLAYER_BLOCK_SIZE) = -1;
                 break;
             }
         G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) = -1;
@@ -774,7 +775,7 @@ static void trollForestSpawnCopy(int x, int y) {
     size_t sq = copySquareAt(x, y);
     int terrain = (unsigned short)G16(sq + SQUARE_TERRAIN_TYPE), owner = copySquareOwner(x, y);
     if ((unsigned short)(terrain - 130) > 1) return;
-    int forest = owner >= 0 && PG16(RVA_SLOT_CLASS + (size_t)owner * 2) == 14;
+    int forest = owner >= 0 && PSLOT16(RVA_SLOT_CLASS, owner, 2) == 14;
     if (!forest && owner < 24) forest = GAME_FN(int (*)(int, int, int), RVA_PLAYER_ABILITY)(owner, 0x20a, 1) > 0;
     if (!forest) {
         if (copyRandom(100) >= 10 || !copyOnMapW(x, y)) return;
@@ -858,7 +859,7 @@ static void groveReversionCopy(int x, int y) {
     int onMap = x < G32(RVA_MAP_W) && y < G32(RVA_MAP_H);
     int terrain = onMap ? (short)G16(sq + SQUARE_TERRAIN_TYPE) : -1, owner = -1;
     if (onMap) owner = copySquareOwner(x, y);
-    if (!(onMap && owner >= 0 && PG16(RVA_SLOT_CLASS + (size_t)owner * 2) == 24) && (unsigned)(terrain - 236) <= 2 &&
+    if (!(onMap && owner >= 0 && PSLOT16(RVA_SLOT_CLASS, owner, 2) == 24) && (unsigned)(terrain - 236) <= 2 &&
         copyRandom(100) < 10 && GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y) != 7 &&
         GAME_FN(int (*)(int, int, int), RVA_PLAYER_ABILITY)(owner, 0x223, 1) <= 0 && copyOnMapW(x, y) && G32(RVA_LAST_TERRAIN) >= 4)
         G16(sq + SQUARE_TERRAIN_TYPE) = 4;
@@ -1126,7 +1127,7 @@ static int copyFriendlyLocation(int player, int t1, int t2, int t3, int t4, int 
 static void heroArrivalCopy(int player) {
     if (G32(RVA_TURN) < 2) return;
     int kind = copyRandom(500) < 9 ? 1 : copyRandom(500) < 3 ? 2 : copyRandom(500) < 1 ? 3 : 0;
-    int cls = PG16(RVA_SLOT_CLASS + (size_t)player * 2);
+    int cls = PSLOT16(RVA_SLOT_CLASS, player, 2);
     void (*exitGame)(const char *) = GAME_FN(void (*)(const char *), RVA_EXIT_GAME);
     if (cls < 0) exitGame("gch1");
     void (*message)(int, int, int, int, int, int, const char *, const char *, ...) =
@@ -1179,12 +1180,12 @@ static void heroArrivalCopy(int player) {
 static int copyTerrainField42(int terrain) { return *(const short *)GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE + 0x42); }
 static int copyCommanderUnitOf(int c) { return c < 0 || c > G32(RVA_LAST_COMMANDER) ? -1 : G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE); }
 static void priestFreespawnCopy(int player) {
-    if (player < 0 || PG16(RVA_SLOT_CLASS + (size_t)player * 2) != 21) return;
+    if (player < 0 || PSLOT16(RVA_SLOT_CLASS, player, 2) != 21) return;
     void (*trace)(const char *, ...) = GAME_FN(void (*)(const char *, ...), RVA_TRACE);
     int seals = G32(RVA_SEALS_BROKEN);
     trace("priest_freespawn, seals %d\n", seals);
     if (seals <= 0) return;
-    if (copyRandom(100) > (PG32(RVA_PLAYER_DIVINE_FAVOR + (size_t)player * PLAYER_BLOCK_SIZE) + 2) * 10) return;
+    if (copyRandom(100) > (PSLOT32(RVA_PLAYER_DIVINE_FAVOR, player, PLAYER_BLOCK_SIZE) + 2) * 10) return;
     int x = -1, y = -1;
     if (!GAME_FN(int (*)(int, int, int, int, int, int, int, int, int *, int *), RVA_GET_FRIENDLY_LOCATION)(player, 0, 0, 0x4000, -1, -1, -1, -1, &x, &y))
         return;
@@ -1313,12 +1314,12 @@ static void conscriptionCopy(int player) {
     if (!farms && !hamlets && !towns) {
         trace("Player %d has no farms\n", player);
     } else {
-        x = PG16(RVA_PLAYER_HOME_X + (size_t)player * 2), y = PG16(RVA_PLAYER_HOME_Y + (size_t)player * 2);
+        x = PSLOT16(RVA_PLAYER_HOME_X, player, 2), y = PSLOT16(RVA_PLAYER_HOME_Y, player, 2);
         int owner = x >= 0 && y >= 0 && copyOnMapW(x, y) ? copySquareOwner(x, y) : -1;
-        if (x >= 0 && y >= 0 && copyOnMapW(x, y) && (unsigned)owner < 32 && player < 32 &&
-            (owner == player || (PG16(RVA_SLOT_TEAM + (size_t)owner * PLAYER_BLOCK_SIZE) > 0 &&
-                                 PG16(RVA_SLOT_TEAM + (size_t)player * PLAYER_BLOCK_SIZE) > 0 &&
-                                 PG16(RVA_SLOT_TEAM + (size_t)owner * PLAYER_BLOCK_SIZE) == PG16(RVA_SLOT_TEAM + (size_t)player * PLAYER_BLOCK_SIZE)))) {
+        if (x >= 0 && y >= 0 && copyOnMapW(x, y) && (unsigned)owner < (unsigned)playerSlotCount() && player < playerSlotCount() &&
+            (owner == player || (PSLOT16(RVA_SLOT_TEAM, owner, PLAYER_BLOCK_SIZE) > 0 &&
+                                 PSLOT16(RVA_SLOT_TEAM, player, PLAYER_BLOCK_SIZE) > 0 &&
+                                 PSLOT16(RVA_SLOT_TEAM, owner, PLAYER_BLOCK_SIZE) == PSLOT16(RVA_SLOT_TEAM, player, PLAYER_BLOCK_SIZE)))) {
             spearmen = (towns + farms) * 2, knights = towns + hamlets;
             copyPopulate(x, y, "Phantasmal Knight", enchanted, player);
             copyPopulate(x, y, "Unicorn Knight", ancient, player);

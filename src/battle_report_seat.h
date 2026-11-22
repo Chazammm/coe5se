@@ -1,6 +1,7 @@
 // @platform-split battle_report_seat: Windows only; the Mac build refuses coe5.reportBattlesTo
 
 static int battleReportSeat = -1;
+static unsigned char *battleReportControllers;
 static void clearBattleReportSeat(void) { battleReportSeat = -1; }
 
 #ifndef __APPLE__
@@ -30,7 +31,7 @@ static int installBattleReportStub(void) {
     }
     unsigned long long seat = (unsigned long long)(uintptr_t)&battleReportSeat;
     unsigned long long reports = (unsigned long long)(uintptr_t)GAME_PTR(RVA_BATTLE_REPORTS);
-    unsigned long long controllers = (unsigned long long)(uintptr_t)GAME_PTR(RVA_SLOT_CONTROLLER);
+    unsigned long long controllers = (unsigned long long)(uintptr_t)&battleReportControllers;
     unsigned char *p = page, *done1, *done2, *done3, *done4, *done5;
     *p++ = 0x48; *p++ = 0xb8; memcpy(p, &seat, 8); p += 8;
     *p++ = 0x48; *p++ = 0x63; *p++ = 0x00;
@@ -40,6 +41,7 @@ static int installBattleReportStub(void) {
     *p++ = 0x66; *p++ = 0x83; *p++ = 0x39; *p++ = 0x00;
     *p++ = 0x74; done2 = p++;
     *p++ = 0x48; *p++ = 0xb9; memcpy(p, &controllers, 8); p += 8;
+    *p++ = 0x48; *p++ = 0x8b; *p++ = 0x09;
     *p++ = 0x66; *p++ = 0x83; *p++ = 0x3c; *p++ = 0x41; *p++ = CONTROLLER_HUMAN;
     *p++ = 0x75; done4 = p++;
     *p++ = 0x31; *p++ = 0xd2;
@@ -99,6 +101,7 @@ static int lReportBattlesTo(lua_State *L) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    battleReportControllers = playerTableAddress(RVA_SLOT_CONTROLLER);
     battleReportSeat = (int)seat;
     writeLog("battle_report_seat", "mod=%s seat=%lld", s ? s->mod : "?", (long long)seat);
     lua_pushboolean(L, 1);

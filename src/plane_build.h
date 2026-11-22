@@ -616,7 +616,7 @@ static int coe5seFilePath(const char *file, char *path, size_t size) {
 static int lLoadPlaneRecipes(lua_State *L) {
     pushLuaTextFile(L, lua_tostring(L, 1), PLANE_RECIPES_FILE);
     lua_call(L, 0, 1);
-    if (!lua_istable(L, -1)) return luaL_error(L, "%s returned no table", PLANE_RECIPES_FILE);
+    if (!lua_istable(L, -1)) return luaL_error(L, "%s must return a table", PLANE_RECIPES_FILE);
     return 1;
 }
 

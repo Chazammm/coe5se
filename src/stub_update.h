@@ -122,8 +122,8 @@ static void rememberStubOffered(void) {
 }
 
 #define STUB_OFFER_TEXT \
-    STUB_FILE " out of date (not copied over manually).\n" \
-    "Update now? The game restarts."
+    STUB_FILE " is out of date.\n" \
+    "Update and restart now?"
 
 static void (*stubUpdateRelaunch)(const char *reason) = relaunchGame;
 
@@ -174,16 +174,16 @@ static void offerStubUpdate(void) {
         return;
     }
     writeLog("stub_update_offered", "file=" STUB_FILE " running_version=%u version=%d", running, SHIPPED_STUB_VERSION);
-    int choice = messageBox("CoE5SE update", STUB_OFFER_TEXT, "Yes", "No", 0, 0, 0);
+    int choice = messageBox("CoE5SE: Update " STUB_FILE "?", STUB_OFFER_TEXT, "Yes", "No", 0, 0, 0);
     writeLog("stub_update_choice", "choice=%s", choice == 1 ? "yes" : "no");
     rememberStubOffered();
     if (choice != 1) return;
     if (!updateStubAndRestart(shipped, installed, fresh, old)) return;
     static char text[POPUP_TEXT_SIZE];
     snprintf(text, sizeof text,
-             "CoE5SE couldn't update " STUB_FILE ".\n\n"
-             "To update it by hand, close the game and copy\n%.200s\n"
-             "over\n%.200s",
+             "Failed to update " STUB_FILE ".\n\n"
+             "Close CoE5 and copy:\n%.200s\n"
+             "to:\n%.200s",
              shipped, installed);
-    okBox("CoE5SE update", text);
+    okBox("CoE5SE: Update failed", text);
 }

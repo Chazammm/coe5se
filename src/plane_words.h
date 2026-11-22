@@ -669,13 +669,13 @@ static size_t missingPlanesText(char *text, size_t size, int *missing) {
     for (int i = 0; i < namedPlaneCount; i++) {
         const NamedPlane *p = &namedPlanes[i];
         if (!isPlaneNameMissing(p->name)) continue;
-        if (count++ == MISSING_PLANE_ENTRIES) appendText(text, size, &n, "\n\n...and others.");
-        if (count > MISSING_PLANE_ENTRIES) continue;
+        if (count++ >= MISSING_PLANE_ENTRIES) continue;
         appendText(text, size, &n, "%sError in %s '%s' at line %d\n\n", n ? "\n\n" : "", p->script ? "script" : "mod", p->file, p->line);
         if (refusedPlaneMod(p->name)) appendText(text, size, &n, "Plane '%s' refused, see coe5mod.log", p->name);
         else appendText(text, size, &n, "No plane called '%s'", p->name);
     }
     appendPlaneProblems(text, size, &n, &count);
+    if (count > MISSING_PLANE_ENTRIES) appendText(text, size, &n, "\n\n...and %d more.", count - MISSING_PLANE_ENTRIES);
     *missing = count;
     return n;
 }

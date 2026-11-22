@@ -17,6 +17,8 @@ static const struct {
     {"reclimiter", 0},
 };
 
+#define REC_BONUS_TERRAIN_LIST -2
+
 typedef struct {
     int cls, offer, kind;
     int slot;
@@ -50,6 +52,15 @@ static void dropRecBonus(RecBonus *b) {
 static void dropClassRecBonuses(int cls) {
     for (int i = recBonus.count - 1; i >= 0; i--)
         if (recBonus.list[i].cls == cls) dropRecBonus(&recBonus.list[i]);
+}
+
+static void moveTerrainListRecBonuses(int from, int to) {
+    for (int i = recBonus.count - 1; i >= 0; i--) {
+        RecBonus *b = &recBonus.list[i];
+        if (b->cls != REC_BONUS_TERRAIN_LIST || b->offer != from) continue;
+        if (to < 0) dropRecBonus(b);
+        else b->offer = to;
+    }
 }
 
 static int setRecBonus(int cls, int offer, int kind, int slot, int amount, int cap) {
@@ -88,23 +99,10 @@ static const char *readRecLimiterText(const char *args, char *text, size_t size)
     return close + 1;
 }
 
-static void recBonusLineHook(const char *line, size_t len, int mod, int level) {
-    if (level != 2) return;
-    int cls = G32(RVA_CLASS_CURRENT), offer = G32(RVA_CLASS_LAST_RECRUIT);
-    if (len == sizeof "clearrec" - 1 && !strncmp(line, "clearrec", len)) {
-        dropClassRecBonuses(cls);
-        return;
-    }
-    int kind = 0;
-    while (kind < REC_BONUS_KINDS && (strlen(REC_BONUS_WORDS[kind].word) != len || strncmp(REC_BONUS_WORDS[kind].word, line, len))) kind++;
-    if (kind == REC_BONUS_KINDS) return;
-    if (cls < 0 || offer < 0 || cls >= tableRecords(TABLE_CLASS_RECRUITS) || offer >= CLASS_RECRUITS_MAX) return;
-    const char *args = line + len, *word = REC_BONUS_WORDS[kind].word;
-    int slot = -1;
+static void readRecBonusWord(int kind, const char *args, int cls, int offer, int slot, int mod) {
+    const char *word = REC_BONUS_WORDS[kind].word, *raw = args;
     char text[MONSTER_NAME_SIZE + 1];
     if (kind == REC_BONUS_UNITS) {
-        slot = G32(RVA_RECLIMITER_COUNT);
-        if (slot < 0 || slot >= RECRUIT_LIMITERS_MAX) return;
         args = readRecLimiterText(args, text, sizeof text);
         if (!args) return;
     }
@@ -113,15 +111,39 @@ static void recBonusLineHook(const char *line, size_t len, int mod, int level) {
     if (old) dropRecBonus(old);
     if (!numbers) return;
     if (numbers < 0 || (kind == REC_BONUS_UNITS && text[0] != '$')) {
-        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.40s", G32(RVA_MOD_LINE), line + len);
+        refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.40s", G32(RVA_MOD_LINE), raw);
         return;
     }
     if (!setRecBonus(cls, offer, kind, slot, amount, cap)) {
-        refuseC5mLine(word, spellModName(mod), "no_memory", "line=%d", G32(RVA_MOD_LINE));
+        refuseC5mLine(word, spellModName(mod), "out_of_memory", "line=%d", G32(RVA_MOD_LINE));
         return;
     }
     int hooked = kind == REC_BONUS_UNITS ? installRecBonusUnitsHooks() : installShopOfferHooks();
     if (!hooked) refuseC5mLine(word, spellModName(mod), "site_unavailable", "line=%d", G32(RVA_MOD_LINE));
+}
+
+static int recBonusKindOf(const char *line, size_t len) {
+    int kind = 0;
+    while (kind < REC_BONUS_KINDS && (strlen(REC_BONUS_WORDS[kind].word) != len || strncmp(REC_BONUS_WORDS[kind].word, line, len))) kind++;
+    return kind;
+}
+
+static void recBonusLineHook(const char *line, size_t len, int mod, int level) {
+    if (level != 2) return;
+    int cls = G32(RVA_CLASS_CURRENT), offer = G32(RVA_CLASS_LAST_RECRUIT);
+    if (len == sizeof "clearrec" - 1 && !strncmp(line, "clearrec", len)) {
+        dropClassRecBonuses(cls);
+        return;
+    }
+    int kind = recBonusKindOf(line, len);
+    if (kind == REC_BONUS_KINDS) return;
+    if (cls < 0 || offer < 0 || cls >= tableRecords(TABLE_CLASS_RECRUITS) || offer >= CLASS_RECRUITS_MAX) return;
+    int slot = -1;
+    if (kind == REC_BONUS_UNITS) {
+        slot = G32(RVA_RECLIMITER_COUNT);
+        if (slot < 0 || slot >= RECRUIT_LIMITERS_MAX) return;
+    }
+    readRecBonusWord(kind, line + len, cls, offer, slot, mod);
 }
 
 static void recBonusBeforePass(int level) {
@@ -150,8 +172,12 @@ static int recBonusFor(const RecBonus *b, int player, const char *name) {
 }
 
 static int recBonusOfferOf(const unsigned char *record, int *cls, int *offer) {
-    const unsigned char *list = tableAddress(TABLE_CLASS_RECRUITS);
-    size_t at = (size_t)(record - list);
+    const unsigned char *list = tableAddress(TABLE_CLASS_RECRUITS), *terrains = gameBase + RVA_SPECIAL_LOCATION_RECRUITS;
+    size_t at = (size_t)(record - list), atTerrain = (size_t)(record - terrains);
+    if (record >= terrains && atTerrain < (size_t)SPECIAL_LOCATION_RECRUITS_MAX * CLASS_RECRUIT_SIZE && atTerrain % CLASS_RECRUIT_SIZE == 0) {
+        *cls = REC_BONUS_TERRAIN_LIST, *offer = (int)(atTerrain / CLASS_RECRUIT_SIZE);
+        return 1;
+    }
     if (record < list || at >= (size_t)tableRecords(TABLE_CLASS_RECRUITS) * CLASS_RECRUITS_SIZE ||
         at % CLASS_RECRUITS_SIZE % CLASS_RECRUIT_SIZE)
         return 0;
@@ -194,10 +220,9 @@ static int recBonusUnitsCount(int player, const char *name) {
 }
 
 static void recBonusAfterRoll(int player, const unsigned char *record, const unsigned char *copy, int entryBefore) {
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int entry = PG32(RVA_SHOP_LAST + block);
+    int entry = PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE);
     if (entry <= entryBefore || entry >= SHOP_OFFERS_MAX) return;
-    PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)entry * 4) = *(const int *)(record + RECRUIT_FLAGS);
+    PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)entry * 4, player, PLAYER_BLOCK_SIZE) = *(const int *)(record + RECRUIT_FLAGS);
     if (*(const int *)(record + RECRUIT_CHANCE) < REC_BONUS_MESSAGE_BELOW && *(const int *)(copy + RECRUIT_CHANCE) >= REC_BONUS_MESSAGE_BELOW)
         GAME_FN(void (*)(int), RVA_SHOP_OFFER_MESSAGE)(player);
 }

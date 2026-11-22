@@ -331,11 +331,11 @@ static void freeAiSpawnboosters(int player, int x, int y, int ability) {
     GAME_FN(void (*)(const char *, ...), RVA_TRACE)("ailog: removed %d old spawnboosters at %d,%d\n", freed, x, y);
 }
 static void payAiOffer(int player, int offer, int sign) {
-    const int *costs = (const int *)playerTableAddress(RVA_SHOP_COSTS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)offer * SHOP_COST_COUNT * 4);
+    const int *costs = (const int *)playerSlotAddress(RVA_SHOP_COSTS + (size_t)offer * SHOP_COST_COUNT * 4, player, PLAYER_BLOCK_SIZE);
     for (int i = 0; i < AI_PAID_COSTS; i++) GAME_FN(void (*)(int, int, int, int, int), RVA_PAY_RESOURCE_AT)(player, i, sign * costs[i], -1, -1);
 }
 static void aiOfferLimiter(int player, int offer, char out[SHOP_OFFER_TEXT_SIZE + 1]) {
-    memcpy(out, playerTableAddress(RVA_SHOP_OFFER_LIMITS + (size_t)player * PLAYER_BLOCK_SIZE + (size_t)offer * SHOP_OFFER_TEXT_SIZE), SHOP_OFFER_TEXT_SIZE);
+    memcpy(out, playerSlotAddress(RVA_SHOP_OFFER_LIMITS + (size_t)offer * SHOP_OFFER_TEXT_SIZE, player, PLAYER_BLOCK_SIZE), SHOP_OFFER_TEXT_SIZE);
     out[SHOP_OFFER_TEXT_SIZE] = 0;
 }
 static void upgradeAiUnit(int u, int monster, int free) {
@@ -350,8 +350,7 @@ static void upgradeAiUnit(int u, int monster, int free) {
 
 static void buyAiTroops(int player, int offer, int x, int y) {
     if (x < 0 || y < 0 || player < 0) return;
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int monster = PG32(RVA_SHOP_OFFERS + block + (size_t)offer * 4), count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)offer * 4);
+    int monster = PSLOT32(RVA_SHOP_OFFERS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE), count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
     char limiter[SHOP_OFFER_TEXT_SIZE + 1];
     aiOfferLimiter(player, offer, limiter);
     int terrain = buyTerrainAt(x, y);
@@ -399,8 +398,7 @@ static void buyAiTroops(int player, int offer, int x, int y) {
 
 static int buyAiCommander(int player, int offer, int x, int y) {
     if (x < 0 || y < 0 || player < 0) return -1;
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int monster = PG32(RVA_SHOP_OFFERS + block + (size_t)offer * 4), commander = -1, upgraded = -1;
+    int monster = PSLOT32(RVA_SHOP_OFFERS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE), commander = -1, upgraded = -1;
     char limiter[SHOP_OFFER_TEXT_SIZE + 1];
     aiOfferLimiter(player, offer, limiter);
     if (limiter[0]) {
@@ -414,7 +412,7 @@ static int buyAiCommander(int player, int offer, int x, int y) {
         commander = GAME_FN(int (*)(int, int, int, int), RVA_NEW_COMMANDER)(x, y, player, monster);
         if (commander >= 0 && commander < COMMANDER_TABLE_MAX) {
             char *name = (char *)GAME_PTR(RVA_COMMANDER_NAMES + (size_t)commander * COMMANDER_SIZE);
-            const char *offered = (const char *)playerTableAddress(RVA_SHOP_OFFER_NAMES + block + (size_t)offer * SHOP_OFFER_TEXT_SIZE);
+            const char *offered = (const char *)playerSlotAddress(RVA_SHOP_OFFER_NAMES + (size_t)offer * SHOP_OFFER_TEXT_SIZE, player, PLAYER_BLOCK_SIZE);
             size_t n = 0;
             while (n < COMMANDER_NAME_SIZE - 1 && offered[n]) name[n] = offered[n], n++;
             name[n] = 0;
@@ -558,16 +556,15 @@ static int lShopOffers(lua_State *L) {
         refuseLuaCall(s ? s->mod : "?", "coe5.shopOffers", "bad_player", "player=%lld", (long long)player);
         return 1;
     }
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int last = PG32(RVA_SHOP_LAST + block), n = 0;
+    int last = PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE), n = 0;
     for (int i = 0; i <= last && i < SHOP_OFFERS_MAX; i++) {
-        int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)i * 4);
+        int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)i * 4, player, PLAYER_BLOCK_SIZE);
         if (count <= 0) continue;
-        int monster = PG32(RVA_SHOP_OFFERS + block + (size_t)i * 4);
-        int flags = PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)i * 4);
-        const int *costs = (const int *)(playerTableAddress(RVA_SHOP_COSTS) + block + (size_t)i * SHOP_COST_COUNT * 4);
-        const char *named = (const char *)(playerTableAddress(RVA_SHOP_OFFER_NAMES) + block + (size_t)i * SHOP_OFFER_TEXT_SIZE);
-        const char *limiter = (const char *)(playerTableAddress(RVA_SHOP_OFFER_LIMITS) + block + (size_t)i * SHOP_OFFER_TEXT_SIZE);
+        int monster = PSLOT32(RVA_SHOP_OFFERS + (size_t)i * 4, player, PLAYER_BLOCK_SIZE);
+        int flags = PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)i * 4, player, PLAYER_BLOCK_SIZE);
+        const int *costs = (const int *)playerSlotAddress(RVA_SHOP_COSTS + (size_t)i * SHOP_COST_COUNT * 4, player, PLAYER_BLOCK_SIZE);
+        const char *named = (const char *)playerSlotAddress(RVA_SHOP_OFFER_NAMES + (size_t)i * SHOP_OFFER_TEXT_SIZE, player, PLAYER_BLOCK_SIZE);
+        const char *limiter = (const char *)playerSlotAddress(RVA_SHOP_OFFER_LIMITS + (size_t)i * SHOP_OFFER_TEXT_SIZE, player, PLAYER_BLOCK_SIZE);
         if (!monsterRecord(monster)) continue;
         lua_createtable(L, 0, 16);
         setIntField(L, "offer", i);
@@ -581,7 +578,7 @@ static int lShopOffers(lua_State *L) {
         setBoolField(L, "oncePerOffer", (flags & SHOP_FLAG_ONCE) != 0);
         setBoolField(L, "extra", (flags & SHOP_FLAG_EXTRA) != 0);
         setBoolField(L, "aiNever", (flags & SHOP_FLAG_AI_NEVER) != 0);
-        setIntField(L, "terrain", PG32(RVA_SHOP_OFFER_TERRAIN + block + (size_t)i * 4));
+        setIntField(L, "terrain", PSLOT32(RVA_SHOP_OFFER_TERRAIN + (size_t)i * 4, player, PLAYER_BLOCK_SIZE));
         if (limiter[0]) {
             pushRecordText(L, limiter, SHOP_OFFER_TEXT_SIZE);
             lua_setfield(L, -2, "limiter");
@@ -650,10 +647,9 @@ static int recruitSquaresOf(const AiRecruitCalls *g, int player, int *xs, int *y
 }
 
 static const char *aiOfferSquareRefusal(const AiRecruitCalls *g, int player, int offer, int x, int y) {
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)offer * 4);
-    int flags = PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)offer * 4);
-    int monster = PG32(RVA_SHOP_OFFERS + block + (size_t)offer * 4);
+    int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int flags = PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int monster = PSLOT32(RVA_SHOP_OFFERS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
     if (count < 0) return "item";
     if (count == 0) return "sold_out";
     if (flags & SHOP_FLAG_AI_NEVER) return "not_for_ai";
@@ -746,7 +742,7 @@ static int lRecruitSquares(lua_State *L) {
     lua_createtable(L, 0, 0);
     const AiRecruitCalls *g = aiRecruitGame();
     const char *reason = player < 0 || player >= playerSlotCount() ? "bad_player" : NULL;
-    if (!reason && withOffer && (offer < 0 || offer >= SHOP_OFFERS_MAX || offer > PG32(RVA_SHOP_LAST + (size_t)player * PLAYER_BLOCK_SIZE)))
+    if (!reason && withOffer && (offer < 0 || offer >= SHOP_OFFERS_MAX || offer > PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE)))
         reason = "bad_offer";
     if (!reason && !g) reason = "windows_only";
     if (reason) {
@@ -777,7 +773,7 @@ static int lAiBuyOffer(lua_State *L) {
     const char *mod = s ? s->mod : "?";
     int inRange = player >= 0 && player < playerSlotCount();
     int controller = inRange ? (*(short *)playerSlotAddress(RVA_SLOT_CONTROLLER, player, 2)) : CONTROLLER_REMOVED;
-    int shopLast = inRange ? PG32(RVA_SHOP_LAST + (size_t)player * PLAYER_BLOCK_SIZE) : -1;
+    int shopLast = inRange ? PSLOT32(RVA_SHOP_LAST, player, PLAYER_BLOCK_SIZE) : -1;
     const AiRecruitCalls *g = aiRecruitGame();
     int sitePlayer = aiRecruitPlayer(), humanTurn = 0, onlyX = -1, onlyY = -1;
     AiBuySquareRule humanRule = NULL;
@@ -802,12 +798,11 @@ static int lAiBuyOffer(lua_State *L) {
         lua_pushstring(L, reason);
         return 2;
     }
-    size_t block = (size_t)player * PLAYER_BLOCK_SIZE;
-    int flags = PG32(RVA_SHOP_OFFER_FLAGS + block + (size_t)offer * 4);
-    int monster = PG32(RVA_SHOP_OFFERS + block + (size_t)offer * 4);
-    int count = PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)offer * 4);
-    int commander = *(const char *)(playerTableAddress(RVA_SHOP_OFFER_NAMES) + block + (size_t)offer * SHOP_OFFER_TEXT_SIZE) != 0;
-    int goldBefore = PG32(RVA_PLAYER_INTS + block), made = -1;
+    int flags = PSLOT32(RVA_SHOP_OFFER_FLAGS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int monster = PSLOT32(RVA_SHOP_OFFERS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int count = PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE);
+    int commander = *(const char *)playerSlotAddress(RVA_SHOP_OFFER_NAMES + (size_t)offer * SHOP_OFFER_TEXT_SIZE, player, PLAYER_BLOCK_SIZE) != 0;
+    int goldBefore = PSLOT32(RVA_PLAYER_INTS, player, PLAYER_BLOCK_SIZE), made = -1;
     if (commander) {
         made = g->buyCommander((int)player, (int)offer, (int)x, (int)y);
         g->makeSpawnbooster(made);
@@ -816,12 +811,12 @@ static int lAiBuyOffer(lua_State *L) {
     }
     size_t square = ((size_t)x * MAP_COLUMN_SQUARES + (size_t)y) * SQUARE_SIZE;
     if (!(flags & SHOP_FLAG_EXTRA)) G32(RVA_SQUARE_FLAGS + square) |= SQUARE_FLAG_RECRUITED;
-    if (flags & SHOP_FLAG_ONCE) PG32(RVA_SHOP_OFFER_COUNTS + block + (size_t)offer * 4) = 0;
+    if (flags & SHOP_FLAG_ONCE) PSLOT32(RVA_SHOP_OFFER_COUNTS + (size_t)offer * 4, player, PLAYER_BLOCK_SIZE) = 0;
     if (humanTurn && humanAfter) humanAfter((int)player, (int)x, (int)y);
     noteAiAction((int)player, mod, AI_ACTION_BUY, (int)offer, monster, count, (int)x, (int)y, commander ? made : -1);
     writeLog("ai_offer_bought", "mod=%s player=%lld offer=%lld monster=%d count=%d commander=%d new_commander=%d x=%lld y=%lld "
              "gold_before=%d gold_after=%d flags=0x%x", mod, (long long)player, (long long)offer, monster, count, commander, made,
-             (long long)x, (long long)y, goldBefore, PG32(RVA_PLAYER_INTS + block), flags);
+             (long long)x, (long long)y, goldBefore, PSLOT32(RVA_PLAYER_INTS, player, PLAYER_BLOCK_SIZE), flags);
     lua_pushboolean(L, !commander || made >= 0);
     return 1;
 }

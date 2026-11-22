@@ -154,6 +154,15 @@ static int healArmyLineHook(const char *line, size_t len, const char *args, int 
 static void healArmyReset(void);
 static void healArmyBlockStored(int slot);
 static void healArmyDropPending(void);
+static void healArmyBeforePass(void);
+static void copyHealArmyRules(int item, int source, int target);
+static void clearHealArmyRules(int item, int record);
+static int indestructibleLine(int item, int on, int mod);
+static void indestructibleBeforePass(int level);
+static void indestructibleCopy(int source, int target);
+static void indestructibleClear(int item);
+static void keptItemsBefore(int unit, short kept[20]);
+static void keptItemsAfter(int unit, const short kept[20]);
 static const char *spellPathLineHook(const char *line, size_t len, int mod, int level);
 static const char *offsetNameLineHook(const char *line, size_t len, int mod, int level);
 static int declinedOffsetNameLine(const char *line, size_t len, int level);
@@ -223,6 +232,8 @@ static int battleTokenReach(void);
 static void battleTokenSizesBeforePass(int level);
 static void battleTokenSizesAfterPass(int level);
 static void ritualWordsAfterPass(int level);
+static void itemScryBeforePass(int level);
+static void itemScryAfterPass(int level);
 static const char *corpseWordLineHook(const char *line, size_t len, int mod, int level);
 static int corpseEventLine(const char *line, int level);
 static void corpseWordsBeforePass(int level);
@@ -267,6 +278,10 @@ static void lookColorBeforePass(int level);
 static int beamFlyDraws(int index);
 static void recBonusLineHook(const char *line, size_t len, int mod, int level);
 static void recBonusBeforePass(int level);
+static int terrainRecruitLineHook(const char *line, size_t len, int mod, int level);
+static int recFlagLineHook(const char *line, size_t len, int mod, int level);
+static void terrainRecruitsBeforePass(int level);
+static int declinedTerrainRecruitLine(const char *line, size_t len, int mod, int level);
 static int recBonusOfferCopy(int player, const unsigned char *record, unsigned char *copy);
 static struct RecBonusRoll { const unsigned char *record, *rolled; int unitsTried, unitsHooked; } recBonusRoll;
 static void recBonusAfterRoll(int player, const unsigned char *record, const unsigned char *copy, int entryBefore);
@@ -499,7 +514,7 @@ static void showAutoEnableNotice(void) {
     if (!autoEnableFileExists(notice)) return;
     int deleted = remove(notice) == 0;
     writeLog("coe5se_auto_enable_notice", "deleted=%d", deleted);
-    okBox("CoE5SE", "CoE5SE was turned on automatically.\nYou can turn it off at any time on the Mods screen.");
+    okBox("CoE5SE: Enabled", "CoE5SE enabled automatically.\nCan be disabled on the Mods screen.");
 }
 
 typedef struct {
@@ -1562,11 +1577,11 @@ static int askLoadOnUnknownGame(int blockFound) {
     CFStringRef message = CFStringCreateWithCString(NULL, text, kCFStringEncodingUTF8);
     CFOptionFlags response = kCFUserNotificationDefaultResponse;
     CFUserNotificationDisplayAlert(0, kCFUserNotificationCautionAlertLevel, NULL, NULL, NULL,
-                                   CFSTR("CoE5SE"), message, CFSTR("No"), CFSTR("Yes"), NULL, &response);
+                                   CFSTR("CoE5SE: Unknown game version"), message, CFSTR("No"), CFSTR("Yes"), NULL, &response);
     if (message) CFRelease(message);
     return response == kCFUserNotificationAlternateResponse;
 #else
-    return MessageBoxA(NULL, text, "CoE5SE", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND) == IDYES;
+    return MessageBoxA(NULL, text, "CoE5SE: Unknown game version", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TOPMOST | MB_SETFOREGROUND) == IDYES;
 #endif
 }
 
@@ -1699,7 +1714,7 @@ static void drawPluginRejections(const char *mod, int *open) {
             *open = 1;
         }
         textButton(0, e->problem);
-        snprintf(tip, sizeof tip, "In %.200s. Its log line is api_refused.", e->section);
+        snprintf(tip, sizeof tip, "In %.200s. Logged in coe5mod.log.", e->section);
         tooltip(tip);
     }
 }
@@ -1776,7 +1791,7 @@ static int readPlugins(PluginEntry **listOut, int *capacity) {
 
 static const char *sourceText(const char *source) {
     if (!strcmp(source, "workshop")) return "Steam Workshop";
-    if (!strcmp(source, "local")) return "Local Mods";
+    if (!strcmp(source, "local")) return "Mods directory";
     return source;
 }
 
@@ -1794,7 +1809,7 @@ static const char *pluginTipNote(const PluginEntry *p) {
     switch (p->found.state) {
     case PLUGIN_FAILED: return "Failed to load. Check coe5mod.log. ";
     case PLUGIN_CONFLICT:
-        return "Not loaded: mod or DLL name shared with another mod folder. A copy in Local Mods wins; otherwise "
+        return "Not loaded: duplicate mod or DLL name. Mods directory copy takes priority; otherwise "
                "neither loads. ";
     case PLUGIN_REFUSED: return "Not loaded: no mod DLLs load in this version of CoE5SE. Mods use Lua scripts instead. ";
     case PLUGIN_UNAPPROVED: return "Not loaded: new or changed since last approval. ";
@@ -1868,7 +1883,7 @@ static void coe5sePageScreen(void) {
         if (id >= ID_APPROVE_FIRST && id < ID_APPROVE_FIRST + n) {
             PluginEntry *p = &plugins[id - ID_APPROVE_FIRST];
             if (p->found.hash[0] && approveHash(p->found.hash, p->found.name)) p->approvedNow = 1;
-            writeLog("plugin_approved", "name=%s sha256=%s ok=%d", p->found.name, p->found.hash, p->approvedNow);
+            writeResultLog(p->approvedNow, "plugin_approved", "name=%s sha256=%s ok=%d", p->found.name, p->found.hash, p->approvedNow);
         }
     }
 }
@@ -1973,6 +1988,8 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "battle_report_seat.h"
 #include "shop_offers.h"
 #include "rec_bonus.h"
+#include "rec_flags.h"
+#include "terrain_recruits.h"
 #include "lua_units.h"
 #include "lua_content_origin.h"
 #include "lua_data_files.h"
@@ -2040,6 +2057,8 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "monster_growth.h"
 #include "custom_afflictions.h"
 #include "affliction_words.h"
+#include "item_indestructible.h"
+#include "item_scry.h"
 #include "affliction_effects.h"
 #include "lan_join_notice.h"
 #include "faction_words.h"
@@ -2162,6 +2181,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_HATES)) hatesWordsInit();
     if (featureOn(FEATURE_UNIQUE_GROUPS)) uniqueGroupsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) ritualWordsInit();
+    if (featureOn(FEATURE_RITUAL_WORDS)) itemScryInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) corpseKindsInit();
     if (featureOn(FEATURE_CORPSE_KINDS)) killTransformsInit();
     if (featureOn(FEATURE_RITUAL_WORDS)) commanderCastsInit();

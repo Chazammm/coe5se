@@ -149,6 +149,13 @@ static short *squareCorpses(int x, int y) {
 static int countCorpses(const short *corpses, int mask) {
     int count = 0;
     for (int k = 0; k < SQUARE_CORPSE_KINDS; k++)
+        if (mask & 1 << k && corpses[k] > 0) count += corpses[k];
+    return count;
+}
+
+static int totalCorpses(const short *corpses, int mask) {
+    int count = 0;
+    for (int k = 0; k < SQUARE_CORPSE_KINDS; k++)
         if (mask & 1 << k) count += corpses[k];
     return count;
 }
@@ -834,7 +841,9 @@ static int corpseEventSquare(short *corpses, int mask, int custom, int n, int re
         if (corpses) takeSelectedCorpses(corpses, mask, custom, n);
         return 1;
     }
-    return (corpses ? countSelectedCorpses(corpses, mask, custom) : 0) >= n;
+    if (!corpses) return 0 >= n;
+    fitCustomCorpses(corpses);
+    return (custom >= 0 ? customCorpseCount(corpseSquareIndex(corpses), custom) : totalCorpses(corpses, mask)) >= n;
 }
 
 static int corpseEventLine(const char *line, int level) {
@@ -857,20 +866,20 @@ static int corpseEventLine(const char *line, int level) {
     if (level != 3 || G32(RVA_EVENT_STATE) < 1) return 1;
     int mask = 1 << CORPSE_KIND_HUMAN, custom = -1, read = number && isLineEnd(p) ? 1 : number ? readCorpseKind(&p, &mask, &custom) : 0;
     if (remove == 2 && !number) {
-        refuseC5mLine(word, "-", "bad_value", "line=%.60s min=1 max=%d", line, PUT_CORPSES_SCALED - 1);
+        refuseC5mLine(word, "-", "bad_value", "line=%d file=%.200s text=%.60s min=1 max=%d", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line, PUT_CORPSES_SCALED - 1);
         return 1;
     }
     if (read <= 0 || (skipSpaces(&p), !isLineEnd(p))) {
-        refuseC5mLine(word, "-", read < 0 ? "unknown_corpse_kind" : "bad_kind", "line=%.60s", line);
+        refuseC5mLine(word, "-", read < 0 ? "unknown_corpse_kind" : "bad_kind", "line=%d file=%.200s text=%.60s", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line);
         if (!remove) G32(RVA_EVENT_STATE) = EVENT_FAILED;
         return 1;
     }
     if (remove == 2 && custom < 0 && onlyCorpseKind(mask) < 0) {
-        refuseC5mLine(word, "-", "not_one_kind", "line=%.60s", line);
+        refuseC5mLine(word, "-", "not_one_kind", "line=%d file=%.200s text=%.60s", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line);
         return 1;
     }
     if (remove == 2 && (amount.count ? !corpseDiceFit(&amount, 0) : n < 1 || n >= PUT_CORPSES_SCALED)) {
-        refuseC5mLine(word, "-", "bad_value", "line=%.60s min=1 max=%d", line, PUT_CORPSES_SCALED - 1);
+        refuseC5mLine(word, "-", "bad_value", "line=%d file=%.200s text=%.60s min=1 max=%d", G32(RVA_MOD_LINE), (const char *)(gameBase + RVA_EVENT_FILE), line, PUT_CORPSES_SCALED - 1);
         return 1;
     }
     int count = n > CORPSE_COUNT_MAX * SQUARE_CORPSE_KINDS ? CORPSE_COUNT_MAX * SQUARE_CORPSE_KINDS : n < 0 ? 0 : (int)n;
@@ -1530,7 +1539,7 @@ static char *corpseSenseDeadText(int commander, int x, int y, int *band) {
     short kept = corpses[CORPSE_KIND_HUMAN];
     int lent = hidden < CORPSE_COUNT_MAX - kept ? hidden : CORPSE_COUNT_MAX - kept;
     corpses[CORPSE_KIND_HUMAN] = (short)(kept + lent);
-    int total = countCorpses(corpses, CORPSE_MASK_ALL);
+    int total = totalCorpses(corpses, CORPSE_MASK_ALL);
     char *text = senseDeadTextGame(commander, x, y, band);
     corpses[CORPSE_KIND_HUMAN] = kept;
     const char *share = text && total >= 3 && best >= 0 ? senseDeadShareWords(most, total) : NULL;

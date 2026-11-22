@@ -168,13 +168,13 @@ static TableMove tableMoves[] = {
      .movedRecords = WEAPON_RECORDS_MOVED, .firstModSlot = FIRST_MOD_WEAPON_SLOT, .lastModSlot = LAST_MOD_WEAPON_SLOT,
      .sites = WEAPON_TABLE_SITES, .siteCount = WEAPON_TABLE_SITE_COUNT, .values = WEAPON_VALUE_SITES, .valueCount = WEAPON_VALUE_SITE_COUNT,
      .overflowCall = RVA_WEAPON_OUT_OF_WEAPONS_CALL, .overflowTarget = RVA_TRACE_ERROR, .overflowHook = (void *)weaponOutOfSlotsHook,
-     .word = "newweapon", .reason = "out_of_weapon_slots", .title = "CoE5SE: Weapons left out", .opening = "Weapons left out (no room):",
+     .word = "newweapon", .reason = "out_of_weapon_slots", .title = "CoE5SE: Weapons left out", .opening = "No free weapon slots:",
      .header = "Weapons left out"},
     {.name = "item", .rva = RVA_ITEM_TABLE, .recordSize = ITEM_SIZE, .gameRecords = ITEM_TABLE_MAX,
      .movedRecords = ITEM_RECORDS_MOVED, .firstModSlot = FIRST_MOD_ITEM_SLOT, .lastModSlot = LAST_MOD_ITEM_SLOT,
      .sites = ITEM_TABLE_SITES, .siteCount = ITEM_TABLE_SITE_COUNT, .bounds = ITEM_BOUND_SITES, .boundCount = ITEM_BOUND_SITE_COUNT,
      .values = ITEM_VALUE_SITES, .valueCount = ITEM_VALUE_SITE_COUNT, .countRva = RVA_ITEM_COUNT, .countSlack = 2,
-     .word = "newitem", .reason = "out_of_item_slots", .title = "CoE5SE: Items left out", .opening = "Items left out (no room):",
+     .word = "newitem", .reason = "out_of_item_slots", .title = "CoE5SE: Items left out", .opening = "No free item slots:",
      .header = "Items left out"},
     {.name = "class_heroes", .rva = RVA_CLASS_SIDE_B, .recordSize = CLASS_HEROES_SIZE, .gameRecords = CLASS_TABLE_MAX,
      .movedRecords = CLASS_RECORDS_MOVED, .firstModSlot = FIRST_MOD_CLASS_SLOT, .lastModSlot = LAST_MOD_CLASS_SLOT, .blockWithNext = 1,
@@ -187,7 +187,7 @@ static TableMove tableMoves[] = {
      .sites = CLASS_TABLE_SITES, .siteCount = CLASS_TABLE_SITE_COUNT, .bounds = CLASS_BOUND_SITES, .boundCount = CLASS_BOUND_SITE_COUNT,
      .values = CLASS_VALUE_SITES, .valueCount = CLASS_VALUE_SITE_COUNT, .queueExtra = queueClassPickerDecode, .extraCount = 1,
      .countRva = RVA_CLASS_COUNT, .countSlack = 1,
-     .word = "newclass", .reason = "out_of_class_slots", .title = "CoE5SE: Classes left out", .opening = "Classes left out (no room):",
+     .word = "newclass", .reason = "out_of_class_slots", .title = "CoE5SE: Classes left out", .opening = "No free class slots:",
      .header = "Classes left out", .nameWord = "setclassname"},
     {.name = "class_copy", .rva = RVA_CLASS_TABLE_COPY, .recordSize = CLASS_SIZE, .gameRecords = CLASS_TABLE_MAX,
      .movedRecords = CLASS_RECORDS_MOVED, .firstModSlot = FIRST_MOD_CLASS_SLOT, .lastModSlot = LAST_MOD_CLASS_SLOT,
@@ -197,7 +197,7 @@ static TableMove tableMoves[] = {
      .sites = MONSTER_TABLE_SITES, .siteCount = MONSTER_TABLE_SITE_COUNT, .bounds = MONSTER_BOUND_SITES, .boundCount = MONSTER_BOUND_SITE_COUNT,
      .patches = MONSTER_FRAME_SITES, .patchCount = MONSTER_FRAME_SITE_COUNT, .countRva = RVA_MONSTER_COUNT, .countSlack = 2,
      .values = MONSTER_VALUE_SITES, .valueCount = MONSTER_VALUE_SITE_COUNT,
-     .word = "newmonster", .reason = "out_of_monster_slots", .title = "CoE5SE: Monsters left out", .opening = "Monsters left out (no room):",
+     .word = "newmonster", .reason = "out_of_monster_slots", .title = "CoE5SE: Monsters left out", .opening = "No free monster slots:",
      .header = "Monsters left out"},
     {.name = "army_list_counts", .rva = RVA_ARMY_LIST_COUNTS, .recordSize = ARMY_LIST_COUNT_SIZE, .gameRecords = MONSTER_TABLE_MAX,
      .movedRecords = MONSTER_RECORDS_MOVED, .firstModSlot = FIRST_MOD_MONSTER_SLOT, .lastModSlot = LAST_MOD_MONSTER_SLOT, .blockWithNext = 1,
@@ -223,14 +223,14 @@ static TableMove tableMoves[] = {
      .macSites = WEAPON_MAC_SITES, .macSiteCount = WEAPON_MAC_SITE_COUNT, .macBounds = WEAPON_MAC_BOUNDS, .macBoundCount = WEAPON_MAC_BOUND_COUNT,
      .macSizes = WEAPON_MAC_SIZES, .macSizeCount = WEAPON_MAC_SIZE_COUNT,
      .overflowCall = RVA_WEAPON_OUT_OF_WEAPONS_CALL, .overflowTarget = RVA_TRACE_ERROR, .overflowHook = (void *)weaponOutOfSlotsHook,
-     .word = "newweapon", .reason = "out_of_weapon_slots", .title = "CoE5SE: Weapons left out", .opening = "Weapons left out (no room):",
+     .word = "newweapon", .reason = "out_of_weapon_slots", .title = "CoE5SE: Weapons left out", .opening = "No free weapon slots:",
      .header = "Weapons left out"},
     {.name = "item", .rva = RVA_ITEM_TABLE, .recordSize = ITEM_SIZE, .gameRecords = ITEM_TABLE_MAX,
      .movedRecords = ITEM_RECORDS_MOVED, .firstModSlot = FIRST_MOD_ITEM_SLOT, .lastModSlot = LAST_MOD_ITEM_SLOT,
      .macSites = ITEM_MAC_SITES, .macSiteCount = ITEM_MAC_SITE_COUNT, .macBounds = ITEM_MAC_BOUNDS, .macBoundCount = ITEM_MAC_BOUND_COUNT,
      .macSizes = ITEM_MAC_SIZES, .macSizeCount = ITEM_MAC_SIZE_COUNT,
      .countRva = RVA_ITEM_COUNT, .countSlack = 2,
-     .word = "newitem", .reason = "out_of_item_slots", .title = "CoE5SE: Items left out", .opening = "Items left out (no room):",
+     .word = "newitem", .reason = "out_of_item_slots", .title = "CoE5SE: Items left out", .opening = "No free item slots:",
      .header = "Items left out"},
     {.name = "class_heroes", .rva = RVA_CLASS_SIDE_B, .recordSize = CLASS_HEROES_SIZE, .gameRecords = CLASS_TABLE_MAX,
      .movedRecords = CLASS_RECORDS_MOVED, .firstModSlot = FIRST_MOD_CLASS_SLOT, .lastModSlot = LAST_MOD_CLASS_SLOT, .blockWithNext = 1,
@@ -244,7 +244,7 @@ static TableMove tableMoves[] = {
      .macSites = CLASS_MAC_SITES, .macSiteCount = CLASS_MAC_SITE_COUNT, .macBounds = CLASS_MAC_BOUNDS, .macBoundCount = CLASS_MAC_BOUND_COUNT,
      .macSizes = CLASS_MAC_SIZES, .macSizeCount = CLASS_MAC_SIZE_COUNT, .queueExtra = queueClassPickerDecode, .extraCount = 1,
      .countRva = RVA_CLASS_COUNT, .countSlack = 1,
-     .word = "newclass", .reason = "out_of_class_slots", .title = "CoE5SE: Classes left out", .opening = "Classes left out (no room):",
+     .word = "newclass", .reason = "out_of_class_slots", .title = "CoE5SE: Classes left out", .opening = "No free class slots:",
      .header = "Classes left out", .nameWord = "setclassname"},
     {.name = "class_copy", .rva = RVA_CLASS_TABLE_COPY, .recordSize = CLASS_SIZE, .gameRecords = CLASS_TABLE_MAX,
      .movedRecords = CLASS_RECORDS_MOVED, .firstModSlot = FIRST_MOD_CLASS_SLOT, .lastModSlot = LAST_MOD_CLASS_SLOT,
@@ -255,7 +255,7 @@ static TableMove tableMoves[] = {
      .macSizes = MONSTER_MAC_SIZES, .macSizeCount = MONSTER_MAC_SIZE_COUNT,
      .macPatches = MONSTER_FRAME_MAC_SITES, .macPatchCount = MONSTER_FRAME_MAC_SITE_COUNT,
      .countRva = RVA_MONSTER_COUNT, .countSlack = 2,
-     .word = "newmonster", .reason = "out_of_monster_slots", .title = "CoE5SE: Monsters left out", .opening = "Monsters left out (no room):",
+     .word = "newmonster", .reason = "out_of_monster_slots", .title = "CoE5SE: Monsters left out", .opening = "No free monster slots:",
      .header = "Monsters left out"},
 #define MAC_MONSTER_ARRAY(n, r, size, sites, block) {.name = n, .rva = r, .recordSize = size, .gameRecords = MONSTER_TABLE_MAX, \
      .movedRecords = MONSTER_RECORDS_MOVED, .firstModSlot = FIRST_MOD_MONSTER_SLOT, .lastModSlot = LAST_MOD_MONSTER_SLOT, .blockWithNext = block, \
@@ -328,7 +328,7 @@ static size_t tableLeftOutText(int table, char *text, size_t size) {
         modDisplayName(tableLeftOut[table].mods[i], label, sizeof label);
         appendText(text, size, &n, "\n%s", label);
     }
-    if (tableLeftOut[table].count > TABLE_LEFT_OUT_LINES) appendText(text, size, &n, "\n...and others.");
+    if (tableLeftOut[table].count > TABLE_LEFT_OUT_LINES) appendText(text, size, &n, "\n...and %d more.", tableLeftOut[table].count - TABLE_LEFT_OUT_LINES);
     return n;
 }
 
@@ -359,10 +359,14 @@ static void drawTablesLeftOut(void) {
         for (int i = 0; i < tableLeftOut[t].count && i < TABLE_LEFT_OUT_ROWS; i++) {
             modDisplayName(tableLeftOut[t].mods[i], label, sizeof label);
             textButton(0, label);
-            snprintf(tip, sizeof tip, "%.79s has more than fit, so its last ones were left out. coe5mod.log has each as c5m_refused.", label);
+            snprintf(tip, sizeof tip, "%.79s exceeded slot limit; excess entries left out. See coe5mod.log.", label);
             tooltip(tip);
         }
-        if (tableLeftOut[t].count > TABLE_LEFT_OUT_ROWS) textButton(0, "...and others. coe5mod.log has each as c5m_refused.");
+        if (tableLeftOut[t].count > TABLE_LEFT_OUT_ROWS) {
+            char more[80];
+            snprintf(more, sizeof more, "...and %d more. See coe5mod.log.", tableLeftOut[t].count - TABLE_LEFT_OUT_ROWS);
+            textButton(0, more);
+        }
         sectionEnd();
     }
 }

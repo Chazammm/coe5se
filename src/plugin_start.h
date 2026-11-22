@@ -296,12 +296,14 @@ static int pluginRefusalText(const char *file, char *row, size_t rowSize, char *
         snprintf(tip, tipSize, "Not started: it was built for an older CoE5SE than this one (%.150s). A version of the "
                  "mod built for this CoE5SE fixes it. ", r->detail);
     } else if (!strcmp(r->reason, "address_missing")) {
-        snprintf(row, rowSize, " (not started: needs what this game version lacks)");
+        snprintf(row, rowSize, " (not started: missing game address)");
         snprintf(tip, tipSize, "Not started: it uses a game address CoE5SE has none for on this game version (%.150s). ", r->detail);
-    } else {
+    } else if (!strcmp(r->reason, "newer_api_version") || !strcmp(r->reason, "newer_address_format")) {
         snprintf(row, rowSize, " (not started: needs a newer CoE5SE)");
-        snprintf(tip, tipSize, "Not started: it was built for a newer CoE5SE than this one (%s: %.150s). Update CoE5SE. ",
-                 r->reason, r->detail);
+        snprintf(tip, tipSize, "Not started: built for a newer CoE5SE. Update CoE5SE. See coe5mod.log. ");
+    } else {
+        snprintf(row, rowSize, " (not started: incompatible plugin)");
+        snprintf(tip, tipSize, "Not started: plugin requested an invalid or mismatched game address. See coe5mod.log. ");
     }
     return 1;
 }

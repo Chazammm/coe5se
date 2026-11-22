@@ -357,7 +357,7 @@ static void pathLine(const char *args, int mod, int level) {
         int found = readSpellQuoted(&p, name, sizeof name) > 0 ? spellPathByName(name) : -1;
         if (found < 0) {
             refuseC5mLine("path", spellModName(mod), "unknown_path", "line=%d text=%.40s", G32(RVA_MOD_LINE), args);
-            noteSpellProblem(mod, G32(RVA_MOD_LINE), "no spell path named %.40s", name);
+            noteSpellProblem(mod, G32(RVA_MOD_LINE), "no magic path named '%.40s'", name);
             spellBlock.badPath = 1;
             return;
         }
@@ -542,12 +542,11 @@ static void drawSpellProblems(void) {
         modDisplayName(p->mod, label, sizeof label);
         snprintf(row, sizeof row, "%.79s%s line %d: %s", p->mod, p->file, p->line, p->text);
         textButton(0, row);
-        snprintf(tip, sizeof tip, "%s (%.79s%s), line %d: %s. CoE5SE left this line out, and every other line of the mod "
-                 "loads. coe5mod.log has it as c5m_refused.", label, p->mod, p->file, p->line, p->text);
+        snprintf(tip, sizeof tip, "%s (%.79s%s), line %d: %s. Line skipped; see coe5mod.log.", label, p->mod, p->file, p->line, p->text);
         tooltip(tip);
     }
     if (spellProblemCount > SPELL_PROBLEM_ROWS) {
-        snprintf(row, sizeof row, "...and %d more. coe5mod.log has each as c5m_refused.", spellProblemCount - SPELL_PROBLEM_ROWS);
+        snprintf(row, sizeof row, "...and %d more. See coe5mod.log.", spellProblemCount - SPELL_PROBLEM_ROWS);
         textButton(0, row);
     }
     sectionEnd();
@@ -564,7 +563,7 @@ static void popupSpellProblems(void) {
     size_t n = 0;
     char label[80];
     const char *lastMod = "";
-    appendText(text, sizeof text, &n, "Spell lines left out:\nOther lines loaded.\n");
+    appendText(text, sizeof text, &n, "Spell lines left out:\n");
     for (int i = 0; i < spellProblemCount && i < SPELL_POPUP_LINES; i++) {
         const SpellProblem *p = &spellProblems[i];
         if (strcmp(lastMod, p->mod)) {

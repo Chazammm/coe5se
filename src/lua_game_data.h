@@ -620,7 +620,8 @@ static unsigned char *gameVarAddress(lua_State *L, const GameVar **out, int *arg
     if (!v) { luaL_error(L, "unknown game variable '%s'", name); return NULL; }
     int isRitualTable = v->count == COUNT_AT_CALL && v->addr >= RVA_RITUAL_TABLE && v->addr < RVA_RITUAL_TABLE + RITUAL_SIZE;
     int movedTable = isRitualTable || !v->addr ? -1 : tableHolding(v->addr, v->stride);
-    int playerTable = !isRitualTable && movedTable < 0 && v->addr && v->count == PLAYER_SLOTS && playerTableHolding(v->addr) >= 0;
+    int inPlayerTable = !isRitualTable && movedTable < 0 && v->addr && playerTableHolding(v->addr) >= 0;
+    int playerTable = inPlayerTable && v->count == PLAYER_SLOTS;
     lua_Integer index = 0;
     int squareSight = v->addr == RVA_SQUARE_RECORDS + SQUARE_SEEN;
     int count = isRitualTable ? ritualSlotCount() : movedTable >= 0 ? tableRecords(movedTable) : playerTable || squareSight ? playerSlotCount() : v->count;
@@ -658,7 +659,7 @@ static unsigned char *gameVarAddress(lua_State *L, const GameVar **out, int *arg
     unsigned char *table = v->type == T_CAST_COUNT ? castCountsBase()
                          : v->addr >= RVA_PLANES && v->addr < RVA_PLANES + PLANE_SIZE ? planeTableAddress() + (v->addr - RVA_PLANES)
                          : movedTable >= 0 ? tableAddress(movedTable) + (v->addr - tableMoves[movedTable].rva)
-                         : playerTable ? playerTableAddress(v->addr)
+                         : inPlayerTable ? playerTableAddress(v->addr)
                          : gameBase + (isRitualTable ? ritualTableRva() + (v->addr - RVA_RITUAL_TABLE) : v->addr);
     if (shape.lastAt && index > G32(shape.lastAt)) return NULL;
     unsigned char *entries = table + (size_t)index * v->stride;

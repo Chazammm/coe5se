@@ -606,7 +606,7 @@ static int lRequire(lua_State *L) {
     lua_pushvalue(L, 1);
     if (lua_rawget(L, 2) != LUA_TNIL) {
         if (lua_touserdata(L, 3) == &luaRequireLoading)
-            return luaL_error(L, "require: loop: '%s' is still loading (it requires itself, through the files it requires)", name);
+            return luaL_error(L, "require: circular dependency while loading '%s'", name);
         return 1;
     }
     lua_pop(L, 1);
@@ -614,7 +614,7 @@ static int lRequire(lua_State *L) {
     char path[MAX_PATH], chunk[LUA_CHUNK_NAME_MAX], part[MAX_PATH];
     if (!strcmp(name, s->mod)) {
         refuseLuaCall(s->mod, "require", "main_script", "name=%.64s", name);
-        return luaL_error(L, "require: '%s' is the mod's own script, which CoE5SE runs itself", name);
+        return luaL_error(L, "require: '%s' is the mod's main script (loaded automatically)", name);
     }
     problem = findRequiredFile(s, name, path, sizeof path, chunk, part, sizeof part);
     if (problem && !strcmp(problem, "not_found"))
@@ -623,7 +623,7 @@ static int lRequire(lua_State *L) {
         refuseLuaCall(s->mod, "require", problem, "name=%.64s part=%.64s", name, part);
         if (!strcmp(problem, "wrong_case"))
             return luaL_error(L, "require: no file %s in %s's folder (%s differs in case)", chunk, s->mod, part);
-        return luaL_error(L, "require: %s refused (%s)", chunk, !strcmp(problem, "link") ? "a link" : "its path is too long");
+        return luaL_error(L, "require: %s refused (%s)", chunk, !strcmp(problem, "link") ? "symbolic link" : "path too long");
     }
     pushLuaTextFile(L, path, chunk);
     lua_pushvalue(L, 1);
@@ -806,6 +806,8 @@ static int luaModEnabledNow(const char *mod, const char *folder) {
 }
 
 static void retireLuaScript(LuaScript *s, const char *reason) {
+    dropLuaScriptWraps(s);
+    dropAfflictionEffects(s);
     s->retired = 1;
     if (!s->stopping) {
         s->stopping = LUA_STOP_CLOSED;
@@ -971,7 +973,7 @@ static void scriptStopMessageText(const char *mod, const char *reason, int onCli
     luaNoticeName(mod, name, sizeof name);
     const char *why = !strcmp(reason, LUA_STOPS[LUA_STOP_STEPS].reason) ? "Ran too long"
                     : !strcmp(reason, LUA_STOPS[LUA_STOP_MEMORY].reason) ? "Too much memory"
-                    : !strcmp(reason, LUA_STOPS[LUA_STOP_MEMORY_TOTAL].reason) ? "Most memory of all scripts"
+                    : !strcmp(reason, LUA_STOPS[LUA_STOP_MEMORY_TOTAL].reason) ? "Exceeded total script memory limit"
                     : "Script error";
     snprintf(title, titleSize, "CoE5SE: %.60s's script was stopped", name);
     snprintf(text, textSize, "%s on %s. Restarted this turn.", why, onClient ? "client" : "host");
@@ -1003,7 +1005,7 @@ static void noteScriptStopOnHost(const char *mod, const char *reason, int onClie
 static void takeClientScriptStop(const char *report) {
     const char *mod = strchr(report, ' ');
     if (!mod || !mod[1]) {
-        writeLogWarning("script_stop_dropped", "reason=bad_report");
+        writeLogWarning("script_stop_dropped", "reason=bad_report report=%.60s", report);
         return;
     }
     int runs = 0;
@@ -1041,8 +1043,6 @@ static void restartLuaScript(LuaScript *s, const char *reason) {
     markScriptBattleMapsRestarting(mod);
     markScriptTransportsRestarting(mod);
     dropScriptMenuRows(s);
-    dropLuaScriptWraps(s);
-    dropAfflictionEffects(s);
     retireLuaScript(s, reason);
     if (!luaModEnabledNow(mod, folder)) return;
     loadLuaCommandsFile(mod, folder);
@@ -1185,10 +1185,10 @@ static void luaNoticeText(int kind, const char *mod, int stop, const char *area,
         return;
     }
     const char *why = stop == LUA_STOP_MEMORY ? "Too much memory.\n"
-                    : stop == LUA_STOP_MEMORY_TOTAL ? "Most memory of all scripts.\n"
+                    : stop == LUA_STOP_MEMORY_TOTAL ? "Exceeded total script memory limit.\n"
                     : "Ran too long.\n";
     snprintf(title, titleSize, "CoE5SE: %s's script was stopped", name);
-    snprintf(text, textSize, "%sOff until restart.\n", why);
+    snprintf(text, textSize, "%sScript disabled until restart.\n", why);
 }
 
 static void showLuaNotices(void) {

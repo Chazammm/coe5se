@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 81
+#define ENTRY_HOOK_COUNT 84
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -84,6 +84,9 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"battle_fight_move", 0x0cb4d0, 5, 0, {{0, 0}}},
     {"test_field_unit_name", 0x0f8520, 10, 0, {{0, 0}}},
     {"test_field_commander_name", 0x0f8bd0, 6, 0, {{0, 0}}},
+    {"found_item", 0x0f0990, 5, 0, {{0, 0}}},
+    {"net_put_full_unit", 0x1e71d0, 6, 0, {{0, 0}}},
+    {"save_player_2h", 0x185120, 5, 0, {{0, 0}}},
 };
 #else
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
@@ -168,5 +171,8 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"battle_fight_move", 0x3f43b4, 16, 0, {{0, 0}}},
     {"test_field_unit_name", 0x000000, 0, 0, {{0, 0}}},
     {"test_field_commander_name", 0x000000, 0, 0, {{0, 0}}},
+    {"found_item", 0x3ce484, 16, 0, {{0, 0}}},
+    {"net_put_full_unit", 0x000000, 0, 0, {{0, 0}}},
+    {"save_player_2h", 0x000000, 0, 0, {{0, 0}}},
 };
 #endif

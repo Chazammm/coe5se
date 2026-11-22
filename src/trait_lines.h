@@ -158,6 +158,44 @@ static void findOwnTraitPictures(void);
 typedef unsigned (*TraitListFn)(int unit, int monster, unsigned long long flags, unsigned long long more);
 typedef int (*AbilityLineFn)(int icon, const char *fmt, ...);
 
+// ---- Army heal lines: a card line for each heal<trait>army rule of a monster or an item -------------
+#define HEAL_ARMY_CARD_ICON 2
+
+static int healArmyCardLine(const HealArmyRule *r, char *label, size_t size) {
+    char text[TRAIT_LINE_TEXT_MAX + 1];
+    snprintf(label, size, "Army Healer (%.31s%s)", r->trait.word, r->bypassNoheal ? ", even non-healing" : "");
+    for (int i = 0; i < traitLineCount; i++)
+        if (traitLines[i].lua < 0 && !traitLines[i].resBit && !strcmp(traitLines[i].label, label)) return i;
+    snprintf(text, sizeof text, "Grants increased healing rate for all %.31s units in the army%s.", r->trait.word,
+             r->bypassNoheal ? ", even those that normally never heal" : "");
+    return addTraitLine(label, text, HEAL_ARMY_CARD_ICON, -1, 0, -1);
+}
+
+static int healArmyRuleOnCard(const HealArmyRule *r, int unit, int item) {
+    if (item >= 0) return r->source == HEAL_ARMY_ITEM && r->slot == item;
+    if (r->source == HEAL_ARMY_MONSTER) return unitMonsterNumber(unit) == r->slot;
+    return r->source == HEAL_ARMY_ITEM && healArmyUnitHolds(unit, r->slot);
+}
+
+static unsigned healArmyCardLines(int unit, int item) {
+    unsigned count = 0;
+    char label[TRAIT_LINE_LABEL_MAX + 1];
+    for (int i = 0; i < healArmy.count; i++) {
+        const HealArmyRule *r = &healArmy.rules[i];
+        if (!healArmyRuleOnCard(r, unit, item)) continue;
+        int seen = 0;
+        for (int j = 0; j < i && !seen; j++) {
+            const HealArmyRule *o = &healArmy.rules[j];
+            seen = healArmyRuleOnCard(o, unit, item) && o->trait.kind == r->trait.kind && o->trait.value == r->trait.value &&
+                   o->bypassNoheal == r->bypassNoheal;
+        }
+        if (seen) continue;
+        int line = healArmyCardLine(r, label, sizeof label);
+        if (GAME_FN(AbilityLineFn, RVA_ABILITY_LIST)(line >= 0 ? traitLineIcon(&traitLines[line]) : HEAL_ARMY_CARD_ICON, "%s", label)) count++;
+    }
+    return count;
+}
+
 static unsigned traitListHook(int unit, int monster, unsigned long long flags, unsigned long long more) {
     unsigned count = GAME_FN(TraitListFn, RVA_UNIT_TRAIT_LIST)(unit, monster, flags, more);
     int m = unitMonsterNumber(unit);
@@ -167,18 +205,19 @@ static unsigned traitListHook(int unit, int monster, unsigned long long flags, u
         if (traitLineShown(&traitLines[i], unit, m) &&
             GAME_FN(AbilityLineFn, RVA_ABILITY_LIST)(traitLineIcon(&traitLines[i]), "%s", traitLines[i].label))
             count++;
-    return count;
+    return count + healArmyCardLines(unit, -1);
 }
 
 static unsigned itemTraitListHook(int unit, int item, unsigned long long flags, unsigned long long more) {
     unsigned count = GAME_FN(TraitListFn, RVA_UNIT_TRAIT_LIST)(unit, item, flags, more);
     int bits = itemResBits(item);
-    if (!bits) return count;
-    findOwnTraitPictures();
-    for (int i = 0; i < traitLineCount; i++)
-        if ((traitLines[i].resBit & bits) && GAME_FN(AbilityLineFn, RVA_ABILITY_LIST)(traitLineIcon(&traitLines[i]), "%s", traitLines[i].label))
-            count++;
-    return count;
+    if (bits) {
+        findOwnTraitPictures();
+        for (int i = 0; i < traitLineCount; i++)
+            if ((traitLines[i].resBit & bits) && GAME_FN(AbilityLineFn, RVA_ABILITY_LIST)(traitLineIcon(&traitLines[i]), "%s", traitLines[i].label))
+                count++;
+    }
+    return item >= 0 ? count + healArmyCardLines(-1, item) : count;
 }
 
 static void findOwnTraitPictures(void) {

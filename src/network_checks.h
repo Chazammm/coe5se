@@ -265,7 +265,10 @@ static void checkReportedBinary(const SaveChunk *vers, int platform) {
     binaryToldSlots[slot] = 1;
     char name[33], text[NET_LOBBY_MESSAGE_MAX];
     shownSlotName(player, name, sizeof name);
-    snprintf(text, sizeof text, "CoE5SE files differ between players, same version.\n\nPlayer: %s", name);
+    snprintf(text, sizeof text,
+             found ? "CoE5SE files differ between players, same version.\n\nPlayer: %s"
+                   : "CoE5SE binary report missing or unreadable.\n\nPlayer: %s",
+             name);
     writeLogWarning("coe5se_binary_differs", "reason=%s player=%d", found ? "differs" : "no_report", player);
     warnAllPlayersOfCheck(text);
 }

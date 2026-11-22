@@ -11,3 +11,7 @@ static unsigned char *playerSlotAddress(unsigned int rva0, int player, int entry
 #define PG16(rva) (*(short *)playerTableAddress(rva))
 #define PG32(rva) (*(int *)playerTableAddress(rva))
 #define PGF(rva)  (*(float *)playerTableAddress(rva))
+#define PSLOT8(rva0, player, entry)  (*(signed char *)playerSlotAddress(rva0, player, entry))
+#define PSLOT16(rva0, player, entry) (*(short *)playerSlotAddress(rva0, player, entry))
+#define PSLOT32(rva0, player, entry) (*(int *)playerSlotAddress(rva0, player, entry))
+#define PSLOTF(rva0, player, entry)  (*(float *)playerSlotAddress(rva0, player, entry))

@@ -198,7 +198,7 @@ static int closeTestFieldNow(void) {
         cleaned = removeTestFieldUnits() && cleaned;
     } else clearTestBattleSquare(x, y);
     short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
-    short *teamA = (short *)GAME_PTR(RVA_SLOT_TEAM), *teamB = (short *)GAME_PTR(RVA_SLOT_TEAM + (size_t)TEST_BATTLE_ENEMY_PLAYER * PLAYER_BLOCK_SIZE);
+    short *teamA = &PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE), *teamB = &PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
     memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);
     *army = testField.army;
     *teamA = testField.teamA;
@@ -583,7 +583,7 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
         testField.lastPlane = G32(RVA_LAST_PLANE);
     }
     short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
-    short *teamA = (short *)GAME_PTR(RVA_SLOT_TEAM), *teamB = (short *)GAME_PTR(RVA_SLOT_TEAM + (size_t)TEST_BATTLE_ENEMY_PLAYER * PLAYER_BLOCK_SIZE);
+    short *teamA = &PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE), *teamB = &PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
     testField.army = *army;
     testField.teamA = *teamA;
     testField.teamB = *teamB;

@@ -7,7 +7,11 @@
 #define RESIST_FASTHEAL_BIT (1ULL << 9)
 #define ABILITY_FALSELIFE   0x1e9
 
+enum { HEAL_ARMY_SPELL, HEAL_ARMY_MONSTER, HEAL_ARMY_ITEM };
+static const char *const HEAL_ARMY_SOURCE_WORDS[] = {"spell", "monster", "item"};
+
 typedef struct {
+    int source;
     int slot;
     int bypassNoheal;
     WeaponTraitRule trait;
@@ -23,25 +27,48 @@ static unsigned long long (*healArmyUnitState)(int unit);
 static int (*healArmyMaxHp)(int unit);
 static int (*healArmyFalselife)(int unit);
 
-static void healArmyReset(void) { healArmy.count = 0; }
-
-static void healArmyBlockStored(int slot) {
-    for (int i = 0; i < healArmy.count; i++)
-        if (!healArmy.rules[i].slot) healArmy.rules[i].slot = slot;
-}
-
-static void healArmyDropPending(void) {
+static void dropHealArmyRules(int source, int record) {
     int n = 0;
     for (int i = 0; i < healArmy.count; i++)
-        if (healArmy.rules[i].slot) healArmy.rules[n++] = healArmy.rules[i];
+        if (healArmy.rules[i].source != source || (record != -1 && healArmy.rules[i].slot != record)) healArmy.rules[n++] = healArmy.rules[i];
     healArmy.count = n;
 }
 
-static int addHealArmyRule(int kind, unsigned long long value, const char *word, int bypassNoheal) {
-    int slot = spellBlock.slot;
+static void healArmyReset(void) { dropHealArmyRules(HEAL_ARMY_SPELL, -1); }
+
+static void healArmyBeforePass(void) {
+    dropHealArmyRules(HEAL_ARMY_MONSTER, -1);
+    dropHealArmyRules(HEAL_ARMY_ITEM, -1);
+}
+
+static void healArmyBlockStored(int slot) {
+    for (int i = 0; i < healArmy.count; i++)
+        if (healArmy.rules[i].source == HEAL_ARMY_SPELL && !healArmy.rules[i].slot) healArmy.rules[i].slot = slot;
+}
+
+static void healArmyDropPending(void) { dropHealArmyRules(HEAL_ARMY_SPELL, 0); }
+
+static void clearHealArmyRules(int item, int record) {
+    if (record < 0) return;
+    dropHealArmyRules(item ? HEAL_ARMY_ITEM : HEAL_ARMY_MONSTER, record);
+}
+
+static void copyHealArmyRules(int item, int source, int target) {
+    int kind = item ? HEAL_ARMY_ITEM : HEAL_ARMY_MONSTER;
+    dropHealArmyRules(kind, target);
+    int count = healArmy.count;
+    for (int i = 0; i < count; i++)
+        if (healArmy.rules[i].source == kind && healArmy.rules[i].slot == source &&
+            growList((void **)&healArmy.rules, &healArmy.capacity, healArmy.count + 1, sizeof *healArmy.rules)) {
+            healArmy.rules[healArmy.count] = healArmy.rules[i];
+            healArmy.rules[healArmy.count++].slot = target;
+        }
+}
+
+static int addHealArmyRule(int source, int slot, int kind, unsigned long long value, const char *word, int bypassNoheal) {
     for (int i = 0; i < healArmy.count; i++) {
         HealArmyRule *r = &healArmy.rules[i];
-        if (r->slot == slot && r->trait.kind == kind && r->trait.value == value) {
+        if (r->source == source && r->slot == slot && r->trait.kind == kind && r->trait.value == value) {
             r->bypassNoheal |= bypassNoheal;
             return 1;
         }
@@ -49,6 +76,7 @@ static int addHealArmyRule(int kind, unsigned long long value, const char *word,
     if (!growList((void **)&healArmy.rules, &healArmy.capacity, healArmy.count + 1, sizeof *healArmy.rules)) return 0;
     HealArmyRule *r = &healArmy.rules[healArmy.count++];
     memset(r, 0, sizeof *r);
+    r->source = source;
     r->slot = slot;
     r->bypassNoheal = bypassNoheal;
     r->trait.kind = kind;
@@ -80,22 +108,42 @@ static int readHealArmyBypass(const char *p) {
     return len > 0 && (size_t)len < sizeof word && !strcmp(word, HEAL_ARMY_BYPASS_WORD) && isLineEnd(p) ? 1 : -1;
 }
 
+#define HEAL_ARMY_PROBLEM(source, mod, line, ...) \
+    do { \
+        if ((source) == HEAL_ARMY_SPELL) noteSpellProblem(mod, line, __VA_ARGS__); \
+    } while (0)
+
+static int healArmyLineSource(const char *word, int mod, int level, int *slot) {
+    if (spellBlock.open) {
+        *slot = spellBlock.slot;
+        return spellBlockTakes(word, mod, level) ? HEAL_ARMY_SPELL : -1;
+    }
+    int monster = G32(RVA_MONSTER_CURRENT), item = G32(RVA_ITEM_CURRENT);
+    if (monsterRecord(monster)) return *slot = monster, HEAL_ARMY_MONSTER;
+    if (item >= 0 && item < tableRecords(TABLE_ITEM)) return *slot = item, HEAL_ARMY_ITEM;
+    refuseC5mLine(word, spellModName(mod), "no_block", "line=%d", G32(RVA_MOD_LINE));
+    noteSpellProblem(mod, G32(RVA_MOD_LINE), "%s outside a newspell, monster or item block", word);
+    return -1;
+}
+
 static void healArmyRuleLine(const char *word, const char *trait, const char *p, int mod, int level) {
-    if (!spellBlockTakes(word, mod, level)) return;
+    if (level != 2) return;
+    int slot = 0, source = healArmyLineSource(word, mod, level, &slot);
+    if (source < 0) return;
     int kind, line = G32(RVA_MOD_LINE);
     unsigned long long value;
     char name[MONSTER_TAG_NAME_SIZE];
     const char *wordShown = trait;
     if (!trait[0]) {
         refuseC5mLine(word, spellModName(mod), "no_trait", "line=%d", line);
-        noteSpellProblem(mod, line, "%s needs a trait", word);
+        HEAL_ARMY_PROBLEM(source, mod, line, "%s needs a trait", word);
         return;
     }
     if (!strcmp(trait, "tag")) {
         int len = readTagName(&p, name, sizeof name), tag = len > 0 ? monsterTagId(name, 1) : 0;
         if (len <= 0 || tag < 0) {
             refuseC5mLine(word, spellModName(mod), len < 0 ? "too_long" : tag < 0 ? "out_of_memory" : "no_name", "line=%d", line);
-            noteSpellProblem(mod, line, "%s tag needs a name in quotes", word);
+            HEAL_ARMY_PROBLEM(source, mod, line, "%s tag needs a name in quotes", word);
             return;
         }
         kind = WEAPON_TRAIT_TAG;
@@ -103,20 +151,21 @@ static void healArmyRuleLine(const char *word, const char *trait, const char *p,
         wordShown = name;
     } else if (!findWeaponTrait(trait, &kind, &value)) {
         refuseC5mLine(word, spellModName(mod), "unknown_trait", "line=%d trait=%.40s", line, trait);
-        noteSpellProblem(mod, line, "%.40s isn't a monster trait", trait);
+        HEAL_ARMY_PROBLEM(source, mod, line, "%.40s isn't a monster trait", trait);
         return;
     }
     int bypassNoheal = readHealArmyBypass(p);
     if (bypassNoheal < 0) {
         refuseC5mLine(word, spellModName(mod), "bad_value", "line=%d text=%.40s", line, p);
-        noteSpellProblem(mod, line, "only " HEAL_ARMY_BYPASS_WORD " can follow %s", word);
+        HEAL_ARMY_PROBLEM(source, mod, line, "only " HEAL_ARMY_BYPASS_WORD " can follow %s", word);
         return;
     }
-    if (!addHealArmyRule(kind, value, wordShown, bypassNoheal)) {
+    if (!addHealArmyRule(source, slot, kind, value, wordShown, bypassNoheal)) {
         refuseC5mLine(word, spellModName(mod), "out_of_memory", "line=%d", line);
         return;
     }
-    writeLog("heal_army_rule", "mod=%s slot=%d trait=%s bypassnoheal=%d line=%d", spellModName(mod), spellBlock.slot, wordShown, bypassNoheal, line);
+    writeLog("heal_army_rule", "mod=%s source=%s slot=%d trait=%s bypassnoheal=%d line=%d", spellModName(mod), HEAL_ARMY_SOURCE_WORDS[source], slot,
+             wordShown, bypassNoheal, line);
 }
 
 static void healarmyLine(const char *args, int mod, int level) {
@@ -146,13 +195,28 @@ static int healArmyCasterHas(int caster, int slot) {
     return 0;
 }
 
+static int healArmyUnitHolds(int u, int item) {
+    int positions = unitExtraItemCount(u) ? ITEM_POSITION_MAX : UNIT_ITEM_SLOTS;
+    for (int i = 0; i < positions; i++)
+        if (unitItemAt(u, i) == item) return 1;
+    return 0;
+}
+
+static int healArmyGiverHas(int giver, const HealArmyRule *r) {
+    if (r->source == HEAL_ARMY_MONSTER) return G16(RVA_UNIT_MONSTER + (size_t)giver * UNIT_SIZE) == r->slot;
+    if (r->source == HEAL_ARMY_ITEM) return healArmyUnitHolds(giver, r->slot);
+    return healArmyCasterHas(giver, r->slot);
+}
+
 static int healArmyHealsFast(int unit, int rate) {
     if (!healArmy.count || rate >= HEAL_RATE_FAST || unit < 0 || unit >= UNIT_TABLE_MAX) return 0;
     size_t at = (size_t)unit * UNIT_SIZE;
     if ((short)G16(RVA_UNIT_HP + at) >= healArmyMaxHp(unit) || (healArmyUnitState(unit) & HEAL_ARMY_DISEASED)) return 0;
     int match = 0;
     for (int i = 0; i < healArmy.count && !match; i++)
-        if (healArmy.rules[i].slot && (rate >= 1 || healArmy.rules[i].bypassNoheal) && unitHasWeaponTrait(unit, &healArmy.rules[i].trait)) match = 1;
+        if ((healArmy.rules[i].slot || healArmy.rules[i].source != HEAL_ARMY_SPELL) && (rate >= 1 || healArmy.rules[i].bypassNoheal) &&
+            unitHasWeaponTrait(unit, &healArmy.rules[i].trait))
+            match = 1;
     if (!match) return 0;
     int x = G32(RVA_UNIT_X + at), y = G32(RVA_UNIT_X + 4 + at), player = (short)G16(RVA_UNIT_PLAYER + at), last = G32(RVA_UNIT_COUNT);
     for (int c = 0; c <= last && c < UNIT_TABLE_MAX; c++) {
@@ -161,8 +225,10 @@ static int healArmyHealsFast(int unit, int rate) {
         if (!playerSameTeam(player, (short)G16(RVA_UNIT_PLAYER + cat))) continue;
         for (int i = 0; i < healArmy.count; i++) {
             const HealArmyRule *r = &healArmy.rules[i];
-            if (!r->slot || (rate < 1 && !r->bypassNoheal) || !unitHasWeaponTrait(unit, &r->trait) || !healArmyCasterHas(c, r->slot)) continue;
-            writeLog("heal_army_heals", "unit=%d caster=%d spell=%d trait=%s rate=%d", unit, c, r->slot, r->trait.word, rate);
+            if ((!r->slot && r->source == HEAL_ARMY_SPELL) || (rate < 1 && !r->bypassNoheal) || !unitHasWeaponTrait(unit, &r->trait) ||
+                !healArmyGiverHas(c, r))
+                continue;
+            writeLog("heal_army_heals", "unit=%d caster=%d %s=%d trait=%s rate=%d", unit, c, HEAL_ARMY_SOURCE_WORDS[r->source], r->slot, r->trait.word, rate);
             return 1;
         }
     }
@@ -173,7 +239,7 @@ static void healArmyInfoLines(int spell) {
     char line[160];
     for (int i = 0; i < healArmy.count; i++) {
         const HealArmyRule *r = &healArmy.rules[i];
-        if (r->slot != spell || !spell) continue;
+        if (r->source != HEAL_ARMY_SPELL || r->slot != spell || !spell) continue;
         snprintf(line, sizeof line, "Knowing this spell grants increased healing rate for all %s beings in the army%s.", r->trait.word,
                  r->bypassNoheal ? ", even never healing ones" : "");
         textButton(0, line);

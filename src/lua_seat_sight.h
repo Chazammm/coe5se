@@ -60,7 +60,7 @@ static int restoreSeatSight(int seat, unsigned game, int columns, int rows) {
 
 static void redrawSeatSight(int seat) {
 #ifndef __APPLE__
-    memset(gameBase + RVA_PLAYER_PLANE_SEEN + (size_t)seat * PLANE_SEEN_ROW, 0xff, PLANE_SEEN_ROW);
+    memset(playerSlotAddress(RVA_PLAYER_PLANE_SEEN, seat, PLANE_SEEN_ROW), 0xff, PLANE_SEEN_ROW);
     GAME_FN(void (*)(int), RVA_UPDATE_DRAW_SQUARES)(seat);
     GAME_FN(int (*)(int, int), RVA_MAP_BG_MARK)(-1, seat);
     for (int index = PLANE_ELYSIUM2 + 1; index <= lastCustomPlaneIndex(); index++) GAME_FN(int (*)(int, int), RVA_MAP_BG_MARK)(index, seat);
@@ -73,7 +73,7 @@ static void redrawSeatSight(int seat) {
 static int lShowSight(lua_State *L) {
     lua_Integer seat = luaL_checkinteger(L, 1), player = luaL_checkinteger(L, 2);
     int inRange = seat >= 0 && seat < PLAYER_SLOTS;
-    int controller = inRange ? PG16(RVA_SLOT_CONTROLLER + 2 * (size_t)seat) : CONTROLLER_REMOVED;
+    int controller = inRange ? PSLOT16(RVA_SLOT_CONTROLLER, seat, 2) : CONTROLLER_REMOVED;
     const char *reason = seatSightRefusal(isNetworkGame(), G32(RVA_ACTIVE_PLAYER), seat, player, controller);
 #ifdef __APPLE__
     if (!reason) reason = "windows_only";

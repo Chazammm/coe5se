@@ -288,9 +288,9 @@ static void finishReading(void) {
         else if (s->optionCount && !r->hasIndex)
             settingProblem(&p, "no_index", "%s %.32s: a choice needs an index (0 to %d)", r->word, r->name, max);
         else if (r->hasIndex && s->isKey && !keyValueIsValid(r->index))
-            settingProblem(&p, "index_out_of_range", "%s %.32s: %d is not a key value", r->word, r->name, r->index);
+            settingProblem(&p, "index_out_of_range", "%s %.32s: invalid key value %d", r->word, r->name, r->index);
         else if (r->hasIndex && !s->isKey && (r->index < 0 || r->index > max))
-            settingProblem(&p, "index_out_of_range", "%s %.32s: index %d is not 0 to %d", r->word, r->name, r->index, max);
+            settingProblem(&p, "index_out_of_range", "%s %.32s: index %d out of range (0 to %d)", r->word, r->name, r->index, max);
         else continue;
         if (r->inSidecar) rejectSidecarLine(r->inSidecar, reading.mod, r->word, r->line, &p, source);
         else rejectC5mLine(reading.mod, r->word, r->line, &p, source);

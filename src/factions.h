@@ -6,7 +6,7 @@ static unsigned char *squareRecord(int x, int y) {
 
 static short playerSlotController(int player) {
     short c;
-    memcpy(&c, (playerTableMoved ? movedPlayerTables[PLAYER_GROUP_CONTROLLER] : GAME_PTR(RVA_SLOT_CONTROLLER)) + 2 * player, 2);
+    memcpy(&c, playerSlotAddress(RVA_SLOT_CONTROLLER, player, 2), 2);
     return c;
 }
 

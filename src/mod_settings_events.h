@@ -98,11 +98,11 @@ static void readEventLine(const char *line, int level, const char *mod, const ch
 }
 
 static void declinedEventLineHook(const char *line, int level) {
-    if (isSettingLine(line)) refuseC5mLine(line[0] == '+' ? "+setting" : "-setting", "-", "plugins_declined", "line=%s", line);
-    else if (isEventLogicWord(line)) refuseC5mLine("or", "-", "plugins_declined", "line=%s", line);
-    else if (declinedPlaneEventLine(line)) refuseC5mLine("plane", "-", "plugins_declined", "line=%s", line);
-    else if (declinedFactionNameLine(line, strcspn(line, " \t"))) refuseC5mLine("faction", "-", "plugins_declined", "line=%s", line);
-    else if (isNamedAfflictionEventLine(line)) refuseC5mLine("makeaff", "-", "plugins_declined", "line=%s", line);
+    if (isSettingLine(line)) refuseC5mLine(line[0] == '+' ? "+setting" : "-setting", "-", "plugins_declined", "text=%.60s", line);
+    else if (isEventLogicWord(line)) refuseC5mLine("or", "-", "plugins_declined", "text=%.60s", line);
+    else if (declinedPlaneEventLine(line)) refuseC5mLine("plane", "-", "plugins_declined", "text=%.60s", line);
+    else if (declinedFactionNameLine(line, strcspn(line, " \t"))) refuseC5mLine("faction", "-", "plugins_declined", "text=%.60s", line);
+    else if (isNamedAfflictionEventLine(line)) refuseC5mLine("makeaff", "-", "plugins_declined", "text=%.60s", line);
     else nextEventLine(line, level);
 }
 

@@ -88,7 +88,7 @@ static int writeWorkshopCacheFile(const char *path, const TextList *items) {
     if (!buildPath(temp, sizeof temp, __func__, "%s.new", path)) return 0;
     FILE *f = fopen(temp, "wb");
     if (!f) {
-        writeLogError("workshop_cache_failed", "reason=open path=%s", temp);
+        writeLogError("workshop_cache_failed", "reason=open_failed path=%s", temp);
         return 0;
     }
     int32_t last = items->count - 1;
@@ -102,12 +102,12 @@ static int writeWorkshopCacheFile(const char *path, const TextList *items) {
         }
     }
     if (fclose(f) || !ok) {
-        writeLogError("workshop_cache_failed", "reason=write path=%s", temp);
+        writeLogError("workshop_cache_failed", "reason=write_failed path=%s", temp);
         remove(temp);
         return 0;
     }
     if (rename(temp, path)) {
-        writeLogError("workshop_cache_failed", "reason=rename path=%s", path);
+        writeLogError("workshop_cache_failed", "reason=move_failed path=%s", path);
         remove(temp);
         return 0;
     }

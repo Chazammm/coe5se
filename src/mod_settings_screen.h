@@ -408,7 +408,7 @@ static int askKeyMove(ModSetting *holder, const ModSetting *s, int key) {
         messageBox("CoE5SE: Key in use", text, "Back", "", 0, ESCAPE_KEY(), 0);
         return 0;
     }
-    formatLookedUp(text, sizeof text, "This is assigned to \"%s\".\nReassign it to \"%s\" now?\nThis could break your hotkeys.", held,
+    formatLookedUp(text, sizeof text, "Assigned to \"%s\": %s.\nReassign to \"%s\"?\nOld binding will be cleared.", held, name,
                    translateText(s->label, wanted, sizeof wanted));
     if (messageBox("CoE5SE: Key in use", text, "Reassign key", "Back", 0, 0, ESCAPE_KEY()) != 1) return 0;
     holder->value = KEY_NONE;
@@ -735,7 +735,7 @@ static void popupSettingErrors(void) {
     static char text[POPUP_TEXT_SIZE];
     size_t n = 0;
     int lines = 0, mods = 0, room = POPUP_LINES;
-    appendText(text, sizeof text, &n, "Settings left out (rule broken):\n");
+    appendText(text, sizeof text, &n, "Invalid settings left out:\n");
     for (int i = 0; i < badLineCount; i++)
         if (popupTakesMod(badLines[i].mod, i, 0)) {
             lines += appendLeftOut(badLines[i].mod, text, sizeof text, &n, &room);
@@ -757,7 +757,7 @@ static void popupSettingErrors(void) {
     if (hash == shownLeftOutHash) return;
     shownLeftOutHash = hash;
     writeLog("settings_left_out_popup", "mods=%d lines=%d", mods, lines);
-    okBox("CoE5SE: Mod Settings", text);
+    okBox("CoE5SE: Settings left out", text);
 }
 
 static void (*nextModsRun)(int);
@@ -797,9 +797,11 @@ static void modsRunHook(int level) {
     beamWidthBeforePass(level);
     lookColorBeforePass(level);
     recBonusBeforePass(level);
+    terrainRecruitsBeforePass(level);
     corpseWordsBeforePass(level);
     commanderCastsBeforePass(level);
     ritualMenusBeforePass(level);
+    itemScryBeforePass(level);
     itemSlotsBeforePass(level);
     afflictionWordsBeforePass(level);
     keepWeaponsBeforePass(level);
@@ -825,6 +827,7 @@ static void modsRunHook(int level) {
     applyLoadedSaveFactions(level);
     resolveFactionNames(level);
     ritualWordsAfterPass(level);
+    itemScryAfterPass(level);
     corpseWordsAfterPass(level);
     killWordsAfterPass(level);
     aiClassAfterPass(level);

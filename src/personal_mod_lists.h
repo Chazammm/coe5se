@@ -56,7 +56,7 @@ static void readPersonalModList(const char *body) {
     char *end = NULL;
     u64 slots = strtoull(body, &end, 16);
     if (end != body + 16 || *end != ':' || strlen(end + 1) >= PERSONAL_LIST_SIZE) {
-        writeLogWarning("personal_mod_list_dropped", "reason=bad_text");
+        writeLogWarning("personal_mod_list_dropped", "reason=bad_text text=%.60s", body);
         return;
     }
     char list[PERSONAL_LIST_SIZE];

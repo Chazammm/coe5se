@@ -33,7 +33,7 @@ static void nameApiCaller(void *caller, char *out, size_t size) {
 
 static int humanPlayerCount(void) {
     int humans = 0;
-    for (int i = 0; i < PLAYER_SLOTS; i++) humans += PG16(RVA_SLOT_CONTROLLER + 2 * i) == CONTROLLER_HUMAN;
+    for (int i = 0; i < PLAYER_SLOTS; i++) humans += PSLOT16(RVA_SLOT_CONTROLLER, i, 2) == CONTROLLER_HUMAN;
     return humans;
 }
 

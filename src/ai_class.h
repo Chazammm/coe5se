@@ -80,7 +80,7 @@ static void aiClassAfterPass(int level) {
 
 // ---- The roll -----------------------------------------------------------------------------------------
 static short *aiClassSlotField(unsigned int rva, int slot, unsigned int stride) {
-    return (short *)playerTableAddress(rva + (unsigned int)slot * stride);
+    return (short *)playerSlotAddress(rva, slot, (int)stride);
 }
 
 static int aiClassAbility(int c, int ability) {
