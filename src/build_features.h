@@ -2,7 +2,7 @@
 
 #define COE5SE_FEATURES(X) \
     X(STACK_COOKIE, "stack_cookie") X(EVENT_FINDERS, "event_finders") X(BATTLE_SNAPSHOT, "battle_snapshot") \
-    X(STRENGTH_INDEX, "strength_index") X(DROWN_SEARCH, "drown_search") X(TRACE_LOG_FILE, "trace_log_file") \
+    X(STRENGTH_INDEX, "strength_index") X(DROWN_SEARCH, "drown_search") X(FAR_SUMMON_COUNT, "far_summon_count") X(TRACE_LOG_FILE, "trace_log_file") \
     X(MAIN_MENU, "main_menu") X(GAME_MENU, "game_menu") X(MAP_EDITOR, "map_editor") \
     X(COMMANDER_LINES, "commander_lines") X(GAME_SAVE, "game_save") X(KEY_ACTIONS, "key_actions") \
     X(NEEDS_WORD, "needs_word") X(RITUAL_EXPANSION, "ritual_expansion") X(SPELL_PATH_EXPANSION, "spell_path_expansion") \
@@ -15,7 +15,8 @@
     X(NAME_LISTS, "name_lists") X(AI_CLASS, "ai_class") X(MAXDATA, "maxdata") X(PERSONALMOD, "personalmod") X(LAN_SCRIPTS, "lan_scripts") X(SIDECAR, "sidecar") \
     X(PLUGIN_CHECKS, "plugin_checks") X(MOD_SETTINGS, "mod_settings") X(LOAD_ORDER, "load_order") X(ITEM_SLOTS, "item_slots") X(CUSTOM_AFFLICTIONS, "custom_afflictions") \
     X(ITEM_SLOT_STATS, "item_slot_stats") X(MAP_RENDERING, "map_rendering") X(FONT_FALLBACK, "font_fallback") \
-    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text") X(GROWTH, "growth") X(BATTLE_TOKENS, "battle_tokens")
+    X(STEAM_RELAY, "steam_relay") X(TEXT_WRAP, "text_wrap") X(DRAWN_TEXT, "drawn_text") X(GROWTH, "growth") X(BATTLE_TOKENS, "battle_tokens") \
+    X(FOREST_WORDS, "forest_words")
 
 typedef enum {
 #define FEATURE_ENUM(id, name) FEATURE_##id,

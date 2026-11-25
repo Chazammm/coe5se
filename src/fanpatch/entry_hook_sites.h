@@ -1,6 +1,6 @@
 #pragma once
 
-#define ENTRY_HOOK_COUNT 84
+#define ENTRY_HOOK_COUNT 85
 #ifndef __APPLE__
 static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"find_all_mods", 0x1c9640, 5, 0, {{0, 0}}},
@@ -66,6 +66,7 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"unit_resistances", 0x32a250, 6, 0, {{0, 0}}},
     {"unit_flags", 0x328a00, 6, 0, {{0, 0}}},
     {"unit_max_hp", 0x3259d0, 5, 0, {{0, 0}}},
+    {"affliction_immune", 0x0dfe70, 8, 0, {{0, 0}}},
     {"unit_banishable", 0x322130, 6, 0, {{0, 0}}},
     {"weapon_hit", 0x0dcaa0, 5, 0, {{0, 0}}},
     {"ai_item_use_rating", 0x183790, 5, 0, {{0, 0}}},
@@ -153,6 +154,7 @@ static const EntryHookSite ENTRY_HOOK_SITES[ENTRY_HOOK_COUNT] = {
     {"unit_resistances", 0x567474, 16, 0, {{0, 0}}},
     {"unit_flags", 0x569d20, 16, 0, {{0, 0}}},
     {"unit_max_hp", 0x56a8e0, 16, 0, {{0, 0}}},
+    {"affliction_immune", 0x3ca034, 16, 0, {{0, 0}}},
     {"unit_banishable", 0x000000, 0, 0, {{0, 0}}},
     {"weapon_hit", 0x3c1f7c, 16, 0, {{0, 0}}},
     {"ai_item_use_rating", 0x4e8420, 16, 0, {{0, 0}}},

@@ -8,7 +8,7 @@
 #define AFFRES_IMMUNE                100
 #define AFFLICTION_CHUNKS_KEPT_AFTER 8
 #define AFFLICTION_UNIT_BYTES_MAX    (8 + CUSTOM_AFFLICTIONS_MAX * 9)
-#define AFFLICTION_STAT_COUNT        16
+#define AFFLICTION_STAT_COUNT        18
 _Static_assert(CUSTOM_AFFLICTIONS_MAX == AFFLICTION_DESCRIPTION_SLOTS, "one card description slot per kind");
 _Static_assert(CUSTOM_AFFLICTIONS_MAX <= 255, "a kind is one byte in AFFS and C5RA");
 
@@ -21,6 +21,11 @@ typedef struct {
     unsigned hash;
     int holders;
     unsigned effectStats;
+    int icon;
+    int picture;
+    int cardLua;
+    char cardLabel[64];
+    char cardText[512];
 } CustomAffliction;
 
 static CustomAffliction customAfflictions[CUSTOM_AFFLICTIONS_MAX];
@@ -91,6 +96,7 @@ static int addCustomAffliction(const char *name) {
     memset(a, 0, sizeof *a);
     snprintf(a->name, sizeof a->name, "%s", name);
     a->hash = afflictionNameHash(a->name);
+    a->icon = a->picture = a->cardLua = -1;
     return customAfflictionCount++;
 }
 
@@ -125,6 +131,7 @@ static AfflictionEntry *unitAfflictionEntry(int unit, int k) {
     return NULL;
 }
 
+static int afflictionEffectUnit = -1;
 static int afflictionUnitInUse(int unit) {
     if (unit < 0 || unit >= UNIT_TABLE_MAX || unit > G32(RVA_UNIT_COUNT)) return 0;
     size_t at = (size_t)unit * UNIT_SIZE;

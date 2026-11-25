@@ -44,9 +44,12 @@ static u64 drawMapEditorToolboxLines(int id, const char *text) {
     return result;
 }
 
+static void terrainDumpBeforeEditorFrame(void);
+static int terrainDumpAfterEditorFrame(int id);
 static int dispatchMapEditorLineClick(int a, int b) {
+    terrainDumpBeforeEditorFrame();
     mapEditorWaiting++;
-    int id = nextMapEditorWait(a, b);
+    int id = terrainDumpAfterEditorFrame(nextMapEditorWait(a, b));
     mapEditorWaiting--;
     int i = mapEditorLineIndex(id);
     if (i < 0 || !runLuaVisible(mapEditorLines[i].lua)) return id;
@@ -70,6 +73,7 @@ static int markMapScreenFrame(int a, int b) {
 }
 
 static void drawUiButtons(void);
+static void terrainDumpBeforeToolbox(void);
 
 static void gateMapEditorDraw(void) {
     if (mapEditorWaiting <= 0) {
@@ -93,6 +97,7 @@ static void gateMapEditorDraw(void) {
         mapDrawing--;
         return;
     }
+    terrainDumpBeforeToolbox();
     mapEditorDrawing++;
     nextMapEditorDraw();
     mapEditorDrawing--;

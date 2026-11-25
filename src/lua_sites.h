@@ -249,7 +249,7 @@ static const LuaSite luaSites[] = {
     {"LEARN_RANDOM_SPELL",            SITE_LEARN_RANDOM_SPELL,            K_OBSERVE, "i:iii"},
     {"GET_START_RITUALS",             SITE_GET_START_RITUALS,             K_OBSERVE, "x:i"},
     {"COMMANDER_LEARN_RITUAL",        SITE_COMMANDER_LEARN_RITUAL,        K_OBSERVE, "x:ii"},
-    {"BOLSTER_BLESSING",              SITE_BOLSTER_BLESSING,              K_OBSERVE, "x:iii"},
+    {"PLAYER_RANDOM_BLESSING",              SITE_PLAYER_RANDOM_BLESSING,              K_OBSERVE, "x:iii"},
     {"ADD_PLAYER_BLESSING",           SITE_ADD_PLAYER_BLESSING,           K_OBSERVE, "x:iiii"},
     {"REMOVE_ENCHANT",                SITE_REMOVE_ENCHANT,                K_OBSERVE, "i:iiii"},
     {"RITUAL_PAY_COSTS",              SITE_RITUAL_PAY_COSTS,              K_OBSERVE, "x:iiiii"},
@@ -282,7 +282,7 @@ static const LuaSite luaSites[] = {
     {"PLANESHIFT_COMMANDER",          SITE_PLANESHIFT_COMMANDER,          K_OBSERVE, "x:ii"},
     {"MIST_SPREAD",                   SITE_MIST_SPREAD,                   K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"TEMPERATURE_CHANGE",            SITE_TEMPERATURE_CHANGE,            K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
-    {"SPECIAL_SITE_POPULATE",                 SITE_SPECIAL_SITE_POPULATE,                 K_OBSERVE, "v:"},
+    {"ELEMENTAL_ANOMALY_SPAWN",                 SITE_ELEMENTAL_ANOMALY_SPAWN,                 K_OBSERVE, "v:"},
     {"UNIT_SWALLOW",                  SITE_UNIT_SWALLOW,                  K_OBSERVE, "v:ii"},
     {"UNIT_UNSWALLOW",                SITE_UNIT_UNSWALLOW,                K_OBSERVE, "x:i"},
     {"LIFEFORCE_DRAIN_UNIT",          SITE_LIFEFORCE_DRAIN_UNIT,          K_OBSERVE, "i:iii"},
@@ -294,8 +294,8 @@ static const LuaSite luaSites[] = {
     {"RECYCLE_UNITS",                 SITE_RECYCLE_UNITS,                 K_OBSERVE, SITE_SIGNATURE("i:", "x:")},
     {"RANDOM_TELEPORT",               SITE_RANDOM_TELEPORT,               K_OBSERVE, SITE_SIGNATURE("i:iii", "x:iii")},
     {"POP_HORRORS",                   SITE_POP_HORRORS,                   K_OBSERVE, "v:i"},
-    {"KILL_TERRAIN_UNITS",            SITE_KILL_TERRAIN_UNITS,            K_OBSERVE, "v:"},
-    {"KILL_SUNKEN_SHIPS",             SITE_KILL_SUNKEN_SHIPS,             K_OBSERVE, "v:ii"},
+    {"BATTLE_REMOVE_TERRAIN_UNITS",            SITE_BATTLE_REMOVE_TERRAIN_UNITS,            K_OBSERVE, "v:"},
+    {"BATTLE_REMOVE_SUNKEN_SHIPS",             SITE_BATTLE_REMOVE_SUNKEN_SHIPS,             K_OBSERVE, "v:ii"},
     {"CREATE_BOATS",                  SITE_CREATE_BOATS,                  K_OBSERVE, "x:"},
     {"BATTLE_TRAPS",                  SITE_BATTLE_TRAPS,                  K_OBSERVE, "x:"},
     {"BATTLE_ENCHANT_TRAPS",          SITE_BATTLE_ENCHANT_TRAPS,          K_OBSERVE, "x:"},
@@ -306,13 +306,13 @@ static const LuaSite luaSites[] = {
     {"CHECK_GAME_WON",                SITE_CHECK_GAME_WON,                K_OBSERVE, "v:"},
     {"SPY_CAUGHT",                    SITE_SPY_CAUGHT,                    K_OBSERVE, "x:"},
     {"TOGGLE_AUTO_RECRUIT",           SITE_TOGGLE_AUTO_RECRUIT,           K_OBSERVE, "i:iiii"},
-    {"CHANGE_LOYALTY",                SITE_CHANGE_LOYALTY,                K_OBSERVE, "i:iisi"},
+    {"UNITS_TURN_TO_HADES",                SITE_UNITS_TURN_TO_HADES,                K_OBSERVE, "i:iisi"},
     {"ALTER_TERRAIN_RECT",            SITE_ALTER_TERRAIN_RECT,            K_OBSERVE, "x:ii"},
     {"RESPAWN_VOID",                  SITE_RESPAWN_VOID,                  K_OBSERVE, "v:"},
     {"BATTLE_SIEGE_UNIT",             SITE_BATTLE_SIEGE_UNIT,             K_OBSERVE, "x:i"},
     {"GATHER_SHIPS",                  SITE_GATHER_SHIPS,                  K_OBSERVE, "v:"},
     {"ADVANCE_SHIPS",                 SITE_ADVANCE_SHIPS,                 K_OBSERVE, "v:"},
-    {"MOVE_ENCHANTS",                 SITE_MOVE_ENCHANTS,                 K_OBSERVE, "i:iiii"},
+    {"MOVE_ENCHANTS",                 SITE_MOVE_ENCHANTS,                 K_OBSERVE, SITE_SIGNATURE("i:iiii", "x:iiii")},
     {"MOVE_GEMS",                     SITE_MOVE_GEMS,                     K_OBSERVE, "v:iiii"},
     {"TAINTED_RITUAL_EFFECT",         SITE_TAINTED_RITUAL_EFFECT,         K_OBSERVE, "v:ii"},
     {"LOCATION_SWAP",                 SITE_LOCATION_SWAP,                 K_OBSERVE, SITE_SIGNATURE("i:iiii", "x:iiii")},
@@ -468,6 +468,7 @@ static const LuaSite luaSites[] = {
     {"BANISH_DESTINATION",            SITE_BANISH_DESTINATION,            K_DESTINATION, "i:iii"},
     {"IMMORTAL_REFORM",               SITE_IMMORTAL_REFORM,               K_REFORM,  "v:iii"},
     {"UNIT_HEAL_RATE",                SITE_UNIT_HEAL_RATE,                K_CALL,    "i:i"},
+    {"ATTACK_INIT",                   SITE_ATTACK_INIT,                   K_CALL,    "i:iiii"},
     {"RITUAL_COST_PERCENT",           SITE_RITUAL_COST_PERCENT,           K_OBSERVE, "i:ii"},
 };
 
@@ -598,7 +599,7 @@ static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
     {SITE_LEARN_RANDOM_SPELL, "ukk", 'k'},
     {SITE_GET_START_RITUALS, "c", '-'},
     {SITE_COMMANDER_LEARN_RITUAL, "cr", '-'},
-    {SITE_BOLSTER_BLESSING, "pk-", '-'},
+    {SITE_PLAYER_RANDOM_BLESSING, "pk-", '-'},
     {SITE_ADD_PLAYER_BLESSING, "pk--", '-'},
     {SITE_REMOVE_ENCHANT, "kkxy", 'k'},
     {SITE_RITUAL_PAY_COSTS, "pcr--", '-'},
@@ -632,7 +633,7 @@ static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
     {SITE_PLANESHIFT_COMMANDER, "cl", '-'},
     {SITE_MIST_SPREAD, "", 'k'},
     {SITE_TEMPERATURE_CHANGE, "", 'k'},
-    {SITE_SPECIAL_SITE_POPULATE, "", '-'},
+    {SITE_ELEMENTAL_ANOMALY_SPAWN, "", '-'},
     {SITE_UNIT_SWALLOW, "uu", '-'},
     {SITE_UNIT_UNSWALLOW, "u", '-'},
     {SITE_LIFEFORCE_DRAIN_UNIT, "ku-", '-'},
@@ -644,8 +645,8 @@ static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
     {SITE_RECYCLE_UNITS, "", 'k'},
     {SITE_RANDOM_TELEPORT, "ukk", 'k'},
     {SITE_POP_HORRORS, "-", '-'},
-    {SITE_KILL_TERRAIN_UNITS, "", '-'},
-    {SITE_KILL_SUNKEN_SHIPS, "xy", '-'},
+    {SITE_BATTLE_REMOVE_TERRAIN_UNITS, "", '-'},
+    {SITE_BATTLE_REMOVE_SUNKEN_SHIPS, "xy", '-'},
     {SITE_CREATE_BOATS, "", '-'},
     {SITE_BATTLE_TRAPS, "", '-'},
     {SITE_BATTLE_ENCHANT_TRAPS, "", '-'},
@@ -656,7 +657,7 @@ static const ObservedSiteKinds OBSERVED_SITE_KINDS[] = {
     {SITE_CHECK_GAME_WON, "", '-'},
     {SITE_SPY_CAUGHT, "", '-'},
     {SITE_TOGGLE_AUTO_RECRUIT, "pxym", 'k'},
-    {SITE_CHANGE_LOYALTY, "xy-p", 'k'},
+    {SITE_UNITS_TURN_TO_HADES, "xy-p", 'k'},
     {SITE_ALTER_TERRAIN_RECT, "xy", '-'},
     {SITE_RESPAWN_VOID, "", '-'},
     {SITE_BATTLE_SIEGE_UNIT, "u", '-'},
@@ -960,7 +961,7 @@ static int luaSiteIsUnitStat(CallSite site) {
     case SITE_UNIT_DAMAGE_BONUS: case SITE_UNIT_MORALE: case SITE_UNIT_MR: case SITE_UNIT_BATTLE_RANK: case SITE_UNIT_MAX_HP:
     case SITE_UNIT_PATH_BONUS: case SITE_UNIT_BLINDNESS: case SITE_UNIT_INCAPACITATED: case SITE_UNIT_FIRE_RESISTANCE:
     case SITE_DOATTACK: case SITE_BATTLE_ADVANCE_UNIT: case SITE_UNIT_BANISHABLE: case SITE_BANISH_DESTINATION:
-    case SITE_UNIT_HEAL_RATE: return 1;
+    case SITE_UNIT_HEAL_RATE: case SITE_ATTACK_INIT: return 1;
     default: return 0;
     }
 }
@@ -1017,10 +1018,12 @@ static void checkNextArgs(const LuaSite *ls, LuaArgs *a, const LuaArgs *orig, co
                              PATH[3] = {{"unit", "unit_changed"}, {"path", "path_changed"}, {NULL, NULL}},
                              ADVANCE[3] = {{"unit", "unit_changed"}, {"ambush", "ambush_changed"}, {NULL, NULL}};
         static const KeptArg CAUSE[3] = {{"unit", "unit_changed"}, {"weapon", "weapon_changed"}, {"attacker", "attacker_changed"}};
+        static const KeptArg INIT[3] = {{"unit", "unit_changed"}, {"slot", "slot_changed"}, {"weapon", "weapon_changed"}};
         const KeptArg *kept = ls->site == SITE_MOVE_INDEPENDENT_ARMY ? ARMY : ls->site == SITE_AI_COUNT_CITADELS ? PLAYER
                             : ls->site == SITE_DOATTACK ? ATTACK : ls->site == SITE_UNIT_PATH_BONUS ? PATH
                             : ls->site == SITE_BATTLE_ADVANCE_UNIT ? ADVANCE
-                            : ls->site == SITE_UNIT_BANISHABLE || ls->site == SITE_BANISH_DESTINATION ? CAUSE : UNIT;
+                            : ls->site == SITE_UNIT_BANISHABLE || ls->site == SITE_BANISH_DESTINATION ? CAUSE
+                            : ls->site == SITE_ATTACK_INIT ? INIT : UNIT;
         for (int i = 0; i < 3 && kept[i].name; i++) {
             if ((int)a->a[i] != (int)orig->a[i])
                 refuseLuaCall(mod, ls->name, kept[i].reason, "%s=%d own=%d", kept[i].name, (int)a->a[i], (int)orig->a[i]);
@@ -1802,6 +1805,11 @@ static const struct { const char *name, *now; } LUA_SITE_FIRST_NAMES[] = {
     {"COMMANDER_STRENGTH", "COMMANDER_BATTLE_STRENGTH"},
     {"KILL_UNIT_999", "KILL_UNIT"},
     {"DAMAGE_UNIT_PLAIN", "SUBTRACT_UNIT_HP"},
+    {"BOLSTER_BLESSING", "PLAYER_RANDOM_BLESSING"},
+    {"SPECIAL_SITE_POPULATE", "ELEMENTAL_ANOMALY_SPAWN"},
+    {"KILL_TERRAIN_UNITS", "BATTLE_REMOVE_TERRAIN_UNITS"},
+    {"KILL_SUNKEN_SHIPS", "BATTLE_REMOVE_SUNKEN_SHIPS"},
+    {"CHANGE_LOYALTY", "UNITS_TURN_TO_HADES"},
 };
 
 static const LuaSite *luaSiteOfName(const char *name) {

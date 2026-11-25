@@ -87,6 +87,13 @@ static int luaGameLogicOpenNow(const LuaScript *s) {
 
 static LuaScript **luaScripts;
 static int luaScriptCount, luaScriptCapacity;
+static int contentScriptRuns(void) {
+    for (int i = 0; i < luaScriptCount; i++) {
+        const LuaScript *s = luaScripts[i];
+        if (s->L && !s->dead && !s->retired && modClassNow(s->mod) == LUA_CLASS_CONTENT) return 1;
+    }
+    return 0;
+}
 
 typedef struct { char mod[MOD_NAME_MAX], path[MAX_PATH]; unsigned hash; } LoadedScriptFile;
 static LoadedScriptFile *loadedScriptFiles;

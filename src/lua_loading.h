@@ -61,7 +61,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"hideMainMenuButton", lHideMainMenuButton}, {"addScreen", lAddScreen}, {"rebindKey", lRebindKey},
     {"addActionKey", lAddActionKey}, {"actionKey", lActionKey}, {"findMonster", lFindMonster},
     {"dataFolder", lDataFolder}, {"readIni", lReadIni}, {"writeIni", lWriteIni}, {"listIni", lListIni},
-    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"newUnits", lNewUnits},
+    {"deleteIni", lDeleteIni}, {"copyText", lCopyText}, {"drawTestField", lDrawTestField}, {"fireTestField", lFireTestField}, {"fightTestField", lFightTestField}, {"closeTestField", lCloseTestField}, {"addTestFieldUnits", lAddTestFieldUnits}, {"moveTestFieldUnit", lMoveTestFieldUnit}, {"stopTestFight", lStopTestFight}, {"spellInfo", lSpellInfo}, {"lookName", lLookName}, {"saveNewMod", lSaveNewMod}, {"spawnUnit", lSpawnUnit}, {"spawnCommander", lSpawnCommander}, {"promoteUnit", lPromoteUnit}, {"renameCommander", lRenameCommander}, {"newUnits", lNewUnits},
     {"monsterVariant", lMonsterVariant}, {"portalExits", lPortalExits}, {"onPortalCrossing", lOnPortalCrossing}, {"squareUnits", lSquareUnits}, {"revealMap", lRevealMap}, {"modEvents", lModEvents}, {"runModEvent", lRunModEvent}, {"centerMap", lCenterMap}, {"viewArmy", lViewArmy}, {"armies", lArmies}, {"route", lRoute},
     {"scrapRitualPlan", lScrapRitualPlan}, {"planRitual", lPlanRitual}, {"aiRitualBad", lAiRitualBad}, {"aiRitualBadTime", lAiRitualBadTime}, {"aiItemValue", lAiItemValue}, {"aiItemUseRating", lAiItemUseRating}, {"aiRandomEnemy", lAiRandomEnemy}, {"terrainMatch", lTerrainMatch},
     {"releaseFollower", lReleaseFollower}, {"transferFollower", lTransferFollower},
@@ -70,14 +70,14 @@ static const luaL_Reg LUA_COE5[] = {
     {"addShopOffer", lAddShopOffer}, {"guildCount", lGuildCount},
     {"aiBuyOffer", lAiBuyOffer}, {"aiActions", lAiActions}, {"runAiTurn", lRunAiTurn}, {"recruitScreen", lRecruitScreen}, {"showSight", lShowSight}, {"restoreSight", lRestoreSight}, {"reportBattlesTo", lReportBattlesTo}, {"changedBy", lChangedBy}, {"addMapEditorLine", lAddMapEditorLine}, {"mapView", lMapView},
     {"addCommanderLine", lAddCommanderLine}, {"addTraitLine", lAddTraitLine}, {"teleportCommander", lTeleportCommander}, {"mayEnterSquare", lMayEnterSquare},
-    {"keepTraceLines", lKeepTraceLines}, {"addPlane", lAddPlane}, {"setPlaneShape", lSetPlaneShape}, {"planeIndex", lPlaneIndex}, {"factionSlot", lFactionSlot}, {"addFaction", lAddFaction},
-    {"setPlaneTint", lSetPlaneTint}, {"clearPlaneTint", lClearPlaneTint}, {"setTerrainLooks", lSetTerrainLooks},
+    {"keepTraceLines", lKeepTraceLines}, {"addPlane", lAddPlane}, {"setPlaneShape", lSetPlaneShape}, {"planeIndex", lPlaneIndex}, {"factionPlayer", lFactionSlot}, {"addFaction", lAddFaction},
+    {"setPlaneTint", lSetPlaneTint}, {"clearPlaneTint", lClearPlaneTint}, {"setTerrainLooks", lSetTerrainLooks}, {"setSpritePack", lSetSpritePack}, {"setTerrainScatter", lSetTerrainScatter}, {"setTerrainForest", lSetTerrainForest},
     {"setRandomEventsOff", lSetRandomEventsOff}, {"randomEventsOff", lRandomEventsOff}, {"gameEvents", lGameEvents}, {"queueGameEvent", lQueueGameEvent},
     {"addBattleMap", lAddBattleMap}, {"setBattleScatter", lSetBattleScatter}, {"addTransport", lAddTransport},
     {"giveAffliction", lGiveAffliction}, {"cureAffliction", lCureAffliction}, {"hasAffliction", lHasAffliction},
     {"unitAfflictions", lUnitAfflictions}, {"afflictedUnits", lAfflictedUnits}, {"afflictionTurn", lAfflictionTurn},
     {"afflictionValue", lAfflictionValue}, {"setAfflictionTurn", lSetAfflictionTurn}, {"setAfflictionValue", lSetAfflictionValue},
-    {"removeAffliction", lRemoveAffliction}, {"afflictionEffect", lAfflictionEffect},
+    {"removeAffliction", lRemoveAffliction}, {"afflictionEffect", lAfflictionEffect}, {"afflictionCardLine", lAfflictionCardLine},
     {"addModCommand", lAddModCommand}, {"alterCommand", lAlterCommand}, {"alterEventTrigger", lAlterEventTrigger}, {"alterEventAction", lAlterEventAction}, {"alterCommandAfter", lAlterCommandAfter}, {"chooseLocation", lChooseLocation}, {"battleBanishUnit", lBattleBanishUnit}, {"battleSummon", lBattleSummon}, {"netRole", lNetRole}, {"localPlayer", lLocalPlayer}, LUA_GAME_CALLS(GAME_CALL_REG) COE5SE_EXTRA_LUA_FUNCTIONS {NULL, NULL},
 };
 
@@ -92,8 +92,36 @@ static const struct { const char *name, *now; } LUA_CALL_FIRST_NAMES[] = {
     {"unitRemoveItem", "takeItemNumber"},
     {"slotBlessingOf", "playerBlessingValue"},
     {"squareEffectiveTemp", "squareEffectiveTemperature"},
-    {"loneHumanNow", "soleHumanSlot"},
+    {"loneHumanNow", "soleHumanPlayer"},
+    {"soleHumanSlot", "soleHumanPlayer"},
+    {"factionSlot", "factionPlayer"},
+    {"countSlotsWithController", "countPlayersWithController"},
 };
+
+static const struct { const char *name, *now; } LUA_VALUE_FIRST_NAMES[] = {
+    {"slotController", "playerController"}, {"slotClass", "playerClass"}, {"slotAi", "playerAi"}, {"slotTeam", "playerTeam"},
+    {"slotName", "playerName"}, {"slotColorRed", "playerColorRed"}, {"slotColorGreen", "playerColorGreen"},
+    {"slotColorBlue", "playerColorBlue"}, {"slotResource", "playerResource"}, {"slotAiIncome", "playerAiIncome"},
+    {"slotAiTrade", "playerAiTrade"}, {"slotIncome", "playerIncome"}, {"slotTradeType", "playerTradeType"},
+    {"slotTradeMode", "playerTradeMode"}, {"slotLeader", "playerLeader"}, {"slotRitualCasts", "playerRitualCasts"},
+    {"slotHomeX", "playerHomeX"}, {"slotHomeY", "playerHomeY"}, {"slotBolsterDevotions", "playerBlessingRolls"},
+    {"slotDivineFavor", "playerDivineFavor"}, {"slotCitadels", "playerCitadels"}, {"slotAbility", "playerAbility"},
+    {"slotAbilitySum", "playerAbilitySum"}, {"slotLockClass", "playerFixedClass"},
+    {"slotLockController", "playerFixedController"}, {"slotLockAi", "playerFixedAi"}, {"slotLockTeam", "playerFixedTeam"},
+    {"slotMostCitadels", "playerAiMostCitadels"}, {"slotBlessingId", "playerBlessingListId"},
+    {"slotBlessingValue", "playerBlessingListValue"}, {"commanderCostAvailable", "commanderCostOnHand"},
+};
+
+static void useValueNameNow(lua_State *L) {
+    if (lua_type(L, 1) != LUA_TSTRING) return;
+    const char *name = lua_tostring(L, 1);
+    for (size_t i = 0; i < sizeof LUA_VALUE_FIRST_NAMES / sizeof LUA_VALUE_FIRST_NAMES[0]; i++) {
+        if (strcmp(LUA_VALUE_FIRST_NAMES[i].name, name)) continue;
+        lua_pushstring(L, LUA_VALUE_FIRST_NAMES[i].now);
+        lua_replace(L, 1);
+        return;
+    }
+}
 static const luaL_Reg LUA_UI[] = {
     {"drawMonsterSprite", lDrawMonsterSprite}, {"drawItemSprite", lDrawItemSprite},
     {"screenBegin", lScreenBegin}, {"sectionBegin", lSectionBegin}, {"sectionEnd", lSectionEnd}, {"text", lText},
@@ -254,7 +282,7 @@ static const char *const PREVIEW_WORLD_CALLS[] = {
     "gen.addGroundItems", "gen.setPortalPair", "gen.linkNewPortal", "gen.stampPiece", "gen.setFixedTemperature", "gen.setTemperatures", "gen.heatBlob", "gen.floodPlane", "gen.updateMoistWalls", "gen.fixDiagonals",
 };
 static const char *const PREVIEW_WORLD_VALUES[] = {
-    "squareTerrain", "squarePortal", "squareGround", "squareTemperature", "squareName", "squareCorpses", "slotResource", "slotClass", "slotController", "slotTeam", "eventVar", "unitApUsed",
+    "squareTerrain", "squarePortal", "squareGround", "squareTemperature", "squareName", "squareCorpses", "playerResource", "playerClass", "playerController", "playerTeam", "eventVar", "unitApUsed",
     "society", "wilder", "mapW", "mapH", "startFlags", "northPart", "southPart",
 };
 
@@ -346,6 +374,7 @@ static const char *luaCallNetRefusal(lua_State *L, const LuaScript *s, const lua
 static int luaGate(lua_State *L) {
     const luaL_Reg *fn = lua_touserdata(L, lua_upvalueindex(1));
     LuaScript *s = luaScriptOf(L);
+    if (fn->func == lGet || fn->func == lSet) useValueNameNow(L);
     const char *reason = s && s->stopping ? "script_stopped"
                        : !s || s != luaRunning ? "not_running"
                        : luaCommandsLoading && !luaCommandsFileCall(fn) ? "commands_file"
@@ -680,6 +709,7 @@ static LuaScript *newLuaScript(const char *mod, const char *folder, const char *
     installBattleReplayScripts();
     installBattleBanish();
     installBattleSummon();
+    installAffresImmunity();
     return s;
 }
 

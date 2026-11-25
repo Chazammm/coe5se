@@ -1,11 +1,15 @@
 #pragma once
 
 typedef struct { CallSite site; int skip; } AfflictionStat;
-static const AfflictionStat AFFLICTION_STATS[AFFLICTION_STAT_COUNT] = {
+#define AFFLICTION_SITE_STATS   (AFFLICTION_STAT_COUNT - 1)
+#define AFFLICTION_STAT_ABILITY (AFFLICTION_STAT_COUNT - 1)
+#define AFFLICTION_ABILITY_NAME "UNIT_ABILITY"
+#define AFFLICTION_ABILITY_RUNS_AS SITE_UNIT_RESISTANCES
+static const AfflictionStat AFFLICTION_STATS[AFFLICTION_SITE_STATS] = {
     {SITE_UNIT_DAMAGE_BONUS, 0}, {SITE_UNIT_MORALE, 0}, {SITE_UNIT_MR, 0}, {SITE_UNIT_BATTLE_RANK, 0}, {SITE_UNIT_MAX_HP, 0},
     {SITE_UNIT_PATH_BONUS, 0}, {SITE_UNIT_BLINDNESS, 0}, {SITE_UNIT_INCAPACITATED, 0}, {SITE_UNIT_FIRE_RESISTANCE, 0},
     {SITE_UNIT_ARMOR, 0}, {SITE_UNIT_RESISTANCES, 0}, {SITE_UNIT_FLAGS, 0}, {SITE_UNIT_BATTLE_STRENGTH, 0}, {SITE_UNIT_STATE_FLAGS, 0},
-    {SITE_DOATTACK, 1}, {SITE_BATTLE_ADVANCE_UNIT, 1},
+    {SITE_DOATTACK, 1}, {SITE_BATTLE_ADVANCE_UNIT, 1}, {SITE_ATTACK_INIT, 0},
 };
 
 typedef struct {
@@ -20,16 +24,22 @@ static int afflictionEffectFirst[CUSTOM_AFFLICTIONS_MAX][AFFLICTION_STAT_COUNT];
 static int afflictionStatDepth[AFFLICTION_STAT_COUNT];
 static int afflictionStatInstalled[AFFLICTION_STAT_COUNT];
 typedef u64 (*AfflictionStatFn)(u64, u64, u64, u64, u64, u64, u64, u64);
-static AfflictionStatFn nextAfflictionStat[AFFLICTION_STAT_COUNT];
+static AfflictionStatFn nextAfflictionStat[AFFLICTION_SITE_STATS];
 
 static int afflictionStatNamed(const char *site) {
+    if (!strcmp(site, AFFLICTION_ABILITY_NAME)) return AFFLICTION_STAT_ABILITY;
     const LuaSite *ls = luaSiteOfName(site);
-    for (int i = 0; ls && i < AFFLICTION_STAT_COUNT; i++)
+    for (int i = 0; ls && i < AFFLICTION_SITE_STATS; i++)
         if (ls->site == AFFLICTION_STATS[i].site) return i;
     return -1;
 }
 
+static const char *afflictionStatName(int stat) {
+    return stat == AFFLICTION_STAT_ABILITY ? "unit_ability" : SITES[AFFLICTION_STATS[stat].site].name;
+}
+
 static const LuaSite *afflictionStatSite(int stat) {
+    if (stat < 0 || stat >= AFFLICTION_SITE_STATS) return NULL;
     for (int r = 0; r < LUA_SITE_COUNT; r++)
         if (luaSites[r].site == AFFLICTION_STATS[stat].site) return &luaSites[r];
     return NULL;
@@ -106,13 +116,83 @@ static u64 applyAfflictionEffects(int stat, const u64 *args, u64 value) {
     int kinds[CUSTOM_AFFLICTIONS_MAX], n = afflictionKindsWithEffect(unit, stat, kinds);
     if (!n) return value;
     afflictionStatDepth[stat]++;
+    int effectUnitWas = afflictionEffectUnit;
+    afflictionEffectUnit = unit;
     for (int i = 0; i < n; i++)
         for (int r = afflictionEffectFirst[kinds[i]][stat]; r; r = afflictionEffects[r - 1].next) {
             value = runAfflictionEffect(&afflictionEffects[r - 1], unit, value, args);
             if (AFFLICTION_STATS[stat].skip && !value) break;
         }
+    afflictionEffectUnit = effectUnitWas;
     afflictionStatDepth[stat]--;
     return value;
+}
+
+// ---- UNIT_ABILITY: an ability's amount, folded into the game's totals --------------------------------------
+typedef struct {
+    const AfflictionEffect *e;
+    int unit, ability;
+    lua_Integer value;
+} AfflictionAbilityCall;
+
+static int pushAfflictionAbility(lua_State *L, void *ctx) {
+    const AfflictionAbilityCall *c = ctx;
+    luaL_checkstack(L, 4, "an affliction effect's arguments");
+    lua_rawgeti(L, LUA_REGISTRYINDEX, c->e->ref);
+    lua_pushinteger(L, c->unit);
+    lua_pushinteger(L, c->value);
+    lua_pushinteger(L, c->ability);
+    return 3;
+}
+
+static lua_Integer runAfflictionAbility(const AfflictionEffect *e, int unit, int ability, lua_Integer value) {
+    LuaScript *s = e->s;
+    if (!s || s->dead || !s->L || !luaSiteOpenNow(s, AFFLICTION_ABILITY_RUNS_AS)) return value;
+    AfflictionAbilityCall c = {e, unit, ability, value};
+    CallSite outerSite = luaRunningSite;
+    luaRunningSite = AFFLICTION_ABILITY_RUNS_AS;
+    noteBattleScriptCall(s);
+    int ok = callLuaProtected(s, pushAfflictionAbility, &c, 1);
+    luaRunningSite = outerSite;
+    if (!ok) return value;
+    lua_State *L = s->L;
+    lua_Integer n = 0;
+    if (lua_isnil(L, -1)) {
+    } else if (luaWholeNumber(L, -1, &n)) {
+        value = n < INT_MIN ? INT_MIN : n > INT_MAX ? INT_MAX : n;
+    } else {
+        refuseLuaCall(s->mod, "coe5.afflictionEffect", "not_a_number", "site=%s name=%.63s type=%s", AFFLICTION_ABILITY_NAME,
+                      customAfflictions[e->kind].name, luaL_typename(L, -1));
+    }
+    lua_pop(L, 1);
+    closeDeadLuaScript(s);
+    return value;
+}
+
+static int afflictionAbilityHolder(int unit) {
+    if (!afflictionStatHolders[AFFLICTION_STAT_ABILITY] || !unitAfflictionCount(unit)) return 0;
+    const AfflictionList *l = &unitAfflictionLists[unit];
+    for (int i = 0; i < l->count; i++) {
+        int k = l->entries[i].kind;
+        if ((customAfflictions[k].effectStats >> AFFLICTION_STAT_ABILITY & 1) && customAfflictionDeclared(k)) return 1;
+    }
+    return 0;
+}
+
+static int afflictionAbilityAmount(int unit, int ability) {
+    if (afflictionStatDepth[AFFLICTION_STAT_ABILITY] || ability <= 0) return 0;
+    int kinds[CUSTOM_AFFLICTIONS_MAX], n = afflictionKindsWithEffect(unit, AFFLICTION_STAT_ABILITY, kinds);
+    if (!n) return 0;
+    afflictionStatDepth[AFFLICTION_STAT_ABILITY]++;
+    int effectUnitWas = afflictionEffectUnit;
+    afflictionEffectUnit = unit;
+    lua_Integer value = 0;
+    for (int i = 0; i < n; i++)
+        for (int r = afflictionEffectFirst[kinds[i]][AFFLICTION_STAT_ABILITY]; r; r = afflictionEffects[r - 1].next)
+            value = runAfflictionAbility(&afflictionEffects[r - 1], unit, ability, value);
+    afflictionEffectUnit = effectUnitWas;
+    afflictionStatDepth[AFFLICTION_STAT_ABILITY]--;
+    return (int)value;
 }
 
 static u64 runAfflictionStat(int stat, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u64 a6, u64 a7, u64 a8) {
@@ -130,16 +210,24 @@ static u64 runAfflictionStat(int stat, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u
 AFFLICTION_STAT_HOOK(0) AFFLICTION_STAT_HOOK(1) AFFLICTION_STAT_HOOK(2) AFFLICTION_STAT_HOOK(3) AFFLICTION_STAT_HOOK(4)
 AFFLICTION_STAT_HOOK(5) AFFLICTION_STAT_HOOK(6) AFFLICTION_STAT_HOOK(7) AFFLICTION_STAT_HOOK(8) AFFLICTION_STAT_HOOK(9)
 AFFLICTION_STAT_HOOK(10) AFFLICTION_STAT_HOOK(11) AFFLICTION_STAT_HOOK(12) AFFLICTION_STAT_HOOK(13) AFFLICTION_STAT_HOOK(14)
-AFFLICTION_STAT_HOOK(15)
+AFFLICTION_STAT_HOOK(15) AFFLICTION_STAT_HOOK(16)
 #undef AFFLICTION_STAT_HOOK
-static const AfflictionStatFn AFFLICTION_STAT_HOOKS[AFFLICTION_STAT_COUNT] = {
+static const AfflictionStatFn AFFLICTION_STAT_HOOKS[AFFLICTION_SITE_STATS] = {
     afflictionStatHook0, afflictionStatHook1, afflictionStatHook2, afflictionStatHook3, afflictionStatHook4, afflictionStatHook5,
     afflictionStatHook6, afflictionStatHook7, afflictionStatHook8, afflictionStatHook9, afflictionStatHook10, afflictionStatHook11,
-    afflictionStatHook12, afflictionStatHook13, afflictionStatHook14, afflictionStatHook15,
+    afflictionStatHook12, afflictionStatHook13, afflictionStatHook14, afflictionStatHook15, afflictionStatHook16,
 };
 
 static int installAfflictionStat(int stat) {
     if (afflictionStatInstalled[stat]) return afflictionStatInstalled[stat] > 0;
+    if (stat == AFFLICTION_STAT_ABILITY) {
+        scriptAbilityHolder = afflictionAbilityHolder, scriptAbilityAmount = afflictionAbilityAmount;
+        int ok = featureOn(FEATURE_ITEM_SLOT_STATS) && installItemSlotStats();
+        if (ok) openItemStatSitesToScripts();
+        afflictionStatInstalled[stat] = ok ? 1 : -1;
+        writeInstallLogFields("affliction_effect_site_installed", ok, 1, "site=%s", afflictionStatName(stat));
+        return ok;
+    }
     CallSite site = AFFLICTION_STATS[stat].site;
     int ok = wrapInnermost(site, (void *)AFFLICTION_STAT_HOOKS[stat], (void **)&nextAfflictionStat[stat]);
     afflictionStatInstalled[stat] = ok ? 1 : -1;
@@ -181,7 +269,7 @@ static int lAfflictionEffect(lua_State *L) {
     int r = afflictionEffectCount++;
     afflictionEffects[r] = (AfflictionEffect){s, luaL_ref(L, LUA_REGISTRYINDEX), k, stat, 0};
     linkAfflictionEffect(r);
-    writeLog("affliction_effect_added", "mod=%s name=%.63s site=%s declared=%d", mod, customAfflictions[k].name, SITES[AFFLICTION_STATS[stat].site].name,
+    writeLog("affliction_effect_added", "mod=%s name=%.63s site=%s declared=%d", mod, customAfflictions[k].name, afflictionStatName(stat),
              customAfflictionDeclared(k));
     lua_pushboolean(L, 1);
     return 1;

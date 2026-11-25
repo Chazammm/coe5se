@@ -182,7 +182,7 @@ static int endsWith(const char *text, const char *ending) {
 static const char *findModFile(const char *folder, const char *spec, const char *const endings[2], const char *const reasons[4], char *path,
                                size_t size) {
     size_t length = strlen(spec);
-    if (length < 4 || length > PLANE_ICON_SPEC_MAX || strncmp(spec, "./", 2) || (!endsWith(spec + 2, endings[0]) && !endsWith(spec + 2, endings[1])))
+    if (length < 3 || length > PLANE_ICON_SPEC_MAX || strncmp(spec, "./", 2) || (!endsWith(spec + 2, endings[0]) && !endsWith(spec + 2, endings[1])))
         return reasons[0];
     for (const char *part = spec + 2; *part;) {
         size_t n = strcspn(part, "/");
@@ -305,12 +305,16 @@ static int lSetPlaneShape(lua_State *L) {
 }
 
 static int lSetTerrainLooks(lua_State *L);
+static int lSetSpritePack(lua_State *L);
+static int lSetTerrainScatter(lua_State *L);
+static int lSetTerrainForest(lua_State *L);
 static int lAddBattleMap(lua_State *L);
 static int lAddTransport(lua_State *L);
 static int lGiveAffliction(lua_State *L), lCureAffliction(lua_State *L), lHasAffliction(lua_State *L), lUnitAfflictions(lua_State *L);
 static int lAfflictedUnits(lua_State *L), lAfflictionTurn(lua_State *L), lAfflictionValue(lua_State *L), lSetAfflictionTurn(lua_State *L);
 static int lSetAfflictionValue(lua_State *L), lRemoveAffliction(lua_State *L);
 static int lAfflictionEffect(lua_State *L);
+static int lAfflictionCardLine(lua_State *L);
 static void dropAfflictionEffects(const LuaScript *s);
 static int lSetBattleScatter(lua_State *L);
 static int lFactionSlot(lua_State *L);
@@ -441,6 +445,35 @@ static int lSetting(lua_State *L) {
     else lua_pushboolean(L, value != 0);
     return 1;
 }
+static const char *sendMessageWhere(lua_State *L, int at, int *x, int *y, int *kind, int *extra) {
+    if (lua_isnoneornil(L, at)) return NULL;
+    if (!lua_istable(L, at)) return "bad_where";
+    lua_getfield(L, at, "x");
+    lua_getfield(L, at, "y");
+    lua_getfield(L, at, "unit");
+    int hasX = !lua_isnil(L, -3), hasY = !lua_isnil(L, -2), hasUnit = !lua_isnil(L, -1);
+    const char *problem = NULL;
+    if (hasX != hasY || (hasX && (!lua_isinteger(L, -3) || !lua_isinteger(L, -2))) || (hasUnit && !lua_isinteger(L, -1))) problem = "bad_where";
+    lua_Integer wx = hasX && !problem ? lua_tointeger(L, -3) : -1, wy = hasY && !problem ? lua_tointeger(L, -2) : -1;
+    lua_Integer unit = hasUnit && !problem ? lua_tointeger(L, -1) : -1;
+    lua_pop(L, 3);
+    if (problem) return problem;
+    if (hasUnit) {
+        if (unit < 0 || unit > G32(RVA_UNIT_COUNT) || unit >= UNIT_TABLE_MAX || (short)G16(RVA_UNIT_MONSTER + (size_t)unit * UNIT_SIZE) < 0)
+            return "no_unit";
+        if (!hasX) wx = G32(RVA_UNIT_X + (size_t)unit * UNIT_SIZE), wy = G32(RVA_UNIT_X + 4 + (size_t)unit * UNIT_SIZE);
+        int commander = unitCommanderIndex((int)unit);
+        *kind = commander >= 0 ? MESSAGE_KIND_COMMANDER : MESSAGE_KIND_UNIT;
+        *extra = commander >= 0 ? commander : (int)unit;
+    }
+    if (wx < 0 || wy < 0 || wx >= G32(RVA_MAP_DEPTH) || wy >= G32(RVA_MAP_H) || wx >= MAP_COLUMNS_MAX || wy >= MAP_COLUMN_SQUARES) {
+        if (hasX) return "off_map";
+        wx = wy = -1;
+        if (hasUnit) *kind = MESSAGE_KIND_UNIT, *extra = (int)unit;
+    }
+    *x = (int)wx, *y = (int)wy;
+    return NULL;
+}
 static int lSendMessage(lua_State *L) {
     if (netShutsGameCalls()) {
         refuseLuaCall(runningLuaMod(), "coe5.sendMessage", "network_game", "player=%lld", (long long)lua_tointeger(L, 1));
@@ -454,7 +487,14 @@ static int lSendMessage(lua_State *L) {
         lua_pushinteger(L, MESSAGE_NOT_ADDED);
         return 1;
     }
-    lua_pushinteger(L, luaApi->sendMessage((int)player, title, text));
+    int x = -1, y = -1, kind = MESSAGE_KIND_SQUARE, extra = 0;
+    const char *problem = sendMessageWhere(L, 4, &x, &y, &kind, &extra);
+    if (problem) {
+        refuseLuaCall(runningLuaMod(), "coe5.sendMessage", problem, "player=%lld title=%s", (long long)player, title);
+        lua_pushinteger(L, MESSAGE_NOT_ADDED);
+        return 1;
+    }
+    lua_pushinteger(L, sendMessageAt(__builtin_return_address(0), (int)player, title, text, x, y, kind, extra));
     return 1;
 }
 

@@ -192,17 +192,6 @@ static int readCopyGroupOf(int c, int *lead, int *player) {
     *player = *lead > G32(RVA_UNIT_COUNT) ? -1 : readCopyUnitPlayer(*lead);
     return G32(RVA_UNIT_X + readCopyUnitAt(*lead)) >= 0 && G32(RVA_UNIT_X + 4 + readCopyUnitAt(*lead)) >= 0;
 }
-static int aiCommanderBoatPlacesCopy(int c) {
-    int lead, player, places = 0, without = 0;
-    if (!readCopyGroupOf(c, &lead, &player)) return 0;
-    for (int u = 0; u <= G32(RVA_UNIT_COUNT) && u < UNIT_TABLE_MAX; u++) {
-        if (!readCopyInGroup(u, c, lead, player)) continue;
-        int transport = readCopyAbilitySum(u, READ_COPY_ABILITY_TRANSPORT, 1);
-        if (transport > 0) places += transport;
-        else without++;
-    }
-    return places - without;
-}
 static int aiGroupBoatTotalCopy(int c) {
     int lead, player, places = 0;
     if (!readCopyGroupOf(c, &lead, &player)) return 0;

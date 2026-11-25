@@ -71,6 +71,8 @@ static int weaponRuleTraitsText(int weapon, int rule, char *out, int size) {
     return n;
 }
 
+static void noteTerrainRecordWritten(int terrain);
+
 static const char *applyContentBytes(int kind, int index, int offset, const unsigned char *bytes, int width) {
     if (kind == CONTENT_CASTER_MAX_CAST) {
         if (index < 0 || index >= RITUAL_SLOT_CAP || offset || width != (int)sizeof(short)) return "bad_record";
@@ -92,6 +94,7 @@ static const char *applyContentBytes(int kind, int index, int offset, const unsi
     unsigned char *record = contentRecord(kind, index);
     if (!record || offset < 0 || width < 1 || offset > contentRecordSize(kind) - width) return "bad_record";
     memcpy(record + offset, bytes, (size_t)width);
+    if (kind == CONTENT_TERRAIN) noteTerrainRecordWritten(index);
     if (kind == CONTENT_CLASS) memcpy(tableAddress(TABLE_CLASS_COPY) + (size_t)index * CLASS_SIZE + offset, bytes, (size_t)width);
     return NULL;
 }

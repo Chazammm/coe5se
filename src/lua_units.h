@@ -55,6 +55,94 @@ static int luaSpawn(lua_State *L, int commander) {
 static int lSpawnUnit(lua_State *L) { return luaSpawn(L, 0); }
 static int lSpawnCommander(lua_State *L) { return luaSpawn(L, 1); }
 
+// ---- Promotion: coe5.promoteUnit -----------------------------------------------------------------
+typedef void (*PromoteUnitFn)(int owner, int unit, int monster, int commanderize);
+static const char *promoteProblem(lua_Integer unit, lua_Integer monster) {
+    if (G32(RVA_ACTIVE_PLAYER) < 0) return "no_game";
+    if (unit < 0 || unit > G32(RVA_UNIT_COUNT) || unit >= UNIT_TABLE_MAX || (short)G16(RVA_UNIT_MONSTER + (size_t)unit * UNIT_SIZE) < 0 ||
+        (short)G16(RVA_UNIT_HP + (size_t)unit * UNIT_SIZE) <= 0)
+        return "no_unit";
+    if (!isUsedMonster(monster)) return "bad_monster";
+    return NULL;
+}
+
+static int lPromoteUnit(lua_State *L) {
+    lua_Integer unit = luaL_checkinteger(L, 1), monster = luaL_checkinteger(L, 2);
+    int commanderize = lua_toboolean(L, 3);
+    const char *problem = promoteProblem(unit, monster);
+    if (problem) {
+        refuseLuaCall(runningLuaMod(), "coe5.promoteUnit", problem, "unit=%lld monster=%lld", (long long)unit, (long long)monster);
+        lua_pushnil(L);
+        return 1;
+    }
+    size_t at = (size_t)unit * UNIT_SIZE;
+    int owner = (short)G16(RVA_UNIT_PLAYER + at), leader = G32(RVA_UNITS + at + UNIT_COMMANDER), was = unitCommanderIndex((int)unit);
+    ((PromoteUnitFn)siteEntry(SITE_PROMOTE_UNIT, GAME_PTR(RVA_PROMOTE_UNIT)))(owner, (int)unit, (int)monster, commanderize);
+    int commander = commanderize ? unitCommanderIndex((int)unit) : -1;
+    if (commanderize && commander < 0) {
+        refuseLuaCall(runningLuaMod(), "coe5.promoteUnit", "no_free_slot", "unit=%lld monster=%lld", (long long)unit, (long long)monster);
+        lua_pushnil(L);
+        return 1;
+    }
+    if (commanderize && was < 0) {
+        if (leader >= 0 && leader < COMMANDER_TABLE_MAX) flushCommanderCache(leader);
+        int x = G32(RVA_UNIT_X + at), y = G32(RVA_UNIT_X + 4 + at);
+        if (owner >= 0 && x >= 0) updateSightHook(owner, x - SPAWN_SIGHT_RADIUS, y - SPAWN_SIGHT_RADIUS, x + SPAWN_SIGHT_RADIUS, y + SPAWN_SIGHT_RADIUS);
+    }
+    writeLog("lua_unit_promoted", "mod=%s unit=%lld monster=%lld commander=%d leader=%d", runningLuaMod(), (long long)unit, (long long)monster,
+             commander, leader);
+    lua_pushinteger(L, commanderize ? commander : (lua_Integer)unit);
+    return 1;
+}
+
+// ---- Renaming: coe5.renameCommander -------------------------------------------------------------
+#define RENAME_COMMANDER_TITLE "Rename Commander"
+
+static int commanderLeadsAPlayer(int commander) {
+    for (int p = 0; p < playerSlotCount(); p++)
+        if (PSLOT16(RVA_SLOT_CONTROLLER, p, 2) >= 0 && PSLOT32(RVA_PLAYER_LEADER, p, PLAYER_BLOCK_SIZE) == commander) return 1;
+    return 0;
+}
+
+static void cleanTypedCommanderName(char *buffer) {
+    size_t length = 0;
+    while (length < COMMANDER_NAME_SIZE && buffer[length]) {
+        if (buffer[length] == '%') buffer[length] = '_';
+        length++;
+    }
+    if (length >= COMMANDER_NAME_SIZE) buffer[COMMANDER_NAME_SIZE - 1] = 0;
+    for (char *c = buffer; *c; c++)
+        if (*c == ',') *c = '.';
+}
+
+static int lRenameCommander(lua_State *L) {
+    lua_Integer commander = luaL_checkinteger(L, 1);
+    const char *problem = NULL;
+    if (G32(RVA_ACTIVE_PLAYER) < 0) problem = "no_game";
+    else if (commander < 0 || commander >= COMMANDER_TABLE_MAX || livingCommanderUnit((int)commander) < 0) problem = "dead_commander";
+    else if (commanderLeadsAPlayer((int)commander)) problem = "main_commander";
+    if (problem) {
+        refuseLuaCall(runningLuaMod(), "coe5.renameCommander", problem, "commander=%lld", (long long)commander);
+        lua_pushnil(L);
+        return 1;
+    }
+    char *name = (char *)GAME_PTR(RVA_COMMANDER_NAMES + (size_t)commander * COMMANDER_SIZE);
+    char buffer[COMMANDER_NAME_SIZE];
+    memcpy(buffer, name, sizeof buffer);
+    buffer[sizeof buffer - 1] = 0;
+    int ok = GAME_FN(int (*)(const char *, char *, int, int), RVA_TEXT_ENTRY_BOX)(RENAME_COMMANDER_TITLE, buffer, COMMANDER_NAME_SIZE, 1);
+    if (ok <= 0) {
+        writeLog("lua_commander_rename_cancelled", "mod=%s commander=%lld", runningLuaMod(), (long long)commander);
+        lua_pushnil(L);
+        return 1;
+    }
+    cleanTypedCommanderName(buffer);
+    memcpy(name, buffer, sizeof buffer);
+    writeLog("lua_commander_renamed", "mod=%s commander=%lld length=%zu", runningLuaMod(), (long long)commander, strlen(buffer));
+    lua_pushstring(L, buffer);
+    return 1;
+}
+
 #define SUMMON_STRING_MAX 1999
 static int lNewUnits(lua_State *L) {
     lua_Integer player = luaCheckPlayer(L, 1), x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);

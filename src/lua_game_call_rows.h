@@ -180,7 +180,7 @@
     X(aiUnitStays, MAC_COPY_CALL(RVA_AI_UNIT_STAYS, aiUnitStaysCopy), "u", 'B') \
     X(aiNearestTerrain, RVA_AI_NEAREST_TREQ, "ixyPOO", 'i') \
     X(aiRitualMaster, MAC_COPY_CALL(RVA_AI_RITUAL_MASTER, aiRitualMasterCopy), "pa", 'i') \
-    X(aiCommanderBoatPlaces, MAC_COPY_CALL(RVA_AI_COMMANDER_BOAT_PLACES, aiCommanderBoatPlacesCopy), "c", 'i') \
+    X(aiCommanderBoatPlaces, BOTH_BUILDS_CALL(RVA_AI_COMMANDER_BOAT_PLACES), "c", 'i') \
     X(aiShipDropCrew, MAC_COPY_CALL(RVA_AI_SHIP_DROP_CREW, aiShipDropCrewCopy), "c", 'B') \
     X(aiShipTakeBoat, MAC_COPY_CALL(RVA_AI_SHIP_TAKE_BOAT, aiShipTakeBoatCopy), "c", 'B') \
     X(aiShipTakeCrew, MAC_COPY_CALL(RVA_AI_SHIP_TAKE_CREW, aiShipTakeCrewCopy), "c", 'B') \
@@ -262,7 +262,7 @@
     X(armyAtForPlayer, MAC_COPY_CALL(RVA_ARMY_AT_FOR_PLAYER, armyAtForPlayerCopy), "Pxy", 'b') \
     X(commanderFullName, MAC_COPY_CALL(RVA_COMMANDER_THE_NAME, commanderTheName), "c", 'z') \
     X(playerRitualFlags, MAC_COPY_CALL(RVA_PLAYER_RITUAL_FLAGS, playerRitualFlagsCopy), "p", 'i') \
-    X(countSlotsWithController, MAC_COPY_CALL(RVA_COUNT_SLOTS_WITH_CONTROLLER, countSlotsWithControllerCopy), "i", 'i') \
+    X(countPlayersWithController, MAC_COPY_CALL(RVA_COUNT_SLOTS_WITH_CONTROLLER, countSlotsWithControllerCopy), "i", 'i') \
     X(findClass, BOTH_BUILDS_CALL(RVA_FIND_CLASS), "s", 'i') \
     X(weaponExtra, MAC_COPY_CALL(RVA_WEAPON_EXTRA, weaponExtraCopy), "wi", 'i') \
     X(afflictionImmune, BOTH_BUILDS_CALL(RVA_AFFLICTION_IMMUNE), "uU", 'b') \
@@ -293,5 +293,5 @@
     X(findAfflictedUnitAt, BOTH_BUILDS_CALL(RVA_FIND_AFFLICTED_UNIT_AT), "PxyiUU", 'i') \
     X(classAbilityNth, BOTH_BUILDS_CALL(RVA_CLASS_ABILITY_NTH), "Cai", 'i') \
     X(countSideUnits, MAC_COPY_CALL(RVA_COUNT_SIDE_UNITS, countSideUnitsCopy), "pxy", 'i') \
-    X(soleHumanSlot, BOTH_BUILDS_CALL(RVA_BEFORE_GAME_START), "", 'i') \
+    X(soleHumanPlayer, BOTH_BUILDS_CALL(RVA_BEFORE_GAME_START), "", 'i') \
 

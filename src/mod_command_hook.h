@@ -59,6 +59,9 @@ static void runModCommandLineBody(const char *line, int mod, int level) {
     len = strcspn(line, " \t");
     if (featureOn(FEATURE_TERRAIN_LOOKS)) line = terrainLooksLineHook(line, len, mod, level);
     if (!line) return;
+    if (featureOn(FEATURE_TERRAIN_LOOKS)) line = spritePackLineHook(line, len, mod, level);
+    if (!line) return;
+    if (!line) return;
     if (featureOn(FEATURE_BATTLE_MAPS)) line = battleMapLineHook(line, len, mod, level);
     if (!line) return;
     if (featureOn(FEATURE_CORPSE_KINDS)) line = corpseWordLineHook(line, len, mod, level);

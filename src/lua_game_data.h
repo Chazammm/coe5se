@@ -152,20 +152,20 @@ static const GameVar GAME_VARS[] = {
     {"mapDepth",       RVA_MAP_DEPTH,                     T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"northPart",      RVA_NORTH_PART,                    T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"southPart",      RVA_SOUTH_PART,                    T_I32, 1, 0, 0, 1, 0, 0, 0},
-    {"slotController", RVA_SLOT_CONTROLLER,               T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotClass",      RVA_SLOT_CLASS,                    T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotAi",         RVA_SLOT_AI,                       T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotTeam",       RVA_SLOT_TEAM,                     T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotName",       RVA_SLOT_NAME,                     T_STR, 32, PLAYER_BLOCK_SIZE, 32, 1, 0, 0, 0},
-    {"slotColorRed",   RVA_SLOT_COLOUR,                   T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotColorGreen", RVA_SLOT_COLOUR + 4,               T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotColorBlue",  RVA_SLOT_COLOUR + 8,               T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotResource",   RVA_PLAYER_INTS,                   T_I32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 14, 4},
-    {"slotIncome",     0,                                 T_SLOT_INCOME, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
-    {"slotAiIncome",   0,                                 T_SLOT_AI_INCOME, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
-    {"slotAiTrade",    0,                                 T_SLOT_AI_TRADE, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
-    {"slotTradeType",  RVA_PLAYER_TRADE_TYPE, T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotTradeMode",  RVA_PLAYER_TRADE_MODE, T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerController", RVA_SLOT_CONTROLLER,               T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerClass",      RVA_SLOT_CLASS,                    T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerAi",         RVA_SLOT_AI,                       T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerTeam",       RVA_SLOT_TEAM,                     T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerName",       RVA_SLOT_NAME,                     T_STR, 32, PLAYER_BLOCK_SIZE, 32, 1, 0, 0, 0},
+    {"playerColorRed",   RVA_SLOT_COLOUR,                   T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerColorGreen", RVA_SLOT_COLOUR + 4,               T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerColorBlue",  RVA_SLOT_COLOUR + 8,               T_F32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerResource",   RVA_PLAYER_INTS,                   T_I32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 14, 4},
+    {"playerIncome",     0,                                 T_SLOT_INCOME, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
+    {"playerAiIncome",   0,                                 T_SLOT_AI_INCOME, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
+    {"playerAiTrade",    0,                                 T_SLOT_AI_TRADE, PLAYER_SLOTS, 0, 0, 0, 0, RESOURCE_COUNT, 0},
+    {"playerTradeType",  RVA_PLAYER_TRADE_TYPE, T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerTradeMode",  RVA_PLAYER_TRADE_MODE, T_I16, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
     {"newWorldUniqueRandom", FRAME_NEW_WORLD_UNIQUE_RANDOM, T_FRAME_I32, 1, 0, 0, 1, SITE_NEW_WORLD_CREATING_WORLD, 0, 0},
     {"cliMapW",        RVA_CLI_MAP_W,                     T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"cliMapH",        RVA_CLI_MAP_H,                     T_I32, 1, 0, 0, 1, 0, 0, 0},
@@ -186,10 +186,10 @@ static const GameVar GAME_VARS[] = {
     {"worldW",         RVA_WORLD_W,                       T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"worldH",         RVA_WORLD_H,                       T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"uniqueRandomDefault", RVA_UNIQUE_RANDOM_DEFAULT,    INT_FLAG_TYPE, 1, 0, 0, 1, 0, 0, 0},
-    {"slotLockClass",      RVA_SLOT_LOCK_CLASS,           T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotLockController", RVA_SLOT_LOCK_CONTROLLER,      T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotLockAi",         RVA_SLOT_LOCK_AI,              T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotLockTeam",       RVA_SLOT_LOCK_TEAM,            T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerFixedClass",      RVA_SLOT_LOCK_CLASS,           T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerFixedController", RVA_SLOT_LOCK_CONTROLLER,      T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerFixedAi",         RVA_SLOT_LOCK_AI,              T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerFixedTeam",       RVA_SLOT_LOCK_TEAM,            T_I16, 32, 2, 0, 1, 0, 0, 0},
     {"eventVar",       RVA_EVENT_VARS,                    T_I32, EVENT_VAR_COUNT, 4, 0, 1, 0, 0, 0},
     {"modLastIndex",   RVA_MOD_LAST_INDEX,                T_I32, 1, 0, 0, 0, 0, 0, 0},
     {"modName",        RVA_MOD_NAMES,                     T_STR, MOD_TABLE_MAX, MOD_RECORD_SIZE, 256, 0, 0, 0, 0},
@@ -254,7 +254,7 @@ static const GameVar GAME_VARS[] = {
     {"commanderUnit",  RVA_COMMANDERS,                    T_I32, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 1, 0, 0, 0},
     {"commanderRitual", RVA_COMMANDER_KNOWN_RITUALS,      T_I16, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 1, 0,
      COMMANDER_KNOWN_RITUALS_MAX, 2},
-    {"commanderCostAvailable", RVA_COMMANDERS,            T_COMMANDER_COST, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0,
+    {"commanderCostOnHand", RVA_COMMANDERS,            T_COMMANDER_COST, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0,
      INCOME_NAME_COUNT, 0},
     {"commanderAiTargetX", RVA_COMMANDER_AI_TARGET_X,     T_I16, COMMANDER_TABLE_MAX, 2, 0, 1, 0, 0, 0},
     {"commanderAiTargetY", RVA_COMMANDER_AI_TARGET_Y,     T_I16, COMMANDER_TABLE_MAX, 2, 0, 1, 0, 0, 0},
@@ -266,7 +266,7 @@ static const GameVar GAME_VARS[] = {
     {"commanderAiLastTargetY", RVA_COMMANDER_AI_LAST_TARGET_Y, T_I16, COMMANDER_TABLE_MAX, 2, 0, 1, 0, 0, 0},
     {"commanderRitualPlan", RVA_COMMANDER_AI_PLAN,        T_I16, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 1, 0, 0, 0},
     {"commanderDone",  RVA_COMMANDER_DONE,                T_FLAG_U8, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 1, 0, 0, 0},
-    {"slotLeader",     RVA_PLAYER_LEADER,                 T_I32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerLeader",     RVA_PLAYER_LEADER,                 T_I32, 32, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
     {"unitLastIndex",  RVA_UNIT_COUNT,                    T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"unitOwner",      RVA_UNIT_PLAYER,                   T_I16, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, 0, 0},
     {"unitHp",         RVA_UNIT_HP,                       T_I16, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, 0, 0},
@@ -294,7 +294,7 @@ static const GameVar GAME_VARS[] = {
     {"ritualEffectTerrainName", RVA_RITUAL_TABLE + RITUAL_FX, T_RITUAL_EFFECT_TERRAIN_NAME, COUNT_AT_CALL, RITUAL_SIZE, 0, 0, 0,
      RITUAL_FX_MAX, RITUAL_FX_SIZE},
     {"effectName",     0,                                 T_EFFECT_NAME, RITUAL_EFFECT_ID_COUNT, 0, 0, 0, 0, 0, 0},
-    {"slotRitualCasts", RVA_CAST_COUNTS,                  T_CAST_COUNT, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, COUNT_AT_CALL, 2},
+    {"playerRitualCasts", RVA_CAST_COUNTS,                  T_CAST_COUNT, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, COUNT_AT_CALL, 2},
     {"ritualCasterMaxCast", RVA_RITUAL_TABLE,             T_RITUAL_CASTER_MAX_CAST, COUNT_AT_CALL, RITUAL_SIZE, 0, 1, 0, 0, 0},
     {"unitRitualCasts", RVA_UNITS,                        T_UNIT_RITUAL_CASTS, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, COUNT_AT_CALL, 0},
     {"unitX",          RVA_UNIT_X,                        T_I32, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, 0, 0},
@@ -392,8 +392,8 @@ static const GameVar GAME_VARS[] = {
     {"commanderBattleStrength", RVA_COMMANDERS, T_COMMANDER_STRENGTH, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
     {"commanderStrength", RVA_COMMANDERS, T_COMMANDER_STRENGTH, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
     {"commanderGarrisonLeft", RVA_COMMANDERS, T_GARRISON_LEFT, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 0, 0, 0, 0},
-    {"slotHomeX",      RVA_PLAYER_HOME_X,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
-    {"slotHomeY",      RVA_PLAYER_HOME_Y,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerHomeX",      RVA_PLAYER_HOME_X,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
+    {"playerHomeY",      RVA_PLAYER_HOME_Y,                 T_I16, 32, 2, 0, 1, 0, 0, 0},
     {"squareGems",     RVA_SQUARE_RECORDS + SQUARE_GEMS,  T_U8, MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE, 0, 1, 0, MAP_COLUMN_SQUARES, SQUARE_SIZE},
     {"squareCorpses",  RVA_SQUARE_RECORDS + SQUARE_CORPSES, T_I16, MAP_COLUMNS_MAX, SQUARE_COLUMN_SIZE, 0, 1, 0, MAP_COLUMN_SQUARES, SQUARE_SIZE},
     {"squareBattleStrength", 0,                           T_SQUARE_STRENGTH, PLAYER_SLOTS, 0, 0, 0, 0, MAP_COLUMNS_MAX, 0},
@@ -452,8 +452,8 @@ static const GameVar GAME_VARS[] = {
     {"squareItem",     RVA_GROUND_ITEMS,                  T_I16, MAP_COLUMNS_MAX, MAP_COLUMN_SQUARES * GROUND_ITEMS_PER_SQUARE * 2, 0, 1, 0,
      MAP_COLUMN_SQUARES, GROUND_ITEMS_PER_SQUARE * 2},
     {"commanderRepeatRitual", RVA_COMMANDER_REPEAT_RITUAL, T_I16, COMMANDER_TABLE_MAX, COMMANDER_SIZE, 0, 1, 0, 0, 0},
-    {"slotBolsterDevotions", RVA_PLAYER_BOLSTERS,         T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotDivineFavor", RVA_PLAYER_DIVINE_FAVOR,          T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerBlessingRolls", RVA_PLAYER_BOLSTERS,         T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerDivineFavor", RVA_PLAYER_DIVINE_FAVOR,          T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
     {"sealsBroken",    RVA_SEALS_BROKEN,                  T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"sealEventsDone", RVA_SEAL_EVENTS_DONE,              T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"starsReliability", RVA_STARS_RELIABILITY,           T_I16, 1, 0, 0, 1, 0, 0, 0},
@@ -497,10 +497,10 @@ static const GameVar GAME_VARS[] = {
     {"commanderLastSpawned", RVA_LAST_SPAWNED_COMMANDER,  T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"unitTempAbilityId", RVA_UNIT_TEMP_ABILITY_IDS,      T_I16, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, UNIT_TEMP_ABILITIES, 2},
     {"unitTempAbilityValue", RVA_UNIT_TEMP_ABILITY_VALUES, T_I32, UNIT_TABLE_MAX, UNIT_SIZE, 0, 1, 0, UNIT_TEMP_ABILITIES, 4},
-    {"slotBlessingId", RVA_PLAYER_BLESSINGS,              T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, PLAYER_BLESSINGS_MAX, 8},
-    {"slotBlessingValue", RVA_PLAYER_BLESSINGS + 4,       T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, PLAYER_BLESSINGS_MAX, 8},
-    {"slotMostCitadels", RVA_PLAYER_SHORT,                T_I16, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
-    {"slotCitadels",   0,                                 T_SLOT_CITADELS, PLAYER_SLOTS, 0, 0, 0, 0, 0, 0},
+    {"playerBlessingListId", RVA_PLAYER_BLESSINGS,              T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, PLAYER_BLESSINGS_MAX, 8},
+    {"playerBlessingListValue", RVA_PLAYER_BLESSINGS + 4,       T_I32, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, PLAYER_BLESSINGS_MAX, 8},
+    {"playerAiMostCitadels", RVA_PLAYER_SHORT,                T_I16, PLAYER_SLOTS, PLAYER_BLOCK_SIZE, 0, 1, 0, 0, 0},
+    {"playerCitadels",   0,                                 T_SLOT_CITADELS, PLAYER_SLOTS, 0, 0, 0, 0, 0, 0},
     {"aiMoveDelay",    RVA_AI_MOVE_DELAY,                 T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"aiGathersHands", RVA_AI_WANTS_HANDS,                T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"aiGathersHerbs", RVA_AI_WANTS_HERBS,                T_I32, 1, 0, 0, 1, 0, 0, 0},
@@ -511,8 +511,8 @@ static const GameVar GAME_VARS[] = {
     {"aiGathersLifeforce", RVA_AI_WANTS_LIFEFORCE,        T_I32, 1, 0, 0, 1, 0, 0, 0},
     {"aiWeighsIron",   RVA_AI_IRON_FLAG,                  INT_FLAG_TYPE, 1, 0, 0, 1, 0, 0, 0},
     {"aiSaveResource", RVA_AI_SAVE_RESOURCE,              T_I16, 19, 2, 0, 1, 0, 0, 0},
-    {"slotAbility",    0,                                 T_SLOT_ABILITY, PLAYER_SLOTS, 0, 0, 0, 0, RITUAL_EFFECT_ID_COUNT, 0},
-    {"slotAbilitySum", 0,                                 T_SLOT_ABILITY, PLAYER_SLOTS, 0, 1, 0, 0, RITUAL_EFFECT_ID_COUNT, 0},
+    {"playerAbility",    0,                                 T_SLOT_ABILITY, PLAYER_SLOTS, 0, 0, 0, 0, RITUAL_EFFECT_ID_COUNT, 0},
+    {"playerAbilitySum", 0,                                 T_SLOT_ABILITY, PLAYER_SLOTS, 0, 1, 0, 0, RITUAL_EFFECT_ID_COUNT, 0},
     {"unitStateFlags", RVA_UNITS,                         T_UNIT_STATE_FLAGS, UNIT_TABLE_MAX, UNIT_SIZE, 0, 0, 0, 0, 0},
     {"unitReturns",    RVA_UNITS,                         T_UNIT_RETURNS, UNIT_TABLE_MAX, UNIT_SIZE, 0, 0, 0, 0, 0},
     {"fortPartWord",   0,                                 T_FORT_PART_WORD, FORT_PART_BITS, 0, 0, 0, 0, 0, 0},
@@ -555,8 +555,8 @@ static const GameVarShape GAME_VAR_SHAPES[] = {
     {"unitKnownSpell", 0, 0, LIST_TO_BELOW_ZERO, 0, 0, 0},
     {"unitMemorizedSpell", 0, 0, LIST_TO_BELOW_ZERO, 0, 0, 0},
     {"squareItem", GROUND_ITEMS_PER_SQUARE, 2, LIST_NONE, 0, 0, 0},
-    {"slotBlessingId", 0, 0, LIST_TO_BELOW_ONE_I32, 0, 0, 0},
-    {"slotBlessingValue", 0, 0, LIST_TO_BELOW_ONE_I32, 4, 0, 0},
+    {"playerBlessingListId", 0, 0, LIST_TO_BELOW_ONE_I32, 0, 0, 0},
+    {"playerBlessingListValue", 0, 0, LIST_TO_BELOW_ONE_I32, 4, 0, 0},
 };
 static GameVarShape gameVarShape(const GameVar *v) {
     for (size_t i = 0; i < sizeof GAME_VAR_SHAPES / sizeof GAME_VAR_SHAPES[0]; i++)
@@ -611,7 +611,7 @@ static int takesAbilityWord(int type) { return type == T_UNIT_ABILITY || type ==
 
 static int indexIsPlayer(const GameVar *v, int which) {
     if (which == 2) return v->type == T_UNIT_VISIBLE;
-    return !strncmp(v->name, "slot", 4) || v->addr == RVA_SQUARE_RECORDS + SQUARE_SEEN;
+    return !strncmp(v->name, "player", 6) || v->addr == RVA_SQUARE_RECORDS + SQUARE_SEEN;
 }
 
 static unsigned char *gameVarAddress(lua_State *L, const GameVar **out, int *arg, int forWrite) {
@@ -705,7 +705,7 @@ static int corpsesAt(int x, int y, int humanoidOnly) {
     return count;
 }
 
-static int commanderCostAvailable(int commander, int type, int *have) {
+static int commanderCostOnHand(int commander, int type, int *have) {
     int unit = G32(RVA_COMMANDERS + (size_t)commander * COMMANDER_SIZE);
     if (unit < 0 || unit >= UNIT_TABLE_MAX) return -1;
     int owner = G16(RVA_UNIT_PLAYER + (size_t)unit * UNIT_SIZE);

@@ -57,7 +57,7 @@ static void newafflictionLine(const char *args, int mod, int level) {
     }
     CustomAffliction *a = &customAfflictions[k];
     if (!again) {
-        a->declared = 1, a->battleaff = 0, a->descr[0] = '\0';
+        a->declared = 1, a->battleaff = 0, a->descr[0] = '\0', a->icon = a->picture = -1;
         snprintf(a->mod, sizeof a->mod, "%s", spellModName(mod));
         if (traitDescriptions) traitDescriptions[TRAIT_DESCRIPTION_SLOTS + k] = a->descr;
     }
@@ -88,6 +88,37 @@ static int afflictionWithText(const char *name) {
 
 static const char *afflictionText(int k) {
     return customAfflictionDeclared(k) && customAfflictions[k].descr[0] ? customAfflictions[k].descr : NULL;
+}
+
+static void afflictionIconLine(const char *args, int mod) {
+    CustomAffliction *a = &customAfflictions[afflictionBlock.kind];
+    const char *p = args, *reason = NULL;
+    int icon = -1, picture = -1;
+    if (*p == '"') {
+        char file[MAX_PATH], path[MAX_PATH];
+        int length = readSpellQuoted(&p, file, sizeof file);
+        reason = length <= 0 || !isLineEnd(p) ? "bad_value" : findModImage(modFolder(mod), file, path, sizeof path);
+        if (!reason && (picture = addTraitPicture(path)) < 0) reason = "too_many_pictures";
+    } else {
+        long long n;
+        reason = !readSpellNumber(&p, &n) || !isLineEnd(p) || n < 0 || n >= RES_TRS_SPRITES ? "bad_icon" : NULL;
+        if (!reason) icon = (int)n;
+    }
+    if (!reason && afflictionBlock.again && (a->icon != icon || a->picture != picture)) reason = "other_declaration";
+    if (reason) {
+        refuseC5mLine("icon", spellModName(mod), reason, "line=%d name=%.63s text=%.60s first_mod=%.63s", G32(RVA_MOD_LINE), a->name, args, a->mod);
+        return;
+    }
+    a->icon = icon, a->picture = picture;
+}
+
+static int afflictionCardIcon(int k) {
+    const CustomAffliction *a = &customAfflictions[k];
+    if (a->picture >= 0) {
+        int sprite = traitPictureSprite(a->picture);
+        return sprite < 0 ? AFFLICTION_CARD_ICON : sprite;
+    }
+    return a->icon >= 0 ? a->icon : AFFLICTION_CARD_ICON;
 }
 
 static void afflictionBattleaffLine(const char *args, int mod) {
@@ -192,15 +223,27 @@ static int namedAfflictionWord(const char *line, size_t len, const char *word) {
     return *p == '"';
 }
 
+static int afflictionIconOutsideContent(const char *line, size_t len, int mod, int level) {
+    static int inBlock, blockMod = -1, blockLevel = -1;
+    static unsigned int blockFile;
+    if (mod != blockMod || level != blockLevel || modFileNow() != blockFile) inBlock = 0;
+    blockMod = mod, blockLevel = level, blockFile = modFileNow();
+    if (spellWordIs(line, len, "newaffliction")) return inBlock = 1, 0;
+    if (!inBlock) return 0;
+    if (spellWordIs(line, len, "icon")) return 1;
+    if (!spellWordIs(line, len, "descr") && !spellWordIs(line, len, "battleaff")) inBlock = 0;
+    return 0;
+}
+
 static const char *afflictionWordLineHook(const char *line, size_t len, int mod, int level) {
-    if (level != 2) return line;
+    if (level != 2) return afflictionIconOutsideContent(line, len, mod, level) ? NULL : line;
     const char *args = line + len;
     skipSpaces(&args);
     if (afflictionBlock.open && (afflictionBlock.mod != mod || afflictionBlock.fileId != modFileNow())) finishAfflictionBlock();
     if (afflictionBlock.open && afflictionBlock.refused) {
-        int descr = spellWordIs(line, len, "descr");
-        if (descr || spellWordIs(line, len, "battleaff")) {
-            refuseC5mLine(descr ? "descr" : "battleaff", spellModName(mod), "no_affliction_block", "line=%d declaration_line=%d",
+        int descr = spellWordIs(line, len, "descr"), icon = spellWordIs(line, len, "icon");
+        if (descr || icon || spellWordIs(line, len, "battleaff")) {
+            refuseC5mLine(descr ? "descr" : icon ? "icon" : "battleaff", spellModName(mod), "no_affliction_block", "line=%d declaration_line=%d",
                           G32(RVA_MOD_LINE), afflictionBlock.line);
             return NULL;
         }
@@ -210,6 +253,7 @@ static const char *afflictionWordLineHook(const char *line, size_t len, int mod,
     if (afflictionBlock.open) {
         if (spellWordIs(line, len, "descr")) return afflictionDescrLine(args, mod), NULL;
         if (spellWordIs(line, len, "battleaff")) return afflictionBattleaffLine(args, mod), NULL;
+        if (spellWordIs(line, len, "icon")) return afflictionIconLine(args, mod), NULL;
         if (spellWordIs(line, len, "end")) return finishAfflictionBlock(), NULL;
         finishAfflictionBlock();
     }
@@ -233,7 +277,9 @@ static int declinedAfflictionLine(const char *line, size_t len, int mod, int lev
     if (mod != blockMod || level != blockLevel) inBlock = 0;
     blockMod = mod, blockLevel = level;
     if (spellWordIs(line, len, "newaffliction")) return inBlock = 1;
-    if (inBlock && (spellWordIs(line, len, "descr") || spellWordIs(line, len, "battleaff") || spellWordIs(line, len, "end"))) return 1;
+    if (inBlock && (spellWordIs(line, len, "descr") || spellWordIs(line, len, "battleaff") || spellWordIs(line, len, "icon") ||
+                    spellWordIs(line, len, "end")))
+        return 1;
     inBlock = 0;
     return namedAfflictionWord(line, len, "affres") || namedAfflictionWord(line, len, "afftarg") || namedAfflictionWord(line, len, "cureoneaff") ||
            namedAfflictionWord(line, len, "makeaff");
@@ -451,20 +497,58 @@ static u64 afflictionDamageUnitHook(u64 unit, u64 damage) {
 }
 
 // ---- The unit card ------------------------------------------------------------------------------
+typedef struct { int ref, unit, value; } AfflictionCardCall;
+static int pushAfflictionCardCall(lua_State *L, void *arg) {
+    const AfflictionCardCall *c = arg;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, c->ref);
+    lua_pushinteger(L, c->unit);
+    lua_pushinteger(L, c->value);
+    return 2;
+}
+
+static int afflictionCardWords(int k, int unit, int value) {
+    CustomAffliction *a = &customAfflictions[k];
+    a->cardLabel[0] = a->cardText[0] = '\0';
+    if (traitDescriptions) traitDescriptions[TRAIT_DESCRIPTION_SLOTS + k] = a->descr;
+    int lua = a->cardLua;
+    if (lua < 0 || lua >= luaCallbackCount) return 0;
+    LuaCallback c = luaCallbacks[lua];
+    if (!c.s || c.s->dead || c.s->retired || !luaCallbackOpenNow(c.s)) return 0;
+    AfflictionCardCall call = {c.ref, unit, value};
+    if (!callLuaProtected(c.s, pushAfflictionCardCall, &call, 2)) return 0;
+    lua_State *L = c.s->L;
+    if (lua_type(L, -2) == LUA_TSTRING) {
+        const char *label = lua_tostring(L, -2);
+        size_t n = textCutLength(label, sizeof a->cardLabel - 1);
+        memcpy(a->cardLabel, label, n), a->cardLabel[n] = '\0';
+        if (lua_type(L, -1) == LUA_TSTRING) {
+            const char *text = lua_tostring(L, -1);
+            n = textCutLength(text, sizeof a->cardText - 1);
+            memcpy(a->cardText, text, n), a->cardText[n] = '\0';
+            if (traitDescriptions) traitDescriptions[TRAIT_DESCRIPTION_SLOTS + k] = a->cardText;
+        }
+    }
+    lua_pop(L, 2);
+    closeDeadLuaScript(c.s);
+    return a->cardLabel[0] != '\0';
+}
+
 static unsigned afflictionListHook(int unit, unsigned long long flags) {
     unsigned count = afflictionGameList(unit, flags);
     if (!unitAfflictionCount(unit)) return count;
-    for (int k = 0; k < customAfflictionCount; k++)
-        if (customAfflictionDeclared(k) && unitAfflictionEntry(unit, k) &&
-            afflictionCardLine(AFFLICTION_CARD_ICON, customAfflictions[k].name))
-            count++;
+    for (int k = 0; k < customAfflictionCount; k++) {
+        const AfflictionEntry *e = customAfflictionDeclared(k) ? unitAfflictionEntry(unit, k) : NULL;
+        if (!e) continue;
+        const char *label = afflictionCardWords(k, unit, e->value) ? customAfflictions[k].cardLabel : customAfflictions[k].name;
+        if (afflictionCardLine(afflictionCardIcon(k), label)) count++;
+    }
     return count;
 }
 
 static int afflictionDescriptionId(const char *text) {
     if (!customAfflictionCount || !traitDescriptions || !text) return 0;
     for (int k = 0; k < customAfflictionCount; k++)
-        if (customAfflictionDeclared(k) && !strcmp(customAfflictions[k].name, text))
+        if (customAfflictionDeclared(k) && (!strcmp(customAfflictions[k].name, text) || (customAfflictions[k].cardLabel[0] && !strcmp(customAfflictions[k].cardLabel, text))))
             return (int)(((uintptr_t)&traitDescriptions[TRAIT_DESCRIPTION_SLOTS + k] - (uintptr_t)GAME_PTR(RVA_ABILITY_DESCRIPTIONS)) / sizeof(char *));
     return 0;
 }
@@ -505,11 +589,12 @@ static void customAfflictionsInit(void) {
 }
 
 // ---- Lua: coe5.giveAffliction and the rest ---------------------------------------------------------------
-static int luaAfflictionArgs(lua_State *L, const char *call, int *unit, int *kind) {
+static int luaAfflictionArgs(lua_State *L, const char *call, int reads, int *unit, int *kind) {
     lua_Integer u = luaL_checkinteger(L, 1);
     const char *name = luaL_checkstring(L, 2);
     int k = findCustomAffliction(name);
-    const char *reason = refuseFromDeadLuaScript(L, call) ? "dead_script" : !afflictionUnitInUse((int)u) ? "no_unit"
+    int inUse = afflictionUnitInUse((int)u) || (reads && u == afflictionEffectUnit);
+    const char *reason = refuseFromDeadLuaScript(L, call) ? "dead_script" : !inUse ? "no_unit"
                        : !customAfflictionDeclared(k) ? "unknown_affliction" : !ensureAfflictionStore() ? "out_of_memory" : NULL;
     if (reason) {
         if (strcmp(reason, "dead_script")) refuseLuaCall(runningLuaMod(), call, reason, "unit=%lld name=%.63s", (long long)u, name);
@@ -519,30 +604,53 @@ static int luaAfflictionArgs(lua_State *L, const char *call, int *unit, int *kin
     return 1;
 }
 
+static int lAfflictionCardLine(lua_State *L) {
+    const char *name = luaL_checkstring(L, 1);
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+    if (refuseFromDeadLuaScript(L, "coe5.afflictionCardLine")) return lua_pushnil(L), 1;
+    const char *mod = runningLuaMod();
+    const char *reason = !name[0] || strlen(name) >= CUSTOM_AFFLICTION_NAME_SIZE ? "bad_value" : !ensureAfflictionStore() ? "out_of_memory" : NULL;
+    int k = reason ? -1 : findCustomAffliction(name);
+    if (!reason && k < 0 && (k = addCustomAffliction(name)) < 0) reason = "too_many_afflictions";
+    int old = k >= 0 ? customAfflictions[k].cardLua : -1;
+    if (!reason && old >= 0 && old < luaCallbackCount && !luaCallbackRetired(old) && luaCallbacks[old].s && !luaCallbacks[old].s->dead)
+        reason = "card_line_taken";
+    int lua = reason ? -1 : newLuaCallback(L, 2, 0);
+    if (!reason && lua < 0) reason = "out_of_memory";
+    if (reason) {
+        refuseLuaCall(mod, "coe5.afflictionCardLine", reason, "name=%.63s", name);
+        return lua_pushnil(L), 1;
+    }
+    customAfflictions[k].cardLua = lua;
+    writeLog("affliction_card_line_added", "mod=%s name=%.63s declared=%d", mod, customAfflictions[k].name, customAfflictionDeclared(k));
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static int lGiveAffliction(lua_State *L) {
     int unit, k;
-    if (!luaAfflictionArgs(L, "coe5.giveAffliction", &unit, &k)) return lua_pushnil(L), 1;
+    if (!luaAfflictionArgs(L, "coe5.giveAffliction", 0, &unit, &k)) return lua_pushnil(L), 1;
     lua_pushboolean(L, giveCustomAffliction(unit, k));
     return 1;
 }
 
 static int lCureAffliction(lua_State *L) {
     int unit, k;
-    if (!luaAfflictionArgs(L, "coe5.cureAffliction", &unit, &k)) return lua_pushnil(L), 1;
+    if (!luaAfflictionArgs(L, "coe5.cureAffliction", 0, &unit, &k)) return lua_pushnil(L), 1;
     lua_pushboolean(L, cureCustomAffliction(unit, k));
     return 1;
 }
 
 static int lHasAffliction(lua_State *L) {
     int unit, k;
-    if (!luaAfflictionArgs(L, "coe5.hasAffliction", &unit, &k)) return lua_pushnil(L), 1;
+    if (!luaAfflictionArgs(L, "coe5.hasAffliction", 1, &unit, &k)) return lua_pushnil(L), 1;
     lua_pushboolean(L, unitAfflictionEntry(unit, k) != NULL);
     return 1;
 }
 
 static int luaAfflictionField(lua_State *L, const char *call, int value) {
     int unit, k;
-    if (!luaAfflictionArgs(L, call, &unit, &k)) return lua_pushnil(L), 1;
+    if (!luaAfflictionArgs(L, call, 1, &unit, &k)) return lua_pushnil(L), 1;
     const AfflictionEntry *e = unitAfflictionEntry(unit, k);
     if (e) lua_pushinteger(L, value ? e->value : e->turn);
     else lua_pushnil(L);
@@ -554,7 +662,7 @@ static int lAfflictionValue(lua_State *L) { return luaAfflictionField(L, "coe5.a
 static int luaSetAfflictionField(lua_State *L, const char *call, int value) {
     int unit, k;
     lua_Integer n = luaL_checkinteger(L, 3);
-    if (!luaAfflictionArgs(L, call, &unit, &k)) return lua_pushnil(L), 1;
+    if (!luaAfflictionArgs(L, call, 0, &unit, &k)) return lua_pushnil(L), 1;
     if (n < INT_MIN || n > INT_MAX) {
         refuseLuaCall(runningLuaMod(), call, "bad_value", "value=%lld", (long long)n);
         return lua_pushnil(L), 1;

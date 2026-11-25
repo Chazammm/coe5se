@@ -85,7 +85,7 @@ static int openLandOf(int x, int y) {
 }
 static int squareOpenLand(int x, int y) { return squareThrough2(SITE_SQUARE_OPEN_LAND, SITE_SQUARE_WATERLIKE, openLandOf, x, y) != 0; }
 
-// ---- Incomes: slotIncome and terrainIncome ---------------------------------------------------------
+// ---- Incomes: playerIncome and terrainIncome ---------------------------------------------------------
 static int terrainIncomeField(int resource) {
     static const int FIELDS[RESOURCE_COUNT] = {TERRAIN_GOLD,  TERRAIN_IRON, TERRAIN_HERBS, TERRAIN_FUNGUS, TERRAIN_SACRIFICES,
                                                TERRAIN_HANDS, TERRAIN_WEED, -1, -1, -1, -1, TERRAIN_TRADE, -1, -1};
@@ -175,9 +175,9 @@ static int slotIncomeAs(int slot, int resource, int asAi) {
     }
     return scaledIncome(rawIncome(slot, resource), percent);
 }
-static int slotIncome(int slot, int resource) { return slotIncomeAs(slot, resource, 0); }
+static int playerIncome(int slot, int resource) { return slotIncomeAs(slot, resource, 0); }
 
-// ---- The trade step of the turn start: slotAiTrade ----------------------------------------------
+// ---- The trade step of the turn start: playerAiTrade ----------------------------------------------
 #define TRADE_TYPE_RANDOM_GEM 23
 #define TRADE_TYPE_SELL_GEMS  24
 static const struct { signed char resource, rate; } TRADE_GOODS[TRADE_TYPE_SELL_GEMS + 1] = {
@@ -224,7 +224,7 @@ static int tradeStepChange(int type, int mode, int points, const int stocks[RESO
     return drawAdds;
 }
 
-static int slotAiTrade(int slot, int resource) {
+static int playerAiTrade(int slot, int resource) {
     if (resource < 0 || resource >= RESOURCE_COUNT) return 0;
     int type = (*(short *)playerSlotAddress(RVA_PLAYER_TRADE_TYPE, slot, PLAYER_BLOCK_SIZE));
     int mode = (*(short *)playerSlotAddress(RVA_PLAYER_TRADE_MODE, slot, PLAYER_BLOCK_SIZE));
@@ -979,6 +979,15 @@ static int setRecordWord(lua_State *L, const GameVar *v, int arg) {
     return reason ? refuseRecordWrite(L, reason, v->name, index, word) : 0;
 }
 
+static void pushGameDate(lua_State *L) {
+    static const char *const SEASON_PART[] = {"", "Late", "Mid", "Early"};
+    int left = *(const short *)GAME_PTR(RVA_SEASON_TURNS_LEFT), season = *(const short *)GAME_PTR(RVA_SEASON);
+    const char *name = season >= 0 && season < 4 ? *(const char *const *)(GAME_PTR(RVA_SEASON_NAMES) + (size_t)season * 8) : NULL;
+    char date[100];
+    snprintf(date, sizeof date, "%.7s %.31s of year %d", left >= 1 && left <= 3 ? SEASON_PART[left] : "", name ? name : "",
+             G32(RVA_TURN) / 12);
+    lua_pushstring(L, date);
+}
 static int lGet(lua_State *L) {
     const GameVar *v;
     int arg = 2;
@@ -1041,13 +1050,13 @@ static int lGet(lua_State *L) {
     }
     case T_COMMANDER_COST: {
         int have;
-        if (commanderCostAvailable((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), &have) < 0) lua_pushnil(L);
+        if (commanderCostOnHand((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), &have) < 0) lua_pushnil(L);
         else lua_pushinteger(L, have);
         break;
     }
-    case T_SLOT_INCOME: lua_pushinteger(L, slotIncome((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3))); break;
+    case T_SLOT_INCOME: lua_pushinteger(L, playerIncome((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3))); break;
     case T_SLOT_AI_INCOME: lua_pushinteger(L, slotIncomeAs((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), 1)); break;
-    case T_SLOT_AI_TRADE: lua_pushinteger(L, slotAiTrade((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3))); break;
+    case T_SLOT_AI_TRADE: lua_pushinteger(L, playerAiTrade((int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3))); break;
     case T_TERRAIN_INCOME: {
         int field = terrainIncomeField((int)lua_tointeger(L, 3));
         if (field < 0) lua_pushnil(L);
@@ -1196,7 +1205,10 @@ static int lGet(lua_State *L) {
     case T_FLAG_I16: lua_pushboolean(L, *(short *)p != 0); break;
     case T_FLAG_TWO: lua_pushboolean(L, *(int *)p == 2); break;
     case T_F32: lua_pushnumber(L, *(float *)p); break;
-    case T_STR: case T_FRAME_STR: lua_pushlstring(L, (const char *)p, strnlen((const char *)p, v->size)); break;
+    case T_STR: case T_FRAME_STR:
+        if (v->type == T_STR && v->addr == RVA_DATE_TEXT) pushGameDate(L);
+        else lua_pushlstring(L, (const char *)p, strnlen((const char *)p, v->size));
+        break;
     case T_PTR_STR: {
         const char *s = *(const char *const *)p;
         if (s) lua_pushlstring(L, s, strnlen(s, v->size));
@@ -1229,28 +1241,28 @@ static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[
     {"mapW", INT_MIN, MAP_COLUMNS_MAX}, {"mapH", INT_MIN, MAP_COLUMN_SQUARES}, {"mapDepth", INT_MIN, MAP_COLUMNS_MAX},
     {"cliMapW", INT_MIN, MAP_COLUMNS_MAX}, {"cliMapH", INT_MIN, MAP_COLUMN_SQUARES},
     {"society", 0, SOCIETY_TABLE_MAX - 1},
-    {"slotClass", INT_MIN, LAST_MOD_CLASS_SLOT},
-    {"slotAi", INT_MIN, AI_LEVEL_TABLE_MAX - 1},
+    {"playerClass", INT_MIN, LAST_MOD_CLASS_SLOT},
+    {"playerAi", INT_MIN, AI_LEVEL_TABLE_MAX - 1},
     {"startDefault", 0, 2}, {"northPart", -1, 100}, {"southPart", -1, 100}, {"wilder", 0, 2},
     {"mouseButtons", 0, 7},
     {"fullscreen", 0, 2}, {"battleGrid", 0, 1},
     {"aiMoveDelay", 0, 10000},
     {"traceLevel", 0, 3},
-    {"slotTradeType", 0, 24},
+    {"playerTradeType", 0, 24},
     {"squareCorpses", 0, SHRT_MAX},
     {"unitLastIndex", -1, UNIT_TABLE_MAX - 1}, {"unitLastSpawned", -1, UNIT_TABLE_MAX - 1},
     {"commanderLastIndex", -1, COMMANDER_TABLE_MAX - 1}, {"commanderLastSpawned", -1, COMMANDER_TABLE_MAX - 1},
     {"selectedCommander", -1, COMMANDER_TABLE_MAX - 1},
-    {"unitCommander", -1, COMMANDER_TABLE_MAX - 1}, {"slotLeader", -1, COMMANDER_TABLE_MAX - 1},
+    {"unitCommander", -1, COMMANDER_TABLE_MAX - 1}, {"playerLeader", -1, COMMANDER_TABLE_MAX - 1},
     {"commanderUnit", -1, UNIT_TABLE_MAX - 1},
     {"unitX", -1, MAP_COLUMNS_MAX - 1}, {"unitY", -1, MAP_COLUMN_SQUARES - 1},
-    {"slotHomeX", -1, MAP_COLUMNS_MAX - 1}, {"slotHomeY", -1, MAP_COLUMN_SQUARES - 1},
+    {"playerHomeX", -1, MAP_COLUMNS_MAX - 1}, {"playerHomeY", -1, MAP_COLUMN_SQUARES - 1},
     {"commanderAiTargetX", -1, MAP_COLUMNS_MAX - 1}, {"commanderAiTargetY", -1, MAP_COLUMN_SQUARES - 1},
     {"recruitLocationLast", -1, 255}, {"recruitLocationX", 0, MAP_COLUMNS_MAX - 1}, {"recruitLocationY", 0, MAP_COLUMN_SQUARES - 1},
     {"unitOwner", -1, INT_MAX}, {"activePlayer", -1, INT_MAX}, {"rulershipSlot", -1, INT_MAX}, {"unitMonster", -1, INT_MAX},
     {"commanderRitual", 0, INT_MAX}, {"commanderRepeatRitual", -1, INT_MAX}, {"commanderRitualPlan", SHRT_MIN, INT_MAX},
     {"unitKnownSpell", -1, INT_MAX}, {"unitMemorizedSpell", -1, INT_MAX},
-    {"unitTempAbilityId", -1, RITUAL_EFFECT_ID_COUNT - 1}, {"slotBlessingId", 0, RITUAL_EFFECT_ID_COUNT - 1},
+    {"unitTempAbilityId", -1, RITUAL_EFFECT_ID_COUNT - 1}, {"playerBlessingListId", 0, RITUAL_EFFECT_ID_COUNT - 1},
     {"aiAttackDivOther", 1, INT_MAX}, {"aiAttackDivAi", 1, INT_MAX}, {"aiAttackDivHuman", 1, INT_MAX},
     {"turn", -1, GAME_LAST_TURN},
     {"battleX", -1, MAP_COLUMNS_MAX - 1}, {"battleY", -1, MAP_COLUMN_SQUARES - 1},
@@ -1261,7 +1273,7 @@ static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[
     {"battleWidth", BATTLE_WIDTH_FIRST, BATTLE_WIDTH_MAX},
     {"sampleHighest", -1, SAMPLE_SLOT_LAST},
     {"autoNameLast", -1, AUTO_NAME_LIST_SIZE - 1},
-    {"slotLockClass", INT_MIN, LAST_MOD_CLASS_SLOT}, {"slotLockAi", INT_MIN, AI_LEVEL_TABLE_MAX - 1},
+    {"playerFixedClass", INT_MIN, LAST_MOD_CLASS_SLOT}, {"playerFixedAi", INT_MIN, AI_LEVEL_TABLE_MAX - 1},
     {"mapViewPlane", 0, INT_MAX},
     {"squareOwner", -1, INT_MAX},
     {"squareItem", -1, INT_MAX},
@@ -1278,7 +1290,7 @@ static const struct { const char *name; lua_Integer min, max; } GAME_VAR_RANGES[
     {"eventSquareX", INT_MIN, MAP_COLUMNS_MAX - 1}, {"eventSquareY", INT_MIN, MAP_COLUMN_SQUARES - 1},
     {"pathLength", 0, PATH_ENTRIES}, {"pathX", 0, MAP_COLUMNS_MAX - 1}, {"pathY", 0, MAP_COLUMN_SQUARES - 1},
     {"squareArmyOwner", -1, INT_MAX}, {"squareRememberedBattleStrength", -1, INT_MAX}, {"squareRememberedStrength", -1, INT_MAX},
-    {"slotRitualCasts", 0, COMMANDER_CAST_MAX}, {"unitRitualCasts", 0, COMMANDER_CAST_MAX},
+    {"playerRitualCasts", 0, COMMANDER_CAST_MAX}, {"unitRitualCasts", 0, COMMANDER_CAST_MAX},
     {"unitItem", -1, INT_MAX}, {"unitBattleX", 0, BATTLE_WIDTH_MAX - 1}, {"unitBattleY", 0, BATTLE_ROWS - 1}, {"uiWheel", INT_MIN, INT_MAX},
     {"monsterSprite", 0, MONSTER_SPRITE_END - 1}, {"itemSlotType", 0, ITEM_TYPE_LAST}, {"ritualTerrain", INT_MIN, TERRAIN_TABLE_MAX - 1},
     {"ritualCostType", INT_MIN, RITUAL_COST_TYPE_LAST}, {"ritualEffect", INT_MIN, RITUAL_EFFECT_ID_COUNT - 1},
@@ -1327,7 +1339,7 @@ static const struct { const char *name; int (*last)(void); } GAME_VAR_LAST[] = {
     {"gameWinner", lastPlayerSlot}, {"loneHuman", lastPlayerSlot}, {"rulershipSlot", lastPlayerSlot},
     {"squareOwner", lastPlayerSlot}, {"unitOwner", lastPlayerSlot},
     {"unitMonster", lastMonsterNumber}, {"squareItem", lastItemNumber},
-    {"slotClass", lastClassNumber}, {"slotLockClass", lastClassNumber},
+    {"playerClass", lastClassNumber}, {"playerFixedClass", lastClassNumber},
     {"planeLastIndex", lastPlaneRecord}, {"mapPlaneIndex", lastPlaneRecord}, {"mapViewPlane", lastPlaneInUse},
     {"commanderRitual", lastRitualSlot}, {"commanderRepeatRitual", lastRitualSlot}, {"commanderRitualPlan", lastRitualSlot},
     {"enchantRitual", lastRitualSlot}, {"unitKnownSpell", lastSpellSlot}, {"unitMemorizedSpell", lastSpellSlot},
@@ -1347,6 +1359,13 @@ static void gameVarRange(const GameVar *v, lua_Integer *min, lua_Integer *max) {
     }
     for (size_t i = 0; i < sizeof GAME_VAR_LAST / sizeof GAME_VAR_LAST[0]; i++)
         if (!strcmp(GAME_VAR_LAST[i].name, v->name) && GAME_VAR_LAST[i].last() < *max) *max = GAME_VAR_LAST[i].last();
+}
+
+static int unitCommanderIndex(int unit) {
+    int last = G32(RVA_LAST_COMMANDER);
+    for (int c = 0; c <= last && c < COMMANDER_TABLE_MAX; c++)
+        if (G32(RVA_COMMANDERS + (size_t)c * COMMANDER_SIZE) == unit) return c;
+    return -1;
 }
 
 static void flushCommanderCache(int commander) {

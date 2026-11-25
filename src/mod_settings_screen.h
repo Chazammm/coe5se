@@ -789,6 +789,7 @@ static void modsRunHook(int level) {
     factionWordsBeforePass(level);
     factionNamesBeforePass(level);
     terrainLooksBeforePass(level);
+    forestWordsBeforePass(level);
     battleMapsBeforePass(level);
     weaponTraitsBeforePass(level);
     uniqueGroupsBeforePass(level);
@@ -833,6 +834,7 @@ static void modsRunHook(int level) {
     aiClassAfterPass(level);
     noExplodeAfterPass(level);
     terrainLooksAfterPass(level);
+    forestWordsAfterPass(level);
     battleMapsAfterPass(level);
     transportsAfterPass(level);
     battleTokenSizesAfterPass(level);

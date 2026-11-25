@@ -188,9 +188,12 @@ static void factionNamesBeforePass(int level);
 static void resolveFactionNames(int level);
 static void clearLuaPlaneTints(int level);
 static const char *terrainLooksLineHook(const char *line, size_t len, int mod, int level);
+static const char *spritePackLineHook(const char *line, size_t len, int mod, int level);
 static int declinedTerrainLooksLine(const char *line, size_t len, int mod, int level);
 static void terrainLooksBeforePass(int level);
 static void terrainLooksAfterPass(int level);
+static void forestWordsBeforePass(int level);
+static void forestWordsAfterPass(int level);
 static const char *battleMapLineHook(const char *line, size_t len, int mod, int level);
 static int declinedBattleMapLine(const char *line, size_t len, int mod, int level);
 static void battleMapsBeforePass(int level);
@@ -638,6 +641,8 @@ static int menuNoticesDue(int clicked) {
     return 1;
 }
 
+static int terrainDumpDue(void);
+#define MAIN_MENU_MAP_EDITOR_ID 5
 static int menuWaitHook(int a, int b) {
     MenuColumn col;
     drawMenuColumn(&col);
@@ -657,6 +662,7 @@ static int menuWaitHook(int a, int b) {
     }
     mainMenuWaiting--;
     if (previewWorldAsked()) return MAIN_MENU_START_NEW_GAME;
+    if (terrainDumpDue()) return MAIN_MENU_MAP_EDITOR_ID;
     if (button) return 0;
     int quiet = menuNoticesDue(clicked);
     if (quiet) showLaunchNotices();
@@ -750,6 +756,7 @@ static int banishDestinationAsGame(int unit, int weapon, int attacker, int *x, i
 static void immortalReformAsGame(int unit, int plane, int apply, int *x, int *y, int *monster, int *owner);
 static int ritualCanCastAsGame(int commander, int ritual);
 static int unitHealRateAsGame(int unit);
+static int attackInitAsGame(int unit, int slot, int weapon, int init);
 static unsigned char *siteCallTarget(CallSite site) {
     unsigned char *generated = generatedSiteTarget(site);
     if (generated) return generated;
@@ -764,6 +771,7 @@ static unsigned char *siteCallTarget(CallSite site) {
     if (site == SITE_BANISH_DESTINATION) return (unsigned char *)banishDestinationAsGame;
     if (site == SITE_IMMORTAL_REFORM) return (unsigned char *)immortalReformAsGame;
     if (site == SITE_UNIT_HEAL_RATE) return (unsigned char *)unitHealRateAsGame;
+    if (site == SITE_ATTACK_INIT) return (unsigned char *)attackInitAsGame;
     if (site == SITE_MODS_READ) return (unsigned char *)modsReadAsGame;
     if (site == SITE_RITUAL_CAN_CAST) return (unsigned char *)ritualCanCastAsGame;
     if (!SITES[site].targetRva) return NULL;
@@ -785,7 +793,8 @@ static int siteRunByCoe5se(CallSite site) {
     return site == SITE_MAP_DRAW || site == SITE_BATTLE_DRAW || site == SITE_TOP_BAR_INCOME || site == SITE_WEAPON_HIT ||
            site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP || site == SITE_UNIT_RESISTANCES ||
            site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_MODS_READ || site == SITE_RITUAL_CAN_CAST ||
-           site == SITE_UNIT_BANISHABLE || site == SITE_BANISH_DESTINATION || site == SITE_IMMORTAL_REFORM || site == SITE_UNIT_HEAL_RATE;
+           site == SITE_UNIT_BANISHABLE || site == SITE_BANISH_DESTINATION || site == SITE_IMMORTAL_REFORM || site == SITE_UNIT_HEAL_RATE ||
+           site == SITE_ATTACK_INIT;
 }
 
 static int installKeepThunk(CallSite site, const unsigned char *stub) {
@@ -971,8 +980,8 @@ static void *makeGate(void *hook, void *next, GateKind kind) {
     X(SITE_NEW_UNIT) X(SITE_REMOVE_UNIT) X(SITE_TURN_UNIT_UPKEEP) X(SITE_SQUARE_UPKEEP) X(SITE_RECRUIT_BUY) X(SITE_PROMOTE_UNIT) \
     X(SITE_MASTERY_TRANSFORM) X(SITE_BATTLE_SETUP) X(SITE_BATTLE_SETUP_SIDE) X(SITE_BATTLE_SETUP_AMBUSH) X(SITE_BATTLE_TURN_EFFECTS) \
     X(SITE_BATTLE_TRANSFORM) X(SITE_FOUND_ITEM) X(SITE_REMOVE_DEAD_PLAYERS) X(SITE_CREATE_CITADEL) X(SITE_INQUISITION_SPAWN) X(SITE_ANIMAL_SUMMONING) X(SITE_ORDER_SLAVE_HUNT) X(SITE_ORDER_EAT_VILLAGE) \
-    X(SITE_UPDATE_VOID) X(SITE_VOID_SHUFFLE) X(SITE_PLANESHIFT_UNIT) X(SITE_NEW_PORTAL_PAIR) X(SITE_PLANE_DISCOVERED_PASS) X(SITE_MOVE_INFERNO_PLAYER) X(SITE_MOVE_HADES_PLAYER) X(SITE_MOVE_CELESTIAL_PLAYER) X(SITE_POPULATE_CELESTIAL) X(SITE_POPULATE_SKY) X(SITE_POPULATE_AGARTHA) X(SITE_POPULATE_INFERNO) X(SITE_POPULATE_HADES) X(SITE_POPULATE_AZTLAN) X(SITE_POPULATE_PRIMAL) X(SITE_POPULATE_ELEMENTAL) X(SITE_PLANE_RISE_TO_ELYSIUM) X(SITE_ENLARGE_PLANE) X(SITE_GEN_FLOOD_PLANE) X(SITE_ADDPLANE) X(SITE_LOAD_MAP_PLANE) X(SITE_UNIT_ADD_XP) X(SITE_USE_SPECIAL_SITE) X(SITE_LONER_STEP) X(SITE_REMOVE_TEMP_MEN) X(SITE_MOVE_WANDERING_MONSTERS) X(SITE_MOVE_PLAYER_STUPIDS) X(SITE_OVERRUN_CHECK) X(SITE_KILL_UNIT) X(SITE_SUBTRACT_UNIT_HP) X(SITE_CONTINUE_MOVE_ORDERS) X(SITE_HUMAN_MULTI_MOVE) X(SITE_GROUP_MOVE) X(SITE_MOVE_ORDER_ROUTE) X(SITE_UNIT_REMOVE_ITEM) X(SITE_MEMORIZE_SPELL) X(SITE_LEARN_RANDOM_SPELL) X(SITE_GET_START_RITUALS) X(SITE_COMMANDER_LEARN_RITUAL) X(SITE_BOLSTER_BLESSING) X(SITE_ADD_PLAYER_BLESSING) X(SITE_REMOVE_ENCHANT) X(SITE_RITUAL_PAY_COSTS) X(SITE_RITUAL_FAR_SUMMON_UNITS) X(SITE_PRIEST_FREESPAWN) X(SITE_EVENT_KILL_SQUARE) X(SITE_GIVE_ITEM_BY_NAME) X(SITE_TAKE_ITEM_BY_NAME) X(SITE_GIVE_RANDOM_ITEM) X(SITE_SQUAREEVENT_START) X(SITE_TERRAIN_PRESENT_RESCAN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_EVENT_VAR_CHANGED) X(SITE_CONSCRIPTION) X(SITE_GAME_STATISTICS) X(SITE_ALTER_TERRAIN) X(SITE_RUIN_SQUARE) X(SITE_DESTROY_GATEWAY) X(SITE_DIG_TUNNEL_SQUARE) X(SITE_MONTH_SQUARE_RESET) X(SITE_ROLL_CLASS) X(SITE_RESET_INCOME_CACHES) \
-    X(SITE_TEAM_START_LOCATIONS) X(SITE_TRIM_TEAM_LOCATIONS) X(SITE_SWAP_TEAM_LOCATIONS) X(SITE_CREATE_CITADELS_STEP) X(SITE_FIX_PORTALS) X(SITE_VOID_FLUCTUATIONS) X(SITE_PLANESHIFT_COMMANDER) X(SITE_MIST_SPREAD) X(SITE_TEMPERATURE_CHANGE) X(SITE_SPECIAL_SITE_POPULATE) X(SITE_UNIT_SWALLOW) X(SITE_UNIT_UNSWALLOW) X(SITE_LIFEFORCE_DRAIN_UNIT) X(SITE_UNIT_CATCH_FIRE) X(SITE_UNIT_CRUSH) X(SITE_REMOVE_BAD_FOLLOWERS) X(SITE_OVERPOP_CULL) X(SITE_MONKEY_CLOAK) X(SITE_RECYCLE_UNITS) X(SITE_RANDOM_TELEPORT) X(SITE_POP_HORRORS) X(SITE_KILL_TERRAIN_UNITS) X(SITE_KILL_SUNKEN_SHIPS) X(SITE_CREATE_BOATS) X(SITE_BATTLE_TRAPS) X(SITE_BATTLE_ENCHANT_TRAPS) X(SITE_BATTLE_SUMMON_STRING) X(SITE_PAY_SPELL_LIFEFORCE) X(SITE_WORLD_NEWS) X(SITE_SEASON_NEWS) X(SITE_CHECK_GAME_WON) X(SITE_SPY_CAUGHT) X(SITE_TOGGLE_AUTO_RECRUIT) X(SITE_CHANGE_LOYALTY) \
+    X(SITE_UPDATE_VOID) X(SITE_VOID_SHUFFLE) X(SITE_PLANESHIFT_UNIT) X(SITE_NEW_PORTAL_PAIR) X(SITE_PLANE_DISCOVERED_PASS) X(SITE_MOVE_INFERNO_PLAYER) X(SITE_MOVE_HADES_PLAYER) X(SITE_MOVE_CELESTIAL_PLAYER) X(SITE_POPULATE_CELESTIAL) X(SITE_POPULATE_SKY) X(SITE_POPULATE_AGARTHA) X(SITE_POPULATE_INFERNO) X(SITE_POPULATE_HADES) X(SITE_POPULATE_AZTLAN) X(SITE_POPULATE_PRIMAL) X(SITE_POPULATE_ELEMENTAL) X(SITE_PLANE_RISE_TO_ELYSIUM) X(SITE_ENLARGE_PLANE) X(SITE_GEN_FLOOD_PLANE) X(SITE_ADDPLANE) X(SITE_LOAD_MAP_PLANE) X(SITE_UNIT_ADD_XP) X(SITE_USE_SPECIAL_SITE) X(SITE_LONER_STEP) X(SITE_REMOVE_TEMP_MEN) X(SITE_MOVE_WANDERING_MONSTERS) X(SITE_MOVE_PLAYER_STUPIDS) X(SITE_OVERRUN_CHECK) X(SITE_KILL_UNIT) X(SITE_SUBTRACT_UNIT_HP) X(SITE_CONTINUE_MOVE_ORDERS) X(SITE_HUMAN_MULTI_MOVE) X(SITE_GROUP_MOVE) X(SITE_MOVE_ORDER_ROUTE) X(SITE_UNIT_REMOVE_ITEM) X(SITE_MEMORIZE_SPELL) X(SITE_LEARN_RANDOM_SPELL) X(SITE_GET_START_RITUALS) X(SITE_COMMANDER_LEARN_RITUAL) X(SITE_PLAYER_RANDOM_BLESSING) X(SITE_ADD_PLAYER_BLESSING) X(SITE_REMOVE_ENCHANT) X(SITE_RITUAL_PAY_COSTS) X(SITE_RITUAL_FAR_SUMMON_UNITS) X(SITE_PRIEST_FREESPAWN) X(SITE_EVENT_KILL_SQUARE) X(SITE_GIVE_ITEM_BY_NAME) X(SITE_TAKE_ITEM_BY_NAME) X(SITE_GIVE_RANDOM_ITEM) X(SITE_SQUAREEVENT_START) X(SITE_TERRAIN_PRESENT_RESCAN) X(SITE_SHOP_OFFER_MESSAGE) X(SITE_WORLD_FIRE_UPDATE) X(SITE_EVENT_VAR_CHANGED) X(SITE_CONSCRIPTION) X(SITE_GAME_STATISTICS) X(SITE_ALTER_TERRAIN) X(SITE_RUIN_SQUARE) X(SITE_DESTROY_GATEWAY) X(SITE_DIG_TUNNEL_SQUARE) X(SITE_MONTH_SQUARE_RESET) X(SITE_ROLL_CLASS) X(SITE_RESET_INCOME_CACHES) \
+    X(SITE_TEAM_START_LOCATIONS) X(SITE_TRIM_TEAM_LOCATIONS) X(SITE_SWAP_TEAM_LOCATIONS) X(SITE_CREATE_CITADELS_STEP) X(SITE_FIX_PORTALS) X(SITE_VOID_FLUCTUATIONS) X(SITE_PLANESHIFT_COMMANDER) X(SITE_MIST_SPREAD) X(SITE_TEMPERATURE_CHANGE) X(SITE_ELEMENTAL_ANOMALY_SPAWN) X(SITE_UNIT_SWALLOW) X(SITE_UNIT_UNSWALLOW) X(SITE_LIFEFORCE_DRAIN_UNIT) X(SITE_UNIT_CATCH_FIRE) X(SITE_UNIT_CRUSH) X(SITE_REMOVE_BAD_FOLLOWERS) X(SITE_OVERPOP_CULL) X(SITE_MONKEY_CLOAK) X(SITE_RECYCLE_UNITS) X(SITE_RANDOM_TELEPORT) X(SITE_POP_HORRORS) X(SITE_BATTLE_REMOVE_TERRAIN_UNITS) X(SITE_BATTLE_REMOVE_SUNKEN_SHIPS) X(SITE_CREATE_BOATS) X(SITE_BATTLE_TRAPS) X(SITE_BATTLE_ENCHANT_TRAPS) X(SITE_BATTLE_SUMMON_STRING) X(SITE_PAY_SPELL_LIFEFORCE) X(SITE_WORLD_NEWS) X(SITE_SEASON_NEWS) X(SITE_CHECK_GAME_WON) X(SITE_SPY_CAUGHT) X(SITE_TOGGLE_AUTO_RECRUIT) X(SITE_UNITS_TURN_TO_HADES) \
     X(SITE_ALTER_TERRAIN_RECT) X(SITE_RESPAWN_VOID) X(SITE_BATTLE_SIEGE_UNIT) X(SITE_GATHER_SHIPS) X(SITE_ADVANCE_SHIPS) X(SITE_MOVE_ENCHANTS) X(SITE_MOVE_GEMS) X(SITE_TAINTED_RITUAL_EFFECT) X(SITE_LOCATION_SWAP) X(SITE_APE_POSSESSION) X(SITE_RITUAL_ASK_HEMISPHERE) X(SITE_GET_TITHES) X(SITE_ELIMINATE_PLAYER) X(SITE_FIND_START_SQUARE) X(SITE_TROLL_FOREST_SPAWN) \
     X(SITE_AI_MAKE_DEFENDERS) X(SITE_AI_REDISTRIBUTE_ITEMS) X(SITE_AI_SHIPS) X(SITE_AI_SHIP_DROP_CREW) X(SITE_AI_SHIP_TAKE_BOAT) X(SITE_AI_SHIP_TAKE_CREW) X(SITE_CHECK_FOLLOWER_LINKS) X(SITE_STEP_BURN_FOREST) X(SITE_ORDER_BURN_FOREST) X(SITE_ORDER_CHOP_FOREST) X(SITE_LIFEFORCE_DRAIN_SQUARE) X(SITE_SPEND_ALL_AP_AT) X(SITE_SWAP_SQUARES) X(SITE_TELEPORT_UNIT) X(SITE_UNIT_CLEAR_BENEFITS) X(SITE_GAME_MENU) X(SITE_ARMY_COMMANDS_MENU) X(SITE_CEREMONY_SCREEN) X(SITE_INCOME_DETAIL_SCREEN) X(SITE_BATTLE_CREATE_TREES) X(SITE_BATTLE_DEPLOY) X(SITE_BATTLE_FIGHT_MOVE) X(SITE_BATTLE_FLY_MOVE) X(SITE_BATTLE_FLEE) X(SITE_BATTLE_FEAR_CHECK) X(SITE_BATTLE_CLOUD_STEP) X(SITE_BATTLE_ENSNARE_CHECK) X(SITE_BATTLE_ENSNARE_RELEASE) X(SITE_BATTLE_WALL_ENCHANTS) X(SITE_BATTLE_WALL_EFFECTS) X(SITE_BATTLE_START_SETUP) X(SITE_BATTLE_TUNNEL_MOVE) X(SITE_BATTLE_BANISH) X(SITE_BATTLE_DEPLOY_UNIT) X(SITE_BATTLE_AFTER_FIGHT_UPKEEP) X(SITE_BATTLE_AFTERMATH_RETURN) X(SITE_BATTLE_MR_ROLL) X(SITE_BATTLE_SUMMON_WEAPON) X(SITE_BATTLE_GATE_SWAP) X(SITE_BATTLE_SPREAD_COLLAPSE) X(SITE_UNIT_CURE_AFFLICTION) X(SITE_UNIT_HP_SHAPE_CHANGE) X(SITE_BERSERK_END) \
     X(SITE_UNIT_RANDOM_AFFLICTION) X(SITE_REVEAL_TERRAIN_ON_PLANE) X(SITE_NEAR_TERRAIN_SQUARE) X(SITE_PLAY_SAMPLE) X(SITE_GROVE_REVERSION) X(SITE_PUT_RARE_SQUARE) X(SITE_RANDOM_ITEM_PICK) \
@@ -1345,13 +1354,45 @@ static u64 runObserved(CallSite site, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u6
 OBSERVED_SITES(OBSERVE_WRAPPER)
 #undef OBSERVE_WRAPPER
 
+#ifdef __APPLE__
+// @platform-split variadic_observers: Mac's observe wrapper of a printf-style site is variadic and passes its values on
+#define MAC_VARIADIC_OBSERVED_SITES(X) X(SITE_NUMBER_BOX) X(SITE_MONTH_START)
+#define OBSERVED_VARIADIC_VALUES 6
+typedef u64 (*ObservedVariadicCall)(u64, u64, ...);
+static u64 runObservedVariadic(CallSite site, u64 a1, u64 a2, va_list ap) {
+    u64 v[OBSERVED_VARIADIC_VALUES];
+    for (int i = 0; i < OBSERVED_VARIADIC_VALUES; i++) v[i] = va_arg(ap, u64);
+    CallInfo call = {{a1, a2, v[0], v[1], v[2], v[3]}, 0};
+    notifyObservers(site, &call, 0);
+    u64 result = ((ObservedVariadicCall)nextObserved[site])(a1, a2, v[0], v[1], v[2], v[3], v[4], v[5]);
+    call = (CallInfo){{a1, a2, v[0], v[1], v[2], v[3]}, result};
+    notifyObservers(site, &call, 1);
+    return result;
+}
+#define OBSERVE_VARIADIC_WRAPPER(s) \
+    static u64 observeVariadic_##s(u64 a1, u64 a2, ...) { \
+        va_list ap; \
+        va_start(ap, a2); \
+        u64 result = runObservedVariadic(s, a1, a2, ap); \
+        va_end(ap); \
+        return result; \
+    }
+MAC_VARIADIC_OBSERVED_SITES(OBSERVE_VARIADIC_WRAPPER)
+#undef OBSERVE_VARIADIC_WRAPPER
+#endif
+
 static void *observeWrapperFor(CallSite site) {
 #define OBSERVE_CASE(s) case s: return (void *)observe_##s;
+#define OBSERVE_VARIADIC_CASE(s) if (site == s) return (void *)observeVariadic_##s;
+#ifdef __APPLE__
+    MAC_VARIADIC_OBSERVED_SITES(OBSERVE_VARIADIC_CASE)
+#endif
     switch (site) {
     OBSERVED_SITES(OBSERVE_CASE)
     default:
         return NULL;
     }
+#undef OBSERVE_VARIADIC_CASE
 #undef OBSERVE_CASE
 }
 
@@ -1430,7 +1471,10 @@ typedef unsigned long long (*AddMessageFn)(int, int, int, int, int, int, const c
 
 static void noteSendMessageText(const char *text);
 
-static int apiSendMessage(int player, const char *title, const char *text) {
+#define MESSAGE_KIND_SQUARE    0
+#define MESSAGE_KIND_COMMANDER 1
+#define MESSAGE_KIND_UNIT      2
+static int sendMessageAt(void *caller, int player, const char *title, const char *text, int x, int y, int kind, int extra) {
     if (!title) return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "no_title", "player=%d", player);
     if (!text) return REFUSE_API(MESSAGE_NOT_ADDED, "sendMessage", "no_text", "player=%d title=%s", player, title);
     if (!(player == MESSAGE_EVERY_HUMAN || (player >= 0 && player < PLAYER_SLOTS)))
@@ -1442,12 +1486,16 @@ static int apiSendMessage(int player, const char *title, const char *text) {
     shortTitle[titleLength] = '\0';
     char cut[ADD_MESSAGE_TEXT_SIZE];
     const char *whole = text;
-    text = fitGameText(__builtin_return_address(0), "sendMessage", text, cut, sizeof cut);
+    text = fitGameText(caller, "sendMessage", text, cut, sizeof cut);
     noteSendMessageText(strlen(whole) < TRANSLATED_SIZE - 1 ? whole : NULL);
-    int index = (int)((AddMessageFn)(gameBase + RVA_ADD_MESSAGE))(-1, player, -1, -1, 0, 0, shortTitle, "%s", text);
+    int index = (int)((AddMessageFn)(gameBase + RVA_ADD_MESSAGE))(-1, player, x, y, kind, extra, shortTitle, "%s", text);
     noteSendMessageText(NULL);
-    writeLog("message_sent", "player=%d title=%s index=%d", player, shortTitle, index);
+    if (x < 0) writeLog("message_sent", "player=%d title=%s index=%d", player, shortTitle, index);
+    else writeLog("message_sent", "player=%d title=%s index=%d x=%d y=%d kind=%d extra=%d", player, shortTitle, index, x, y, kind, extra);
     return index;
+}
+static int apiSendMessage(int player, const char *title, const char *text) {
+    return sendMessageAt(__builtin_return_address(0), player, title, text, -1, -1, MESSAGE_KIND_SQUARE, 0);
 }
 
 static void apiLogLine(const void *self, const char *text) {
@@ -1960,6 +2008,7 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "top_bar_income.h"
 #include "square_panel_wrap.h"
 #include "computed_hooks.h"
+#include "battle_script_traits.h"
 #include "commander_lines.h"
 #include "lua_scripts.h"
 #include "lua_determinism.h"
@@ -2030,6 +2079,10 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "plane_pieces.h"
 #include "preview_lines.h"
 #include "terrain_looks.h"
+#include "terrain_scatter.h"
+#include "forest_words.h"
+#include "tree_starter.h"
+#include "terrain_dump.h"
 #include "battle_maps.h"
 #ifndef __APPLE__
 #include "lua_test_field_environment.h"
@@ -2043,11 +2096,13 @@ static u64 modErrorDialogWrapper(u64 title, u64 text, u64 a3, u64 a4, u64 a5, u6
 #include "battle_token_size.h"
 #include "event_finders.h"
 #include "drown_search.h"
+#include "far_summon_count.h"
 #include "battle_snapshot.h"
 #include "fanpatch/fanpatch_host.h"
 #include "transport_carry.h"
 #include "item_slot_hooks.h"
 #include "item_slot_card.h"
+#include "attack_init.h"
 #include "item_slot_battle.h"
 #include "item_slot_weapons.h"
 #include "lua_test_field_loadout.h"
@@ -2130,6 +2185,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_BATTLE_SNAPSHOT)) battleSnapshotInit();
     if (featureOn(FEATURE_STRENGTH_INDEX)) strengthIndexInit();
     if (featureOn(FEATURE_DROWN_SEARCH)) drownSearchInit();
+    if (featureOn(FEATURE_FAR_SUMMON_COUNT)) farSummonCountInit();
 #ifndef __APPLE__
     if (featureOn(FEATURE_TRACE_LOG_FILE)) traceLogFileInit();
     if (featureOn(FEATURE_STACK_COOKIE)) installStackCookieHook();
@@ -2176,6 +2232,9 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_PLANE_WORDS)) planeWordsInit();
     if (featureOn(FEATURE_FACTION_WORDS)) factionWordsInit();
     if (featureOn(FEATURE_TERRAIN_LOOKS)) terrainLooksWordsInit();
+    if (featureOn(FEATURE_TERRAIN_LOOKS)) terrainScatterWordsInit();
+    if (featureOn(FEATURE_FOREST_WORDS)) forestWordsInit();
+    if (featureOn(FEATURE_TERRAIN_LOOKS)) terrainDumpInit();
     if (featureOn(FEATURE_BATTLE_MAPS)) battleMapWordsInit();
     if (featureOn(FEATURE_MONSTER_FLAGS)) monsterFlagWordsInit();
     if (featureOn(FEATURE_HATES)) hatesWordsInit();

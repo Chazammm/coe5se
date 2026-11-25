@@ -175,6 +175,8 @@ static int ritualCanCastAsGame(int commander, int ritual);
 static int installComputedHook(CallSite site);
 static int unitHealRateAsGame(int unit);
 static int healRateHooksIn;
+static int attackInitAsGame(int unit, int slot, int weapon, int init);
+static int installAttackInitHooks(void);
 static int siteHasCopyHooksMac(CallSite site) {
     return site == SITE_AI_COUNT_CITADELS || site == SITE_SQUARE_OPEN_LAND || site == SITE_SQUARE_LIBRARY_LEVEL ||
            site == SITE_UNIT_INCAPACITATED || site == SITE_UNIT_FIRE_RESISTANCE;
@@ -197,6 +199,7 @@ static void *siteGameFunction(CallSite site) {
     if (site == SITE_BANISH_DESTINATION) return (void *)banishDestinationAsGame;
     if (site == SITE_IMMORTAL_REFORM) return (void *)immortalReformAsGame;
     if (site == SITE_UNIT_HEAL_RATE) return (void *)unitHealRateAsGame;
+    if (site == SITE_ATTACK_INIT) return (void *)attackInitAsGame;
     if (site == SITE_MODS_READ) return (void *)modsReadAsGame;
     if (site == SITE_RITUAL_CAN_CAST) return (void *)ritualCanCastAsGame;
     if (isInlinedButtonRowSite(site)) return (void *)buttonRowMac;
@@ -761,10 +764,11 @@ static int installSite(CallSite site) {
         writeLog("site_skipped", "site=%s reason=upkeep_hooks_missing", info->name);
         return 0;
     }
+    if (site == SITE_ATTACK_INIT && !installAttackInitHooks()) return 0;
     if (site == SITE_BATTLE_DRAW || site == SITE_WEAPON_HIT || site == SITE_BATTLE_TARGET_CHECK || site == SITE_SQUARE_PANEL_WRAP ||
         site == SITE_UNIT_RESISTANCES || site == SITE_UNIT_FLAGS || site == SITE_UNIT_MAX_HP || site == SITE_MODS_READ ||
         site == SITE_RITUAL_CAN_CAST || site == SITE_UNIT_BANISHABLE || site == SITE_BANISH_DESTINATION || site == SITE_IMMORTAL_REFORM ||
-        site == SITE_UNIT_HEAL_RATE) {
+        site == SITE_UNIT_HEAL_RATE || site == SITE_ATTACK_INIT) {
         *siteHead(site) = siteGameFunction(site);
         siteInstalled[site] = 1;
         return 1;

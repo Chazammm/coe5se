@@ -330,9 +330,8 @@ static __attribute__((unused)) uint64_t groundInfoRow(short style) {
         const short *slots = groundItemsAt(groundInfoX, groundInfoY);
         for (int i = 0; i < GROUND_ITEMS_PER_SQUARE && slots[i] >= 0; i++) {
             if (slots[i] >= tableRecords(TABLE_ITEM)) break;
-            char line[96];
-            snprintf(line, sizeof line, "Magic item here: %.47s", (const char *)(tableAddress(TABLE_ITEM) + (size_t)slots[i] * ITEM_SIZE));
-            textButtonAsIs(0, line);
+            if (i == 0) textButtonAsIs(0, "Magic item(s) here:");
+            textButtonAsIs(0, (const char *)(tableAddress(TABLE_ITEM) + (size_t)slots[i] * ITEM_SIZE));
         }
     }
     return nextGroundInfoRow(style);

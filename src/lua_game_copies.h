@@ -707,6 +707,7 @@ static void forestShepherdSpawnCopy(int x, int y) {
     if (owner < 0 || !copyEnchantCount(owner, 2, x, y) || copyRandom(100) >= 33) return;
     copyPopulate(x, y, "Forest Shepherd", 1, owner);
 }
+static int terrainSpawnsWild(int terrain);
 static void wildSpawnCopy(int x, int y) {
     if (!copyOnMapW(x, y)) return;
     int owner = copySquareOwner(x, y);
@@ -715,7 +716,7 @@ static void wildSpawnCopy(int x, int y) {
     for (int tries = 0; tries < 10; tries++) {
         int tx = copyRandom(7) + x - 3, ty = copyRandom(7) + y - 3;
         if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-        if ((unsigned short)((unsigned short)G16(copySquareAt(tx, ty) + SQUARE_TERRAIN_TYPE) - 2) & 0xfffd) continue;
+        if (!terrainSpawnsWild((short)G16(copySquareAt(tx, ty) + SQUARE_TERRAIN_TYPE))) continue;
         if (copySquareOwner(x, y) != owner) continue;
         int pick = copyRandom(8), n;
         const char *name;
@@ -1420,7 +1421,7 @@ static void killUnitCopy(int u) {
 #else
     GAME_FN(void (*)(int), RVA_KILL_UNIT_999)(u);
 #endif
-    if ((short)G16(RVA_UNIT_HP + at) <= 0 && netRoleNow() == NET_ROLE_CLIENT && netClientInTurn) noteClientUnitKill(u, monster);
+    if ((short)G16(RVA_UNIT_HP + at) <= 0 && netRoleNow() == NET_ROLE_CLIENT && netClientInTurn && !netReplayRunning()) noteClientUnitKill(u, monster);
 }
 
 // ---- A LAN client's kills in its turn file: UKIL ----------------------------------------------------

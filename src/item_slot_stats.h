@@ -81,6 +81,18 @@ static unsigned long long itemStatFlags(int unit, int field) {
     return flags;
 }
 
+// ---- Abilities a script gives a unit: coe5.afflictionEffect's UNIT_ABILITY ------------------------------------
+static int (*scriptAbilityHolder)(int unit);
+static int (*scriptAbilityAmount)(int unit, int ability);
+
+static int unitHasScriptAbility(int unit) { return scriptAbilityHolder && scriptAbilityHolder(unit); }
+
+static int itemStatScriptFold(int unit, int ability, int total, int sum) {
+    if (!unitHasScriptAbility(unit)) return total;
+    int value = scriptAbilityAmount(unit, ability);
+    return value ? itemStatCombine(total, value, sum) : total;
+}
+
 // ---- RVA_UNIT_ABILITY_TOTAL: the game's own, or the copy for a unit holding items past position 7 ---------------
 typedef int (*UnitAbilityTotalFn)(int unit, int ability, int add, char *out, int size, int *first);
 static UnitAbilityTotalFn gameUnitAbilityTotal;
@@ -128,6 +140,7 @@ static int itemStatsAbilityTotal(int unit, int ability, int add, char *out, int 
         if (first && *first < 0) *first = item;
     }
     total = itemStatFold(unit, ability, total, add, out, size, first);
+    total = itemStatScriptFold(unit, ability, total, add);
     int owner = (short)G16(RVA_UNIT_PLAYER + at);
     if (owner >= 0) {
         typedef unsigned long long (*FlagsFn)(int);
@@ -149,7 +162,7 @@ static int itemStatsAbilityTotal(int unit, int ability, int add, char *out, int 
 }
 
 static int unitAbilityTotalHook(int unit, int ability, int add, char *out, int size, int *first) {
-    if (!unitExtraItemCount(unit)) return gameUnitAbilityTotal(unit, ability, add, out, size, first);
+    if (!unitExtraItemCount(unit) && !unitHasScriptAbility(unit)) return gameUnitAbilityTotal(unit, ability, add, out, size, first);
     return itemStatsAbilityTotal(unit, ability, add, out, size, first);
 }
 
@@ -228,17 +241,20 @@ static UNUSED void itemStatSiteRun(int index, unsigned long long *r) {
         itemStatSiteLogged[index] = 1;
         return;
     }
-    if (!unitExtraItemCount(unit)) return;
+    int extra = unitExtraItemCount(unit) != 0, scripted = unitHasScriptAbility(unit);
+    if (!extra && !scripted) return;
     int argument = itemPlaceRead(&s->ability, r) + s->abilityAdd;
     if (s->kind == ITEM_STAT_FLAGS) {
-        r[s->total.reg & 15] |= itemStatFlags(unit, argument);
+        if (extra) r[s->total.reg & 15] |= itemStatFlags(unit, argument);
         return;
     }
+    if (s->kind == ITEM_STAT_PATHBOOST && !extra) return;
     int total = itemPlaceRead(&s->total, r);
     if (s->kind == ITEM_STAT_PATHBOOST) total = itemStatPathboost(unit, argument, total);
     else {
         int sum = s->kind == ITEM_STAT_SUM || (s->kind == ITEM_STAT_BY_MODE && itemPlaceRead(&s->mode, r) != 0);
-        total = itemStatFold(unit, argument, total, sum, NULL, 0, NULL);
+        if (extra) total = itemStatFold(unit, argument, total, sum, NULL, 0, NULL);
+        total = itemStatScriptFold(unit, argument, total, sum);
     }
     itemPlaceWrite(&s->total, r, total);
 }
@@ -253,6 +269,12 @@ static UNUSED void itemStatSiteRun(int index, unsigned long long *r) {
 static unsigned char *itemStatPage;
 
 __attribute__((used)) short **coe5seItemStatStore = &extraItems;
+static short *itemStatScriptsOpen;
+
+static void openItemStatSitesToScripts(void) {
+    itemStatScriptsOpen = (short *)&itemStatScriptsOpen;
+    coe5seItemStatStore = &itemStatScriptsOpen;
+}
 void coe5seItemStatHandle(unsigned long long *registers, const unsigned char *returnAddress);
 __attribute__((used)) void coe5seItemStatHandle(unsigned long long *registers, const unsigned char *returnAddress) {
     long long index = (returnAddress - ITEM_STAT_CALL_SIZE - itemStatPage) / ITEM_STAT_STUB_SIZE;
@@ -420,6 +442,7 @@ static int installItemStatSites(int counts[5]) {
 #else
 // ---- Mac: the flag sums and the pathboost count as step hooks --------------------------------------------
 // @platform-split item_stat_sites: Windows patches about 390 generated sites, Mac five step hooks (the rest call RVA_UNIT_ABILITY_TOTAL)
+static void openItemStatSitesToScripts(void) {}
 typedef struct {
     StepHook hook;
     unsigned int rva;

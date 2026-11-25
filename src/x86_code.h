@@ -414,6 +414,47 @@ static UNUSED size_t buildItemNetIndexStub(unsigned char *code, const unsigned c
     return itemCardEnd(&e);
 }
 
+// ---- An attack's initiative (attack_init.h) ----------------------------------------------------------------------
+#define ATTACK_INIT_STUB_SIZE 112
+
+static UNUSED size_t buildAttackInitPlanStub(unsigned char *code, const unsigned char *stub, const void *slot, const void *saved,
+                                             const unsigned char *clamp, const unsigned char *none) {
+    static const unsigned char SAVE[3][3] = {{0x4c, 0x89, 0x05}, {0x4c, 0x89, 0x0d}, {0x4c, 0x89, 0x15}};
+    static const unsigned char LOAD[3][3] = {{0x4c, 0x8b, 0x05}, {0x4c, 0x8b, 0x0d}, {0x4c, 0x8b, 0x15}};
+    static const unsigned char ARGS[] = {0x89, 0x54, 0x24, 0x20, 0x89, 0xd9, 0x44, 0x89, 0xe2, 0x45, 0x89, 0xf0, 0x45, 0x89, 0xd9};
+    static const unsigned char RESULT[] = {0x89, 0xc2};
+    static const unsigned char TEST[] = {0x85, 0xd2}, JNS[] = {0x0f, 0x89}, NONE[] = {0x33, 0xc9}, JMP[] = {0xe9};
+    ItemCardEmit e = {code, code, stub, 1};
+    memset(code, 0xcc, ATTACK_INIT_STUB_SIZE);
+    for (int r = 0; r < 3; r++) itemCardRel32(&e, SAVE[r], 3, (const unsigned char *)saved + 8 * r);
+    itemCardBytes(&e, ARGS, sizeof ARGS);
+    itemCardCall(&e, slot);
+    itemCardBytes(&e, RESULT, sizeof RESULT);
+    for (int r = 0; r < 3; r++) itemCardRel32(&e, LOAD[r], 3, (const unsigned char *)saved + 8 * r);
+    itemCardBytes(&e, TEST, sizeof TEST);
+    itemCardRel32(&e, JNS, 2, clamp);
+    itemCardBytes(&e, NONE, sizeof NONE);
+    itemCardRel32(&e, JMP, 1, none);
+    return e.ok && e.p - e.code <= ATTACK_INIT_STUB_SIZE ? (size_t)(e.p - e.code) : 0;
+}
+
+static UNUSED size_t buildAttackInitCardStub(unsigned char *code, const unsigned char *stub, const void *slot, const unsigned char *moved,
+                                             int movedSize, const unsigned char *args, int argsSize, const unsigned char *result,
+                                             int resultSize, const unsigned char *back) {
+    static const unsigned char JMP[] = {0xe9};
+    if (movedSize < 1 || movedSize > ITEM_CARD_MOVED_MAX || argsSize < 0 || argsSize > ITEM_ARGS_MAX || resultSize < 0 ||
+        resultSize > ITEM_ARGS_MAX)
+        return 0;
+    ItemCardEmit e = {code, code, stub, 1};
+    memset(code, 0xcc, ATTACK_INIT_STUB_SIZE);
+    itemCardBytes(&e, moved, movedSize);
+    itemCardBytes(&e, args, argsSize);
+    itemCardCall(&e, slot);
+    itemCardBytes(&e, result, resultSize);
+    itemCardRel32(&e, JMP, 1, back);
+    return e.ok && e.p - e.code <= ATTACK_INIT_STUB_SIZE ? (size_t)(e.p - e.code) : 0;
+}
+
 // ---- The aftermath's banish square (lua_battle_banish.h) --------------------------------------------------------
 static UNUSED size_t buildBanishSquareStub(unsigned char *code, const unsigned char *stub, const void *hook, const unsigned char *write) {
     static const unsigned char ARGS[] = {0x44, 0x89, 0xf9, 0x44, 0x89, 0xf2, 0x41, 0x89, 0xe8};
@@ -469,6 +510,52 @@ static UNUSED size_t buildVoidCountCall(unsigned char *code, const unsigned char
     memcpy(p, &rel, 4);
     p += 4;
     return (size_t)(p - code);
+}
+
+// ---- A script's added traits in the battle's reads (battle_script_traits.h) --------------------------------------
+#define TRAIT_READ_STUB_SIZE 160
+#define TRAIT_READ_MOVED     8
+
+static UNUSED void traitReadKeep(ItemCardEmit *e, unsigned regs, const void *saved, int load) {
+    static const unsigned char MODRM[7] = {0x05, 0x0d, 0x15, 0x05, 0x0d, 0x15, 0x1d};
+    for (int r = 0; r < 7; r++) {
+        if (!(regs >> r & 1)) continue;
+        const unsigned char op[3] = {(unsigned char)(r < 3 ? 0x48 : 0x4c), (unsigned char)(load ? 0x8b : 0x89), MODRM[r]};
+        itemCardRel32(e, op, 3, (const unsigned char *)saved + 8 * r);
+    }
+}
+
+static UNUSED size_t buildTeleportTestStub(unsigned char *code, const unsigned char *stub, const void *slot, const void *saved,
+                                           const unsigned char *moved, const unsigned char *blink, const unsigned char *none) {
+    static const unsigned char JNE[] = {0x0f, 0x85}, JE[] = {0x0f, 0x84}, JMP[] = {0xe9};
+    static const unsigned char UNIT[] = {0x44, 0x89, 0xf9}, TEST[] = {0x85, 0xc0};
+    ItemCardEmit e = {code, code, stub, 1};
+    memset(code, 0xcc, TRAIT_READ_STUB_SIZE);
+    itemCardBytes(&e, moved, TRAIT_READ_MOVED);
+    itemCardRel32(&e, JNE, 2, blink);
+    traitReadKeep(&e, 0x7f, saved, 0);
+    itemCardBytes(&e, UNIT, sizeof UNIT);
+    itemCardCall(&e, slot);
+    itemCardBytes(&e, TEST, sizeof TEST);
+    traitReadKeep(&e, 0x7f, saved, 1);
+    itemCardRel32(&e, JE, 2, none);
+    itemCardRel32(&e, JMP, 1, blink);
+    return e.ok && e.p - e.code <= TRAIT_READ_STUB_SIZE ? (size_t)(e.p - e.code) : 0;
+}
+
+static UNUSED size_t buildShieldReadStub(unsigned char *code, const unsigned char *stub, const void *slot, const void *saved,
+                                         const unsigned char *moved, const unsigned char *back) {
+    static const unsigned char JMP[] = {0xe9};
+    static const unsigned char ARGS[] = {0x44, 0x89, 0xe1, 0x48, 0x89, 0xc2};
+    ItemCardEmit e = {code, code, stub, 1};
+    memset(code, 0xcc, TRAIT_READ_STUB_SIZE);
+    itemCardBytes(&e, moved, TRAIT_READ_MOVED);
+    traitReadKeep(&e, 0x7e, saved, 0);
+    itemCardBytes(&e, ARGS, sizeof ARGS);
+    itemCardCall(&e, slot);
+    traitReadKeep(&e, 0x7e, saved, 1);
+    itemCardRel32(&e, JMP, 1, back);
+    return e.ok && e.p - e.code <= TRAIT_READ_STUB_SIZE ? (size_t)(e.p - e.code) : 0;
 }
 
 #endif

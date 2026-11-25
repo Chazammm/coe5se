@@ -41,6 +41,7 @@ static void immortalReformHook(int unit, int plane, int *x, int *y, int *monster
         unit, plane, apply, x, y, monster, owner);
 }
 
+static void installBattleTraitReads(CallSite site);
 static int installComputedHook(CallSite site) {
     static int done[SITE_COUNT];
     static const struct { CallSite site; unsigned int rva; void *detour; void **original; } HOOKS[] = {
@@ -71,5 +72,6 @@ static int installComputedHook(CallSite site) {
     int ok = fanpatchHookCreate(target, detour, original) && fanpatchHookEnable(target, 1);
     done[site] = ok ? 1 : -1;
     writeInstallLogFields("computed_hook_installed", ok, 1, "site=%s", SITES[site].name);
+    if (ok) installBattleTraitReads(site);
     return ok;
 }

@@ -6,7 +6,11 @@
 #define TERRAIN_VANILLA_LAST       (TERRAIN_TRS_SPRITES - 1)
 #define TERRAIN_LOOKS_FROM_WORDS   1
 #define TERRAIN_LOOKS_EARLIER_PASS 2
+#define TERRAIN_FOREST             2
+#define TERRAIN_ENCHANTED_FOREST   8
+#define TERRAIN_DEAD_FOREST        36
 #define SPRITE_MODE_MAP            4
+#define TERRAIN_PICTURE_FITTED     2
 
 typedef struct {
     char path[MAX_PATH];
@@ -14,6 +18,8 @@ typedef struct {
     int w, h;
     int loaded;
     unsigned char *rgba;
+    int fit;
+    int fitted;
 } TerrainPicture;
 static TerrainPicture *terrainPictures;
 static int terrainPictureCount, terrainPictureCapacity;
@@ -64,15 +70,16 @@ static int readImageSize(const char *path, int *w, int *h) {
 
 static int isPowerOfTwo(int n) { return n > 0 && !(n & (n - 1)); }
 
-static int addTerrainPicture(const char *path) {
+static int addTerrainPictureAs(const char *path, int fit) {
     for (int i = 0; i < terrainPictureCount; i++)
-        if (!strcmp(terrainPictures[i].path, path)) return i;
+        if (!strcmp(terrainPictures[i].path, path) && terrainPictures[i].fit == fit) return i;
     if (terrainPictureCount >= TERRAIN_PICTURES_MAX ||
         !growList((void **)&terrainPictures, &terrainPictureCapacity, terrainPictureCount + 1, sizeof *terrainPictures))
         return -1;
     TerrainPicture *t = &terrainPictures[terrainPictureCount];
     memset(t, 0, sizeof *t);
     snprintf(t->path, sizeof t->path, "%s", path);
+    t->fit = fit;
     return terrainPictureCount++;
 }
 
@@ -81,13 +88,14 @@ static const char *findTerrainPicture(const char *folder, const char *spec, int 
     const char *reason = strlen(spec) > PLANE_ICON_SPEC_MAX ? "bad_icon" : findModImage(folder, spec, path, sizeof path);
     int w = 0, h = 0;
     if (!reason && !readImageSize(path, &w, &h)) reason = "bad_picture";
-    if (!reason && ground && !endsWith(path, ".tga")) reason = "not_a_tga";
-    if (!reason && ground && (!isPowerOfTwo(w) || !isPowerOfTwo(h))) reason = "size_not_power_of_two";
-    if (!reason && (*picture = addTerrainPicture(path)) < 0) reason = "too_many_pictures";
+    if (!reason && ground == 1 && !endsWith(path, ".tga")) reason = "not_a_tga";
+    if (!reason && ground == 1 && (!isPowerOfTwo(w) || !isPowerOfTwo(h))) reason = "size_not_power_of_two";
+    if (!reason && (*picture = addTerrainPictureAs(path, ground == TERRAIN_PICTURE_FITTED)) < 0) reason = "too_many_pictures";
     if (!reason) terrainPictures[*picture].w = w, terrainPictures[*picture].h = h;
     return reason;
 }
 
+static int fitScatterPictureFile(TerrainPicture *t, char *out, size_t size);
 static int terrainPictureSprite(int pic) {
     TerrainPicture *t = &terrainPictures[pic];
     int sprite = TREE_TRS_SPRITES + pic;
@@ -95,21 +103,30 @@ static int terrainPictureSprite(int pic) {
     int *const *replaced = (int *const *)GAME_PTR(RVA_SPRITE_REPLACED);
     const int *list = replaced[SPRITE_KIND_TREE];
     if (t->registered > 0 && list && list[sprite] >= 0) return sprite;
+    char fitted[MAX_PATH];
+    const char *path = t->path;
+    if (t->fit) {
+        if (!fitScatterPictureFile(t, fitted, sizeof fitted)) {
+            t->registered = -1;
+            return -1;
+        }
+        path = fitted;
+    }
     int image;
-    if (terrainSpriteReplaceForTests) image = terrainSpriteReplaceForTests(SPRITE_KIND_TREE, sprite, t->path);
+    if (terrainSpriteReplaceForTests) image = terrainSpriteReplaceForTests(SPRITE_KIND_TREE, sprite, path);
 #ifndef __APPLE__
-    else image = GAME_FN(int (*)(int, int, int, const char *), RVA_REPLACE_SPRITE)(SPRITE_KIND_TREE, sprite, 0, t->path);
+    else image = GAME_FN(int (*)(int, int, int, const char *), RVA_REPLACE_SPRITE)(SPRITE_KIND_TREE, sprite, 0, path);
 #else
-    else image = GAME_FN(int (*)(int, int, const char *), RVA_REPLACE_SPRITE)(SPRITE_KIND_TREE, sprite, t->path);
+    else image = GAME_FN(int (*)(int, int, const char *), RVA_REPLACE_SPRITE)(SPRITE_KIND_TREE, sprite, path);
 #endif
     list = replaced[SPRITE_KIND_TREE];
     if (image < 0 || !list || list[sprite] < 0) {
         t->registered = -1;
-        writeLogWarning("terrain_sprite_refused", "reason=picture_not_loaded sprite=%d path=%s", sprite, t->path);
+        writeLogWarning("terrain_sprite_refused", "reason=picture_not_loaded sprite=%d path=%s", sprite, path);
         return -1;
     }
     t->registered = 1;
-    writeLog("terrain_sprite_registered", "sprite=%d path=%s", sprite, t->path);
+    writeLog("terrain_sprite_registered", "sprite=%d path=%s", sprite, path);
     return sprite;
 }
 
@@ -130,6 +147,10 @@ static int installTerrainDecorHook(void);
 static int installTerrainCompositeHook(void);
 static int installBattleBackgroundHook(void);
 static void rebuildTerrainLooks(void);
+static void terrainScatterBeforePass(int level);
+static void terrainScatterAfterPass(int level);
+static void markScriptScatterRestarting(const char *mod);
+static void markScriptForestRestarting(const char *mod);
 
 static TerrainLooks *findTerrainLooks(int terrain) {
     for (int i = 0; i < terrainLooksCount; i++)
@@ -140,6 +161,8 @@ static TerrainLooks *findTerrainLooks(int terrain) {
 static void markScriptLooksRestarting(const char *mod) {
     for (int i = 0; i < terrainLooksCount; i++)
         if (terrainLooks[i].script && !terrainLooks[i].from && !strcmp(terrainLooks[i].mod, mod)) terrainLooks[i].from = TERRAIN_LOOKS_EARLIER_PASS;
+    markScriptScatterRestarting(mod);
+    markScriptForestRestarting(mod);
 }
 
 static const char *declareTerrainLooks(const char *mod, const TerrainLooksFields *f, int script, const char *file, int line) {
@@ -335,6 +358,7 @@ static void terrainLooksBeforePass(int level) {
     finishLooksBlock();
     for (int i = 0; i < terrainLooksCount; i++)
         if (terrainLooks[i].from) terrainLooks[i].from = TERRAIN_LOOKS_EARLIER_PASS;
+    terrainScatterBeforePass(level);
 }
 
 static void terrainLooksAfterPass(int level) {
@@ -351,6 +375,7 @@ static void terrainLooksAfterPass(int level) {
     }
     terrainLooksCount = kept;
     rebuildTerrainLooks();
+    terrainScatterAfterPass(level);
 }
 
 // ---- The ground pass ---------------------------------------------------------------------------
@@ -452,6 +477,23 @@ static int installTerrainGroundHook(void) {
 }
 
 // ---- The decorations ---------------------------------------------------------------------------
+static void pointDecorEntry(unsigned char *e, int to) {
+    size_t noted = (size_t)SPRITE_KIND_TREE * SPRITES_PER_KIND + (size_t)to;
+    short *widths = (short *)GAME_PTR(RVA_SPRITE_WIDTHS), *heights = (short *)GAME_PTR(RVA_SPRITE_HEIGHTS);
+    if (!widths[noted] && !terrainSpriteReplaceForTests) GAME_FN(int (*)(int, int, int), RVA_LOAD_SPRITE)(SPRITE_KIND_TREE, to, SPRITE_MODE_MAP);
+    short sixteen = (short)to;
+    memcpy(e + DECOR_ENTRY_SPRITE, &sixteen, 2);
+    if (widths[noted] <= 0 || heights[noted] <= 0) return;
+    float x, w, h;
+    memcpy(&x, e + DECOR_ENTRY_X, 4);
+    memcpy(&w, e + DECOR_ENTRY_W, 4);
+    memcpy(&h, e + DECOR_ENTRY_H, 4);
+    float width = h * (float)widths[noted] / (float)heights[noted];
+    x += (w - width) * 0.5f;
+    memcpy(e + DECOR_ENTRY_X, &x, 4);
+    memcpy(e + DECOR_ENTRY_W, &width, 4);
+}
+
 static void remapTerrainDecor(const TerrainLooks *t, int first, int last) {
     unsigned char *queue = GAME_PTR(RVA_DECOR_QUEUE);
     for (int i = first; i <= last; i++) {
@@ -462,25 +504,19 @@ static void remapTerrainDecor(const TerrainLooks *t, int first, int last) {
         if (kind != SPRITE_KIND_TREE || sprite < 0 || sprite >= TREE_TRS_SPRITES || !t->spriteMap[sprite]) continue;
         int to = terrainPictureSprite(t->spriteMap[sprite] - 1);
         if (to < 0) continue;
-        size_t noted = (size_t)SPRITE_KIND_TREE * SPRITES_PER_KIND + (size_t)to;
-        short *widths = (short *)GAME_PTR(RVA_SPRITE_WIDTHS), *heights = (short *)GAME_PTR(RVA_SPRITE_HEIGHTS);
-        if (!widths[noted] && !terrainSpriteReplaceForTests) GAME_FN(int (*)(int, int, int), RVA_LOAD_SPRITE)(SPRITE_KIND_TREE, to, SPRITE_MODE_MAP);
-        short sixteen = (short)to;
-        memcpy(e + DECOR_ENTRY_SPRITE, &sixteen, 2);
-        if (widths[noted] <= 0 || heights[noted] <= 0) continue;
-        float x, w, h;
-        memcpy(&x, e + DECOR_ENTRY_X, 4);
-        memcpy(&w, e + DECOR_ENTRY_W, 4);
-        memcpy(&h, e + DECOR_ENTRY_H, 4);
-        float width = h * (float)widths[noted] / (float)heights[noted];
-        x += (w - width) * 0.5f;
-        memcpy(e + DECOR_ENTRY_X, &x, 4);
-        memcpy(e + DECOR_ENTRY_W, &width, 4);
+        pointDecorEntry(e, to);
     }
 }
 
+static int terrainHasScatter(int terrain);
+static void drawTerrainScatter(int plane, int x, int y, int terrain);
+
 static void terrainDecorationsHook(int plane, int x, int y, int terrain) {
     MapDecorationsFn game = terrainDecorationsForTests ? terrainDecorationsForTests : GAME_FN(MapDecorationsFn, RVA_MAP_DECORATIONS);
+    if (terrainHasScatter(terrain)) {
+        drawTerrainScatter(plane, x, y, terrain);
+        return;
+    }
     int at = terrain >= 0 && terrain < TERRAIN_TABLE_MAX ? terrainLooksAt[terrain] : 0;
     const TerrainLooks *t = at ? &terrainLooks[at - 1] : NULL;
     if (!t || t->decor < 0) {

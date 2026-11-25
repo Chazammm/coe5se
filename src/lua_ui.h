@@ -1,4 +1,5 @@
 static int monsterRowIndex;
+static int monsterRowFirstElement = -1, monsterRowLastElement = -1;
 static int uiButtonCount;
 static int uiButtonsWaiting;
 static LuaScript *uiFrameScript;
@@ -9,6 +10,7 @@ static int lScreenBegin(lua_State *L) {
     closeLuaRow(L, "coe5.ui.screenBegin");
     uiFrameScript = luaScriptOf(L);
     monsterRowIndex = 0;
+    monsterRowLastElement = -1;
     uiButtonCount = 0;
     luaApi->ui->screenBegin(luaL_checkstring(L, 1));
     return 0;
@@ -44,7 +46,27 @@ static int lCheckbox(lua_State *L) {
     luaApi->ui->checkbox(id, value, label);
     return 0;
 }
-static int lTooltip(lua_State *L) { luaApi->ui->tooltip(luaL_checkstring(L, 1)); return 0; }
+static int isTooltipElement(const unsigned char *element) {
+    short type = *(const short *)(element + LAYOUT_ELEMENT_TYPE);
+    return type != LAYOUT_TYPE_COLUMN_X && type != LAYOUT_TYPE_OVERLAP;
+}
+static void spreadTooltipOverMonsterRow(void) {
+    int first = monsterRowFirstElement, last = monsterRowLastElement;
+    if (last < 0 || G32(RVA_LAYOUT_LAST) != last) return;
+    unsigned char *table = GAME_PTR(RVA_LAYOUT_TABLE);
+    int linked = last;
+    while (linked > first && !isTooltipElement(table + (size_t)linked * LAYOUT_STRIDE)) linked--;
+    int tooltipIndex = *(int *)(table + (size_t)linked * LAYOUT_STRIDE + LAYOUT_ELEMENT_TOOLTIP);
+    for (int i = first; i <= last; i++) {
+        unsigned char *element = table + (size_t)i * LAYOUT_STRIDE;
+        if (isTooltipElement(element)) *(int *)(element + LAYOUT_ELEMENT_TOOLTIP) = tooltipIndex;
+    }
+}
+static int lTooltip(lua_State *L) {
+    luaApi->ui->tooltip(luaL_checkstring(L, 1));
+    spreadTooltipOverMonsterRow();
+    return 0;
+}
 static int lButtonRow(lua_State *L) { (void)L; luaApi->ui->buttonRow(); return 0; }
 static int lListBegin(lua_State *L) { (void)L; luaApi->ui->listBegin(); return 0; }
 static int lListRow(lua_State *L) { luaApi->ui->listRow((int)luaL_checkinteger(L, 1), luaL_checkstring(L, 2)); return 0; }
@@ -581,6 +603,8 @@ static int lMonsterRow(lua_State *L) {
     char cut[TEXT_BUTTON_TEXT_SIZE], cut2[TEXT_BUTTON_TEXT_SIZE];
     text = fitTranslatedText((void *)lMonsterRow, "coe5.ui.monsterRow", text, cut, sizeof cut);
     int stripe = (monsterRowIndex++ & 1) + 1;
+    monsterRowFirstElement = G32(RVA_LAYOUT_LAST) + 1;
+    monsterRowLastElement = -1;
     monsterRowBegin();
     if (!line2) {
         GAME_FN(void (*)(int, int), RVA_ROW_STRIPE)(stripe, MONSTER_ROW_STRIPE_WIDTH);
@@ -588,6 +612,7 @@ static int lMonsterRow(lua_State *L) {
         monsterRowColumn(MONSTER_ROW_TEXT_X);
         textButtonAsIs((int)id, text);
         monsterRowEnd();
+        monsterRowLastElement = G32(RVA_LAYOUT_LAST);
         return 0;
     }
     line2 = fitTranslatedText((void *)lMonsterRow, "coe5.ui.monsterRow", line2, cut2, sizeof cut2);
@@ -609,6 +634,7 @@ static int lMonsterRow(lua_State *L) {
         (int)id, TEXT_COLOUR_KEEP, TEXT_COLOUR_KEEP, TEXT_COLOUR_KEEP, MONSTER_ROW_SUBTEXT_ALPHA, "%s", line2));
     setTextScale(scale);
     monsterRowEnd();
+    monsterRowLastElement = G32(RVA_LAYOUT_LAST);
     return 0;
 }
 
