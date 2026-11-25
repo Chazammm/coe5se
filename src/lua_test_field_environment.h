@@ -22,7 +22,8 @@ static const char *testFieldEnvironmentProblem(void) {
         G32(RVA_BATTLE_AT_SEA) != (int)!!(policy->requiredFlags & UINT64_C(4)) ||
         G32(RVA_BATTLE_PLANE_3_OR_4) ||
         (unsigned)GAME_FN(int (*)(int,int), RVA_SQUARE_FORT_PARTS)(testField.x,testField.y) != policy->battleFlags ||
-        GAME_FN(int (*)(int,int), RVA_PLANE_AT)(testField.x,testField.y) != 0 ||
+        GAME_FN(int (*)(int,int), RVA_PLANE_AT)(testField.x,testField.y) != (testField.planar ? testField.planar->plane : 0) ||
+        !testFieldPlanarContextMatches() ||
         *(short *)(testFieldSquare() + (RVA_SQUARES - RVA_SQUARE_RECORDS)) != testField.terrain ||
         *(short *)(testFieldSquare() + SQUARE_TEMPERATURE) != 25) return reason;
     if (testFieldTerrainPolicyWater(policy) &&
@@ -97,6 +98,39 @@ static int lTestFieldEnvironmentInfo(lua_State *L) {
         lua_rawseti(L, -2, ++count);
     }
     lua_setfield(L, -2, "terrains");
+    return 1;
+}
+
+static int lTestFieldTerrainInfo(lua_State *L) {
+    const char *call = "coe5.testFieldTerrainInfo";
+    checkLuaMainThread(L, call);
+    lua_Integer id = luaL_checkinteger(L, 1);
+    if (!gameCodeMatches) return refuseTestFieldRead(L, call, "game_code_differs");
+    if (id < 0 || id >= TERRAIN_TABLE_MAX || id > G32(RVA_LAST_TERRAIN))
+        return refuseTestFieldRead(L, call, "bad_terrain");
+    const unsigned char *record = GAME_PTR(RVA_TERRAIN_TABLE + (size_t)id * TERRAIN_SIZE);
+    if (!*record) return refuseTestFieldRead(L, call, "bad_terrain");
+    uint64_t flags;
+    unsigned int fortParts;
+    memcpy(&flags, record + TERRAIN_FLAGS, sizeof flags);
+    memcpy(&fortParts, record + TERRAIN_FORT_PARTS, sizeof fortParts);
+    const char *reason = testFieldTerrainProblem(L, (int)id);
+    lua_newtable(L);
+    setIntField(L, "id", id);
+    pushGameTerrainName(L, (int)id); lua_setfield(L, -2, "name");
+    lua_pushinteger(L, (lua_Integer)flags); lua_setfield(L, -2, "flags");
+    setIntField(L, "fortParts", fortParts);
+    setBoolField(L, "available", reason == NULL);
+    if (reason) {
+        lua_pushstring(L, reason); lua_setfield(L, -2, "reason");
+    } else {
+        const TestFieldPlanarPolicy *planar = findTestFieldPlanarPolicy((int)id);
+        setIntField(L, "plane", planar ? planar->plane : 0);
+        const char *name = findTestFieldTerrainPolicy((int)id)->nativeTemplate;
+        if (name) {
+            lua_pushstring(L, name); lua_setfield(L, -2, "nativeTemplate");
+        }
+    }
     return 1;
 }
 
