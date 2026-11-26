@@ -18,7 +18,13 @@ static HGLRC map_reserve_context;
 static char map_reserve_tag[64];
 static volatile LONG map_reserve_reset;
 static int map_reserve_draining, map_reserve_failed;
-static int map_pixels_detached;
+// Keep only names for old contexts. Allow one full reserve to migrate without starving its successor.
+enum { MAP_NAME_LIMIT=2*MAP_RESERVE_SIZE };
+typedef struct { HGLRC context; unsigned texture; unsigned long long generation; } MapRetiredTile;
+static MapRetiredTile map_retired[MAP_NAME_LIMIT];
+static unsigned map_retired_count;
+static int map_retired_scan;
+static unsigned long long map_generation;
 
 // Invalidate immediately; delete names only on their own rendering context.
 static void map_load_world(const CallInfo *call) {
@@ -33,13 +39,19 @@ static MapReservedTile *map_reserve_slot(int x,int y) {
 }
 
 // A recycled context handle and texture number cannot establish ownership.
-static int map_owns_reserved_name(unsigned texture) {
+static int map_name_matches(unsigned texture,const char *expected) {
     char tag[sizeof map_reserve_tag]={0};
     int length=0;
     if(map_read_label && glIsTexture(texture)){
         map_read_label(GL_TEXTURE,texture,sizeof tag,&length,tag);
-        if(length>0 && length<(int)sizeof tag && !strcmp(tag,map_reserve_tag))return 1;
+        if(length>0 && length<(int)sizeof tag && !strcmp(tag,expected))return 1;
     }
+    return 0;
+}
+
+// Stop adoption if a live name has changed owners.
+static int map_owns_reserved_name(unsigned texture) {
+    if(map_name_matches(texture,map_reserve_tag))return 1;
     map_reserve_failed=1;
     return 0;
 }
@@ -53,19 +65,39 @@ static void map_release_slot(MapReservedTile *slot,int transfer) {
     --map_reserve_count;
 }
 
-// Release host snapshots on a context change. Retire remaining GL names only on their owner.
-static void map_release_detached_pixels(void) {
-    if(!map_reserve_count || map_pixels_detached || !ta_context || !ta_current_context ||
-       ta_current_context()==ta_context)return;
-    for(unsigned i=0;i<MAP_RESERVE_SIZE;i++){
-        MapReservedTile *slot=&map_reserve[i];
-        if(!slot->pixels)continue;
-        if(slot->texture){free(slot->pixels);slot->pixels=NULL;}
-        else map_release_slot(slot,0);
+// Tag each reserve generation separately, including recycled context handles.
+static void map_make_tag(char *tag,unsigned long long generation) {
+    snprintf(tag,sizeof map_reserve_tag,"CoE5SE terrain %lu %llu",(unsigned long)GetCurrentProcessId(),generation);
+}
+
+// Under the map-pass lock, release CPU snapshots and retire GL names only on the owning context.
+static void map_sync_reserve_context(HGLRC current) {
+    if(current!=map_reserve_context){
+        for(unsigned i=0;map_reserve_count && i<MAP_RESERVE_SIZE;i++){
+            MapReservedTile *slot=&map_reserve[i];
+            if(!slot->pixels)continue;
+            if(slot->texture)
+                map_retired[map_retired_count++]=(MapRetiredTile){map_reserve_context,slot->texture,map_generation};
+            map_release_slot(slot,1);
+        }
+        map_reserve_context=current;
+        map_make_tag(map_reserve_tag,++map_generation);
+        map_retired_scan=1;map_reserve_failed=0;
+        map_reserve_draining=map_atlas_height=map_trim_left=0;
+        map_previous_box=(MapTileBox){0};
     }
-    map_reserve_draining=map_reserve_count!=0;
-    map_pixels_detached=map_reserve_draining;
-    map_atlas_height=0;
+    if(!map_retired_scan || !current || current!=ta_context || !map_read_label)return;
+    unsigned processed=0;
+    for(unsigned i=0;i<map_retired_count && processed<32;){
+        MapRetiredTile tile=map_retired[i];
+        if(tile.context!=current){i++;continue;}
+        char tag[sizeof map_reserve_tag];
+        map_make_tag(tag,tile.generation);
+        if(map_name_matches(tile.texture,tag))glDeleteTextures(1,&tile.texture);
+        map_retired[i]=map_retired[--map_retired_count];
+        processed++;
+    }
+    map_retired_scan=processed==32;
 }
 
 // Reset pass-local state. All owned pixels come from the native crop call.
@@ -102,7 +134,8 @@ static void map_capture_neighbors(const unsigned char *src,int w,int h,int x,int
     long long start=map_ticks();
     static const int offsets[][2]={{-4,0},{4,0},{0,-4},{0,4},{-8,0},{8,0},{0,-8},{0,8},
                                      {-4,-4},{4,-4},{-4,4},{4,4},{-12,0},{12,0},{0,-12},{0,12}};
-    for(unsigned i=0;i<sizeof offsets/sizeof *offsets && map_captured_this_pass<256;i++){
+    for(unsigned i=0;i<sizeof offsets/sizeof *offsets && map_captured_this_pass<256 &&
+        map_reserve_count+map_retired_count<MAP_NAME_LIMIT;i++){
         int nx=x+64*offsets[i][0],ny=y+64*offsets[i][1];
         if(nx<0 || nx>w-64 || ny<0 || ny>h-64)continue;
         MapReservedTile *slot=map_reserve_slot(nx,ny);
@@ -131,8 +164,6 @@ static int map_prepare_slot(MapReservedTile *slot) {
     glGenTextures(1,&name);
     if(!name)return 0;
     glBindTexture(GL_TEXTURE_2D,name);
-    if(!map_reserve_tag[0])
-        snprintf(map_reserve_tag,sizeof map_reserve_tag,"CoE5SE terrain %lu %lld",(unsigned long)GetCurrentProcessId(),map_ticks());
     map_label(GL_TEXTURE,name,-1,map_reserve_tag);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812f);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812f);
@@ -144,13 +175,12 @@ static int map_prepare_slot(MapReservedTile *slot) {
     }
     slot->texture=name;
     --map_reserve_pending;
-    map_reserve_context=ta_context;
     return 1;
 }
 
 // Spend at most one slice per pass, with no GL names shared between contexts.
 static void map_reserve_end(void) {
-    if(!map_reserve_count){map_reserve_draining=0;map_reserve_context=NULL;return;}
+    if(!map_reserve_count){map_reserve_draining=0;return;}
     if(!ta_current_context || !ta_context_ok || ta_current_context()!=ta_context ||
        (map_reserve_context && map_reserve_context!=ta_context))return;
     if(!map_reserve_close || map_reserve_failed)map_reserve_draining=1;
@@ -159,7 +189,7 @@ static void map_reserve_end(void) {
             MapReservedTile *slot=&map_reserve[map_reserve_scan++%MAP_RESERVE_SIZE];
             if(slot->pixels || slot->texture){map_release_slot(slot,0);++freed;}
         }
-        if(!map_reserve_count){map_reserve_draining=map_pixels_detached=0;map_reserve_context=NULL;}
+        if(!map_reserve_count)map_reserve_draining=0;
         return;
     }
     if(map_tile_box.right>=0 && memcmp(&map_previous_box,&map_tile_box,sizeof map_tile_box)!=0){

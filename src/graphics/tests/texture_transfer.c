@@ -44,28 +44,107 @@ static void check_copy(unsigned source) {
     assert(glGetError()==GL_NO_ERROR);
 }
 
-// A remaining private name can be retired only after its original context returns.
+// Native mods invalidate only their source. A cold miss on a full stack must be retryable.
+static void check_edits_and_stack(unsigned source) {
+    FpsTextureLayer layer,other_layer;
+    GLuint other;
+    glGenTextures(1,&other);glBindTexture(GL_TEXTURE_2D,other);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812f);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812f);
+    unsigned char pixels[64*64*4];
+    memset(pixels,182,sizeof pixels);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+    array_texture_remove(source);
+    int depth=0,max_depth=0;
+    glGetIntegerv(GL_MAX_CLIENT_ATTRIB_STACK_DEPTH,&max_depth);
+    for(int i=0;i<max_depth;i++)glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
+    assert(!ta_prepare(&ta_terrain_cache,source,&layer,1) && ta_reject_reason==FPS_CLIENT_STACK_FULL);
+    glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&depth);
+    assert(!terrain_submission_available() && depth==max_depth && glGetError()==GL_NO_ERROR);
+    for(int i=0;i<max_depth;i++)glPopClientAttrib();
+    map_copy_ticks=0;
+    assert(ta_prepare(&ta_terrain_cache,source,&layer,1));
+    map_copy_ticks=0;
+    assert(ta_prepare(&ta_terrain_cache,other,&other_layer,1));
+    ta_scene_replace=1;
+    assert(ta_prepare(&ta_sprite_cache,other,&other_layer,1));
+    ta_scene_replace=0;
+    assert(!coe5seBeforeTextureUpdate(0));
+    arrays_native_open=1;
+    assert(!coe5seBeforeTextureUpdate(other));
+    arrays_native_open=0;
+    assert(ta_prepare(&ta_terrain_cache,other,&other_layer,0));
+    assert(coe5seBeforeTextureUpdate(other));
+    long long attempts=ta_terrain_cache.attempts;
+    assert(ta_prepare(&ta_terrain_cache,source,&layer,0) && ta_terrain_cache.attempts==attempts);
+    assert(!ta_prepare(&ta_terrain_cache,other,&other_layer,0));
+    assert(!ta_prepare(&ta_sprite_cache,other,&other_layer,0));
+    memset(pixels,97,sizeof pixels);
+    glBindTexture(GL_TEXTURE_2D,other);
+    glTexSubImage2D(GL_TEXTURE_2D,0,0,0,64,64,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+    // Leave the old pixels in the freed array layer on the unchecked path.
+    void (*upload)(unsigned,int,int,int,int,int,int,int,unsigned,unsigned,const void *)=ta_subimage3d;
+    map_texture_pass=0;ta_subimage3d=skip_upload;
+    assert(ta_prepare(&ta_terrain_cache,other,&other_layer,1));
+    ta_subimage3d=upload;map_texture_pass=MAP_TERRAIN;map_copy_ticks=0;
+    assert(ta_prepare(&ta_terrain_cache,other,&other_layer,1));
+    unsigned char actual[sizeof pixels];
+    assert(ta_layer_matches(other_layer.array_texture,other_layer.layer,0,64,64,pixels,actual));
+    assert(ta_prepare(&ta_terrain_cache,other,&other_layer,0));
+    if(ta_has_restart){
+        glEnable(0x8f9d);assert(!terrain_submission_available());glDisable(0x8f9d);
+    }
+    assert(glGetError()==GL_NO_ERROR);
+    array_texture_remove(other);glDeleteTextures(1,&other);
+}
+
+// Return a private name only to its original context. Other contexts may reuse its number.
 static void check_context(HDC dc,HGLRC owner) {
     HGLRC other=wglCreateContext(dc);
+    assert(other && map_label && map_read_label);
+    map_sync_reserve_context(owner);
     GLuint name;
     glGenTextures(1,&name);glBindTexture(GL_TEXTURE_2D,name);
-    strcpy(map_reserve_tag,"terrain regression");
     map_label(GL_TEXTURE,name,-1,map_reserve_tag);
-    map_reserve_context=owner;
     map_reserve[0]=(MapReservedTile){.texture=name,.pixels=calloc(1,MAP_TILE_BYTES)};
     map_reserve[1]=(MapReservedTile){.pixels=calloc(1,MAP_TILE_BYTES)};
     map_reserve_count=2;map_reserve_pending=1;
-    assert(other && wglMakeCurrent(dc,other));
-    map_release_detached_pixels();
-    assert(!map_reserve[0].pixels && !map_reserve[1].pixels && map_reserve_count==1 && !map_reserve_pending);
-    GLuint unrelated=0;
-    glGenTextures(1,&unrelated);glBindTexture(GL_TEXTURE_2D,unrelated);
-    map_reserve_end();
-    assert(glIsTexture(unrelated) && map_reserve_count==1);
+    assert(wglMakeCurrent(NULL,NULL));
+    map_sync_reserve_context(NULL);
+    assert(!map_reserve_count && !map_reserve_pending && map_retired_count==1);
+    assert(wglMakeCurrent(dc,other));
+    map_sync_reserve_context(other);
+    assert(!map_reserve_count && !map_reserve_pending && map_retired_count==1);
+    glBindTexture(GL_TEXTURE_2D,name);
+    assert(glIsTexture(name));
     assert(wglMakeCurrent(dc,owner));
-    map_reserve_end();
-    assert(!map_reserve_count && !glIsTexture(name));
-    assert(wglDeleteContext(other));
+    map_sync_reserve_context(owner);
+    assert(!map_retired_count && !glIsTexture(name));
+    assert(wglMakeCurrent(dc,other) && glIsTexture(name));
+    assert(wglMakeCurrent(dc,owner) && wglDeleteContext(other));
+}
+
+typedef struct { HDC dc; HGLRC replacement; } WorkerContext;
+
+// A new rendering thread can prepare its own map tiles after the original context is destroyed.
+static DWORD WINAPI check_replacement(void *arg) {
+    WorkerContext *worker=arg;
+    assert(wglMakeCurrent(worker->dc,worker->replacement));
+    assert(TryAcquireSRWLockExclusive(&map_work_lock));
+    assert(ta_initialize_context() && ta_sprite_cache.entries==ta_entries);
+    map_sync_reserve_context(worker->replacement);
+    assert(!map_reserve_count && !map_reserve_pending && map_retired_count==1);
+    MapReservedTile *slot=&map_reserve[0];
+    slot->pixels=calloc(1,MAP_TILE_BYTES);
+    map_reserve_count=map_reserve_pending=1;
+    assert(slot->pixels && map_prepare_slot(slot) && !map_reserve_pending);
+    assert(map_name_matches(slot->texture,map_reserve_tag));
+    map_release_slot(slot,0);
+    assert(!map_reserve_count && glGetError()==GL_NO_ERROR);
+    ReleaseSRWLockExclusive(&map_work_lock);
+    assert(wglMakeCurrent(NULL,NULL));
+    return 0;
 }
 
 // Exercise the direct-state and framebuffer layer readers on the same compatibility driver.
@@ -78,7 +157,8 @@ int main(void) {
     HGLRC context=wglCreateContext(dc);
     assert(context && wglMakeCurrent(dc,context));
     map_textures_enabled=1;
-    assert(install_texture_array() && ta_initialize_context() && map_copy_image);
+    assert(mod_initialize_original_gl() && install_texture_array() && arrays_load_functions());
+    assert(arrays_check_context() && ta_initialize_context() && map_copy_image);
     ta_terrain_cache.layer_limit=1;
     static FpsTextureArrayEntry entries[16];
     ta_terrain_cache.entries=entries;
@@ -102,6 +182,9 @@ int main(void) {
     memset(image,77,sizeof image);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,image);
     check_copy(source);
+    ta_terrain_cache.layer_limit=4;
+    check_edits_and_stack(source);
+    array_texture_remove(source);
     ta_read_subimage=NULL;
     ta_init_layer_reader(3,0,"");
     glBindTexture(GL_TEXTURE_2D,source);
@@ -112,11 +195,16 @@ int main(void) {
     map_reserve[0]=(MapReservedTile){.texture=source,.pixels=calloc(1,MAP_TILE_BYTES)};
     map_reserve_count=1;
     HGLRC replacement=wglCreateContext(dc);
-    assert(map_reserve[0].pixels && replacement && wglMakeCurrent(dc,replacement));
-    assert(wglDeleteContext(context));
-    assert(!ta_initialize_context());
-    map_release_detached_pixels();
-    assert(!map_reserve[0].pixels && map_reserve_count==1 && !map_reserve_pending);
-    wglMakeCurrent(NULL,NULL);wglDeleteContext(replacement);ReleaseDC(win,dc);DestroyWindow(win);
-    puts("Transfer recovery, native GL errors, both layer readers and context cleanup passed.");
+    assert(map_reserve[0].pixels && replacement && wglMakeCurrent(NULL,NULL) && wglDeleteContext(context));
+    HMODULE glu=LoadLibraryExW(L"glu32.dll",NULL,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    assert(glu);
+    arrays_real_gluBuild2DMipmaps=(void *)GetProcAddress(glu,"gluBuild2DMipmaps");
+    assert(arrays_real_gluBuild2DMipmaps);
+    WorkerContext worker={dc,replacement};
+    HANDLE thread=CreateThread(NULL,0,check_replacement,&worker,0,NULL);
+    assert(thread && WaitForSingleObject(thread,15000)==WAIT_OBJECT_0);
+    CloseHandle(thread);FreeLibrary(glu);
+    assert(wglDeleteContext(replacement));
+    ReleaseDC(win,dc);DestroyWindow(win);
+    puts("Verified texture edits, retries, GL state, both layer readers and render-thread handoff.");
 }

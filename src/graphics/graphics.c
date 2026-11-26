@@ -125,11 +125,13 @@ static void mod_terrain_finish(unsigned view,long long before) {
     mod_log(line);terrain_reported|=view;
 }
 static void mod_terrain_plane(uintptr_t a,unsigned plane) {
-    if(map_textures_enabled && map_owns_mips())map_release_detached_pixels();
     int opened=mod_operational && (!mod_render_setting || *mod_render_setting) && terrain_begin_scope();
     long long before=terrain_tiles;
     int previous=map_texture_pass;
-    int prepare=opened && map_textures_enabled && map_owns_mips() && map_owns_imports() && ta_current_context && ta_initialize_context();
+    HGLRC current=map_textures_enabled && ta_current_context?ta_current_context():NULL;
+    int locked=map_textures_enabled && TryAcquireSRWLockExclusive(&map_work_lock);
+    int prepare=current && locked && opened && map_owns_imports() && ta_initialize_context();
+    if(locked)map_sync_reserve_context(current);
     map_texture_pass=prepare?MAP_TERRAIN:0;
     if(prepare){
         map_copy_ticks=0;
@@ -139,6 +141,7 @@ static void mod_terrain_plane(uintptr_t a,unsigned plane) {
     map_texture_pass=previous;
     if(opened)mod_terrain_finish(1,before);
     if(prepare)map_reserve_end();
+    if(locked)ReleaseSRWLockExclusive(&map_work_lock);
 }
 static void mod_terrain_battle(void) {
     int opened=mod_scenes_enabled && mod_scene_kind && terrain_begin_scope();
@@ -156,10 +159,12 @@ static void mod_map_units(int a,int b,int flags) {
     }
     int samples=0;arrays_get_int(0x80a8,&samples);
     int previous_bounds=map_bounds_active;
-    map_bounds_active=map_textures_enabled && map_owns_mips() && map_owns_imports();
+    int locked=map_textures_enabled && map_owns_imports() && TryAcquireSRWLockExclusive(&map_work_lock);
+    map_bounds_active=locked;
     if(samples){
         draw(a,b,flags);
         map_bounds_active=previous_bounds;
+        if(locked)ReleaseSRWLockExclusive(&map_work_lock);
         return;
     }
     array_texture_begin_frame();arrays_begin_frame();
@@ -170,6 +175,7 @@ static void mod_map_units(int a,int b,int flags) {
     map_bounds_active=previous_bounds;
     arrays_end_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
+    if(locked)ReleaseSRWLockExclusive(&map_work_lock);
 }
 #endif
 #include "scene_batch.h"
@@ -453,6 +459,21 @@ static int mod_install_calls(void) {
     return 1;
 }
 #endif
+
+// Finish queued draws using the old pixels before a native mod edits a source texture.
+__declspec(dllexport) int coe5seBeforeTextureUpdate(unsigned int texture) {
+    if(!texture)return 0;
+#ifdef _WIN32
+    if(gui_expected)return 0;
+#endif
+    if(!texture_array_enabled)return 1;
+    if(!ta_context || !ta_current_context || ta_current_context()!=ta_context ||
+       arrays_native_open || arrays_open)return 0;
+    arrays_end_frame();
+    array_texture_remove(texture);
+    return 1;
+}
+
 static int mod_initialize_original_gl(void) {
     HMODULE gl=GetModuleHandleA(FPS_GL_LIBRARY);if(!gl)return 0;
 #define MOD_GL(var,name) do {*(void **)&var=(void *)GetProcAddress(gl,name);if(!var)return 0;}while(0)

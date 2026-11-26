@@ -33,9 +33,13 @@ static long long readPlayerNumber(const char *line, int index) {
 }
 
 // Install the private reader only when selected at launch.
-static void initPlayerNumberCache(void) {
+static void initPlayerNumberCache(int passInstalled) {
     const int *setting = api->setting("cache_player_arguments");
     if (setting && *setting) {
+        if (!passInstalled) {
+            writeLog("player_rule_cache", "installed=%d reason=mods_run_unavailable", 0);
+            return;
+        }
         int installed = wrapSite(SITE_TURN_RULE_PLAYER_NUMBER, (void *)readPlayerNumber, (void **)&nextPlayerNumber);
         writeLog("player_rule_cache", "installed=%d", installed);
     }

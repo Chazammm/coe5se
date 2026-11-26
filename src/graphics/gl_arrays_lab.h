@@ -54,8 +54,8 @@ static void (*arrays_draw)(unsigned,int,int);
 static void (*arrays_tex2)(float,float);
 static void (*arrays_tex4)(float,float,float,float);
 static void (*arrays_vertex3)(float,float,float);
-static void (*arrays_client_active)(unsigned);
-static void (*arrays_multi_tex4)(unsigned,float,float,float,float);
+static _Thread_local void (*arrays_client_active)(unsigned);
+static _Thread_local void (*arrays_multi_tex4)(unsigned,float,float,float,float);
 static void (*arrays_raw_matrix_mode)(unsigned);
 static void (*arrays_load_matrix)(const float *);
 static HGLRC (WINAPI *arrays_current_context)(void);
@@ -186,7 +186,8 @@ static void arrays_flush(void) {
     long long begin=now_ticks();
     int complete=(arrays_count%4)==0;
     if(!arrays_output_layered)array_texture_end_draw();
-    int shader_ok=complete && (!arrays_output_layered || array_texture_begin_draw(&ta_sprite_cache,arrays_output_texture));
+    int shader_ok=complete && (arrays_client_session || ta_client_stack_room()) &&
+        (!arrays_output_layered || array_texture_begin_draw(&ta_sprite_cache,arrays_output_texture));
     if(!shader_ok) {
         array_texture_end_draw();
         arrays_end_client_session();

@@ -2268,7 +2268,7 @@ static void startCoe5se(const char *via) {
     if (featureOn(FEATURE_PLUGIN_CHECKS)) pluginStartInit();
     if (featureOn(FEATURE_MOD_SETTINGS)) modSettingsInit();
 #ifdef _WIN32
-    if (featureOn(FEATURE_MOD_SETTINGS)) initPlayerNumberCache();
+    if (featureOn(FEATURE_MOD_SETTINGS)) initPlayerNumberCache(nextModsRun != NULL);
 #endif
     if (featureOn(FEATURE_LOAD_ORDER)) loadOrderInit();
 #ifdef __APPLE__

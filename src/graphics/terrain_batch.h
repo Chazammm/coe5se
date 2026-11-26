@@ -14,7 +14,7 @@ static _Thread_local unsigned terrain_count,terrain_page;
 static _Thread_local int terrain_client_ready;
 static _Thread_local long long terrain_upload_start;
 static _Thread_local long long terrain_batches,terrain_tiles;
-static void (*terrain_draw_elements)(unsigned,int,unsigned,const void *);
+static _Thread_local void (*terrain_draw_elements)(unsigned,int,unsigned,const void *);
 
 static void terrain_native_rect(TerrainQuad q) {
     ((TerrainNativeRect)(detail_base+RVA_FPS_TERRAIN_RECT_DRAW))(q.x,q.y,q.w,q.h,q.u,q.v,q.du,q.dv);
@@ -30,6 +30,8 @@ static void terrain_replay(unsigned count) {
 }
 
 static int terrain_submission_available(void) {
+    if(!ta_client_stack_room() || (ta_has_restart && arrays_is_enabled(0x8f9d)) ||
+       (ta_has_nv_restart && arrays_is_enabled(0x8558)))return 0;
     int value=0;
     ta_get_int(0x8b8d,&value);if(value)return 0;
     ta_get_int(0x84e0,&value);if(value!=0x84c0)return 0;

@@ -15,7 +15,7 @@ typedef struct {
 } FpsTextureArrayPage;
 typedef struct {
     unsigned source,last_pass,capacity_epoch,last_transfer_attempt;
-    int decision, scene_checked;
+    int decision, scene_checked, map_checked;
     FpsTextureLayer value;
     FpsFallbackReason reason;
 } FpsTextureArrayEntry;
@@ -29,7 +29,8 @@ typedef struct {
     long long bytes, attempts;
 } FpsTextureArrayCache;
 static int texture_array_enabled;
-static int ta_multi_page,ta_track_state,ta_scene_program;
+static _Thread_local int ta_multi_page=1;
+static int ta_track_state,ta_scene_program;
 #ifdef __APPLE__
 static _Thread_local int ta_glsl120,ta_has_blit;
 #endif
@@ -41,6 +42,9 @@ static _Thread_local long long ta_state_checks,ta_draw_sessions;
 static _Thread_local HGLRC ta_context;
 static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_state_ok,ta_drawing;
 static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler;
+#ifdef _WIN32
+static _Thread_local int ta_has_restart,ta_has_nv_restart;
+#endif
 static _Thread_local unsigned ta_program;
 static _Thread_local int ta_saved_program,ta_saved_binding,ta_saved_unit;
 static _Thread_local FpsTextureArrayEntry ta_entries[TA_CACHE_SIZE];
@@ -67,25 +71,25 @@ static void (*ta_parameter)(unsigned,unsigned,int);
 static void (*ta_push_client)(unsigned);
 static void (*ta_pop_client)(void);
 static void (*ta_pixel_store)(unsigned,int);
-static void (*ta_active_texture)(unsigned);
-static void (*ta_image3d)(unsigned,int,int,int,int,int,int,unsigned,unsigned,const void *);
-static void (*ta_subimage3d)(unsigned,int,int,int,int,int,int,int,unsigned,unsigned,const void *);
-static unsigned (*ta_create_shader)(unsigned);
-static void (*ta_shader_source)(unsigned,int,const char *const *,const int *);
-static void (*ta_compile_shader)(unsigned);
-static void (*ta_get_shader)(unsigned,unsigned,int *);
-static void (*ta_shader_log)(unsigned,int,int *,char *);
-static void (*ta_delete_shader)(unsigned);
-static unsigned (*ta_create_program)(void);
-static void (*ta_attach_shader)(unsigned,unsigned);
-static void (*ta_link_program)(unsigned);
-static void (*ta_get_program)(unsigned,unsigned,int *);
-static void (*ta_program_log)(unsigned,int,int *,char *);
-static void (*ta_delete_program)(unsigned);
-static void (*ta_use_program)(unsigned);
-static int (*ta_uniform_location)(unsigned,const char *);
-static void (*ta_uniform1i)(int,int);
-static void (*ta_bind_sampler)(unsigned,unsigned);
+static _Thread_local void (*ta_active_texture)(unsigned);
+static _Thread_local void (*ta_image3d)(unsigned,int,int,int,int,int,int,unsigned,unsigned,const void *);
+static _Thread_local void (*ta_subimage3d)(unsigned,int,int,int,int,int,int,int,unsigned,unsigned,const void *);
+static _Thread_local unsigned (*ta_create_shader)(unsigned);
+static _Thread_local void (*ta_shader_source)(unsigned,int,const char *const *,const int *);
+static _Thread_local void (*ta_compile_shader)(unsigned);
+static _Thread_local void (*ta_get_shader)(unsigned,unsigned,int *);
+static _Thread_local void (*ta_shader_log)(unsigned,int,int *,char *);
+static _Thread_local void (*ta_delete_shader)(unsigned);
+static _Thread_local unsigned (*ta_create_program)(void);
+static _Thread_local void (*ta_attach_shader)(unsigned,unsigned);
+static _Thread_local void (*ta_link_program)(unsigned);
+static _Thread_local void (*ta_get_program)(unsigned,unsigned,int *);
+static _Thread_local void (*ta_program_log)(unsigned,int,int *,char *);
+static _Thread_local void (*ta_delete_program)(unsigned);
+static _Thread_local void (*ta_use_program)(unsigned);
+static _Thread_local int (*ta_uniform_location)(unsigned,const char *);
+static _Thread_local void (*ta_uniform1i)(int,int);
+static _Thread_local void (*ta_bind_sampler)(unsigned,unsigned);
 
 static void ta_message(const char *text) {snprintf(ta_status,sizeof(ta_status),"%s",text);}
 static int ta_refuse(FpsFallbackReason reason) {ta_reject_reason=reason;fps_note_fallback(reason);return 0;}
@@ -218,6 +222,7 @@ static int ta_build_program(void) {
 static int ta_initialize_context(void) {
     HGLRC context=ta_current_context();if(!context)return ta_refuse(FPS_NO_CONTEXT);
     if(ta_context_attempted){if(context!=ta_context)return ta_refuse(FPS_CONTEXT_CHANGED);return ta_context_ok;}
+    ta_sprite_cache.entries=ta_entries;ta_sprite_cache.size=TA_CACHE_SIZE;ta_sprite_cache.layer_limit=256;
     ta_context_attempted=1;ta_context=context;
     const char *v=(const char *)ta_get_string(0x1f02),*ext;
     int major=0,minor=0;
@@ -235,6 +240,8 @@ static int ta_initialize_context(void) {
 #endif
 #ifdef _WIN32
     map_transfer_init(major,minor,ext);
+    ta_has_restart=major>3 || (major==3 && minor>=1);
+    ta_has_nv_restart=ta_extension(ext,"GL_NV_primitive_restart");
     if(map_textures_enabled)ta_init_layer_reader(major,minor,ext);
 #endif
     ta_has_aniso=ta_extension(ext,"GL_EXT_texture_filter_anisotropic") || ta_extension(ext,"GL_ARB_texture_filter_anisotropic");
@@ -402,15 +409,19 @@ static void ta_packing(void) {
     ta_pixel_store(0x0cf5,1);ta_pixel_store(0x0cf2,0);ta_pixel_store(0x0cf3,0);ta_pixel_store(0x0cf4,0);
     ta_pixel_store(0x0cf0,0);ta_pixel_store(0x0cf1,0);ta_pixel_store(0x806d,0);ta_pixel_store(0x806e,0);
 }
+// Leave a caller's saved client state in place when the stack is full.
+static int ta_client_stack_room(void) {
+    int depth=0,limit=0;
+    ta_get_int(0x0bb1,&depth);ta_get_int(0x0d3b,&limit);
+    return depth<limit;
+}
 static int ta_clone(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out) {
     int before2d=0,before_array=0,width=0,height=0,last=0,ok=0;unsigned min=0,mag=0;
     ta_get_int(0x8069,&before2d);ta_get_int(0x8c1d,&before_array);ta_bind(0x0de1,source);
     unsigned char *memory=NULL;
     int rgba=1;
     if(!ta_source_parameters(&width,&height,&last,&min,&mag,cache==&ta_terrain_cache,&rgba))goto done;
-    int stack=0,limit=0;
-    ta_get_int(0x0bb1,&stack);ta_get_int(0x0d3b,&limit);
-    if(stack>=limit){ta_refuse(FPS_PIXEL_TRANSFER);goto done;}
+    if(!ta_client_stack_room()){ta_refuse(FPS_CLIENT_STACK_FULL);goto done;}
     ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(cache,width,height,last,min,mag);
     if(!p){ta_pop_client();goto done;}
     int layer=ta_available_layer(p);if(layer<0){ta_pop_client();ta_refuse(FPS_CACHE_LIMIT);goto done;}
@@ -442,12 +453,19 @@ done:
     ta_bind(0x8c1a,(unsigned)before_array);ta_bind(0x0de1,(unsigned)before2d);return ok;
 }
 static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out,int allow_upload) {
-    if(!source || !out || !cache->entries || !ta_allowed_state())return 0;
+    if(!source || !out || !ta_allowed_state() || !cache->entries)return 0;
     for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==source)return 0;
     unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
     for(unsigned i=0;i<cache->size;i++) {
         FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];if(e->source && e->source!=source)continue;
         if(cache->pass && e->source)e->last_pass=cache->pass;
+#ifdef _WIN32
+        // Rebuild a layer once when a checked map pass first uses an unchecked copy.
+        if(map_texture_pass && e->decision>0 && !e->map_checked){
+            ta_release_layer(cache,&e->value);
+            e->decision=0;
+        }
+#endif
         int retry=e->decision<0 && ((ta_scene_replace && !e->scene_checked) ||
                   (e->reason==FPS_TEXTURE_TRANSFER && ta_terrain_cache.pass-e->last_transfer_attempt>=64) ||
                   (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
@@ -464,10 +482,12 @@ static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLaye
             e->capacity_epoch=cache->capacity_epoch;
             e->decision=ta_clone(cache,source,&e->value)?1:-1;
 #ifdef _WIN32
+            e->map_checked=map_texture_pass!=0 && e->decision>0;
             if(budgeted)map_copy_ticks+=map_ticks()-started;
 #endif
             if(e->decision<0){
                 e->reason=ta_reject_reason;
+                if(e->reason==FPS_CLIENT_STACK_FULL){e->decision=0;return 0;}
                 if(e->reason==FPS_TEXTURE_TRANSFER)e->last_transfer_attempt=ta_terrain_cache.pass;
                 ta_rejected++;
             }
@@ -587,8 +607,7 @@ static void array_texture_end_draw(void) {
     ta_active_texture((unsigned)ta_saved_unit);ta_drawing=0;
 }
 static int install_texture_array(void) {
-    texture_array_enabled=1;ta_multi_page=1;ta_track_state=1;
-    ta_sprite_cache.entries=ta_entries;ta_sprite_cache.size=TA_CACHE_SIZE;ta_sprite_cache.layer_limit=256;
+    texture_array_enabled=1;ta_track_state=1;
     ta_gl=GetModuleHandleA(FPS_GL_LIBRARY);if(!ta_gl)return 0;
 #define TA_CORE(var,name) do {*(void **)&var=(void *)GetProcAddress(ta_gl,name);if(!var)return 0;}while(0)
     TA_CORE(ta_current_context,FPS_GL_CONTEXT_FN);

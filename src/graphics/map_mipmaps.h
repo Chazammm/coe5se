@@ -8,16 +8,9 @@ typedef struct {
     unsigned char source[MAP_TILE_BYTES], levels[MAP_LOWER_BYTES];
 } MapMipEntry;
 static MapMipEntry *map_mips;
-static LONG map_mip_thread;
+static SRWLOCK map_work_lock=SRWLOCK_INIT;
 static unsigned short map_base_pixels[512*64*4];
 static _Thread_local int map_filters_disabled;
-
-// Only the first rendering thread uses the bounded shared CPU buffers.
-static int map_owns_mips(void) {
-    LONG id=(LONG)GetCurrentThreadId();
-    LONG owner=InterlockedCompareExchange(&map_mip_thread,id,0);
-    return owner==0 || owner==id;
-}
 
 // Match the Windows GLU intermediate precision at every level.
 static void map_filter_tile(const unsigned char *source,unsigned char *levels) {
@@ -95,7 +88,7 @@ static int map_build_mips(unsigned target,int internal,int w,int h,unsigned form
        type!=GL_UNSIGNED_BYTE || !ta_current_context || ta_current_context()!=ta_context)return 0;
     int square=internal==GL_RGBA && w==64 && h==64;
     int dw=internal==GL_RGBA4 && (h==71 || h==72)?bfTargetWidth(w):0;
-    if((!square && !dw) || !map_owns_mips() || !map_simple_upload(w*4,square?64:dw))return 0;
+    if((!square && !dw) || !map_simple_upload(w*4,square?64:dw))return 0;
     if(!map_level_widths(square?64:dw,64,0))return 0;
     int result=0;
     if(square){
