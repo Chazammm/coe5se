@@ -159,7 +159,7 @@ static void mod_pointer_module(void *address,char *out,size_t size) {
 static void mod_import_problem(const char *name,uintptr_t rva,void *actual,void *expected) {
     char owner[340],expected_owner[340],line[1000];
     mod_pointer_module(actual,owner,sizeof(owner));mod_pointer_module(expected,expected_owner,sizeof(expected_owner));
-    snprintf(line,sizeof(line),"fps_mod disabled reason=%s function=%s import_rva=0x%llx actual=%s expected=%s imports_unchanged=1",
+    snprintf(line,sizeof(line),"fps_mod import_check reason=%s function=%s import_rva=0x%llx actual=%s expected=%s imports_unchanged=1",
         expected?"graphics_import_conflict":"required_export_unavailable",name,(unsigned long long)rva,owner,expected_owner);
     mod_log(line);
 }
@@ -312,7 +312,13 @@ static int mod_verify_calls(void) {
         unsigned char *site=detail_base+c->site;int32_t rel=0;
         memcpy(&rel,site+1,4);
         if(site[0]!=0xe8 || site+5+rel!=detail_base+c->target) {
-            char line[256];snprintf(line,sizeof(line),"fps_mod disabled reason=game_callsite_changed site_rva=0x%llx expected_target_rva=0x%llx",(unsigned long long)c->site,(unsigned long long)c->target);mod_log(line);return 0;
+            char line[256];
+            snprintf(line,sizeof(line),"fps_mod %sdisabled reason=game_callsite_changed site_rva=0x%llx expected_target_rva=0x%llx",
+                c->group==MOD_GUI?"gui_frame_batching ":"",(unsigned long long)c->site,(unsigned long long)c->target);
+            mod_log(line);
+            if(c->group!=MOD_GUI)return 0;
+            mod_features&=~MOD_GUI;
+            continue;
         }
         memcpy(c->original,site,5);
     }
@@ -338,8 +344,8 @@ static int mod_rollback_calls(ModCodePage *pages,size_t count) {
     return writable;
 }
 static int mod_install_calls(void) {
-    if(!mod_features)return 1;
     if(!mod_verify_calls())return 0;
+    if(!mod_features)return 1;
     unsigned char *stubs=allocate_near((uintptr_t)(detail_base+mod_calls[0].site));if(!stubs)return 0;
     const size_t count=sizeof(mod_calls)/sizeof(mod_calls[0]);
     for(size_t i=0;i<count;i++) {
@@ -472,24 +478,24 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
 #endif
     mod_original_decor=(ModDecorFn)(detail_base+RVA_DRAW_SPRITE_SHEARED);
     if(!game_hash_matches()) {mod_disable();mod_log("fps_mod disabled reason=unsupported_game_hash graphics_imports_unchanged=1");return 1;}
-#ifdef _WIN32
-    if((mod_features&MOD_GUI) && (!mod_initialize_original_gl() || !arrays_load_functions() ||
-       !fps_check_gl_imports(detail_base,GetModuleHandleA(FPS_GL_LIBRARY),fps_expected_glu(),mod_import_problem))) {
-        mod_features&=~MOD_GUI;
-        mod_log("fps_mod gui_frame_batching disabled reason=graphics_functions_unavailable_or_replaced");
-    }
-#endif
     if(!mod_verify_calls()){mod_disable();mod_log("fps_mod hook_check status=blocked graphics_imports_unchanged=1");return 1;}
-    if(mod_features&(MOD_RENDERING|MOD_SCENES)){
-        if(!mod_initialize_original_gl()) {mod_disable();mod_log("fps_mod disabled reason=original_gl_exports_unavailable");return 1;}
-        if(!fps_check_gl_imports(detail_base,GetModuleHandleA(FPS_GL_LIBRARY),fps_expected_glu(),mod_import_problem)) {mod_disable();return 1;}
+    if((mod_features&(MOD_RENDERING|MOD_SCENES)) &&
+       !fps_check_gl_imports(detail_base,GetModuleHandleA(FPS_GL_LIBRARY),fps_expected_glu(),mod_import_problem)){
+        mod_features&=~(MOD_RENDERING|MOD_SCENES);
+        mod_log("fps_mod map_and_scene_batching disabled reason=graphics_import_check_failed");
     }
-    {
-        unsigned imports=mod_features&(MOD_RENDERING|MOD_SCENES)?(unsigned)(sizeof(arrays_imports)/sizeof(arrays_imports[0]))+1:0;
-        unsigned calls=0;for(size_t i=0;i<sizeof(mod_calls)/sizeof(mod_calls[0]);i++)if(mod_calls[i].group&mod_features)calls++;
-        char line[200];snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d gui_frames=%d",imports,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES),!!(mod_features&MOD_GUI));mod_log(line);
+    if((mod_features&(MOD_RENDERING|MOD_SCENES|MOD_GUI)) && !mod_initialize_original_gl()){
+        mod_features&=~(MOD_RENDERING|MOD_SCENES|MOD_GUI);
+        mod_log("fps_mod drawing disabled reason=original_gl_exports_unavailable");
     }
 #ifdef _WIN32
+    if(mod_features&MOD_GUI){
+        int shared_renderer=!!(mod_features&(MOD_RENDERING|MOD_SCENES));
+        if(!gui_prepare_imports(shared_renderer) || (!shared_renderer && !arrays_load_functions())){
+            mod_features&=~MOD_GUI;
+            mod_log("fps_mod gui_frame_batching disabled reason=graphics_functions_unavailable_or_replaced");
+        }
+    }
     ta_scene_program=!!(mod_features&(MOD_RENDERING|MOD_SCENES));
 #endif
     FpsArrayInstall imports={0};
@@ -508,14 +514,17 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         if(!arrays_restore_imports(&imports,replace_gl_import))mod_log("fps_mod disabled reason=gl_hook_rollback_failed module_retained=1");
         mod_log("fps_mod disabled reason=call_patch_transaction_failed module_retained=1");return 1;
     }
+    if(!mod_features){mod_log("fps_mod disabled reason=no_compatible_features hooks_installed=0");return 1;}
+    {
+        unsigned calls=0;for(size_t i=0;i<sizeof(mod_calls)/sizeof(mod_calls[0]);i++)if(mod_calls[i].group&mod_features)calls++;
+        snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d gui_frames=%d",
+            (unsigned)imports.count,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES),!!(mod_features&MOD_GUI));mod_log(line);
+    }
     if(mod_features&MOD_FRAME_CONTROLS){
         fps_initialize_graphics_settings(userFolder);
         if(!api->wrap || !api->wrap(SITE_MAP_DRAW,(void *)fps_frame_preference_map_draw,(void **)&fps_next_map_draw))mod_log("fps_mod graphics_menu map_start_callback=unavailable preference_applies_at_menu");
         if(!api->wrap || !api->wrap(SITE_MAIN_MENU_WAIT,(void *)mod_main_menu_wait,(void **)&mod_next_main_menu_wait))mod_log("fps_mod diagnostics main_menu_callback=unavailable graphics_report=first_map");
     }
-#ifdef _WIN32
-    if(mod_features&MOD_GUI)gui_record_imports();
-#endif
     mod_operational=!!(mod_features&MOD_RENDERING);
     if(mod_features&MOD_SCENES)mod_install_scene_waits(api);
     snprintf(line,sizeof(line),"fps_mod initialized version=" FPS_MOD_VERSION " game=5.43 api=%d launch_settings_fixed=1 quality_unchanged=1 graphics_report=first_current_context",api->version);

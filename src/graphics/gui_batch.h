@@ -18,10 +18,26 @@ static const uintptr_t gui_imports[]={RVA_GL_ENABLE_CLIENT_STATE,RVA_GL_DISABLE_
     RVA_GL_VERTEX_POINTER,RVA_FPS_GL_TEX_COORD_POINTER_IAT,RVA_GL_DRAW_ARRAYS};
 static void *gui_expected_imports[sizeof(gui_imports)/sizeof(gui_imports[0])];
 
-// Capture the final dispatch after the other graphics options have installed.
-static void gui_record_imports(void) {
-    for(size_t i=0;i<sizeof(gui_imports)/sizeof(gui_imports[0]);i++)
-        gui_expected_imports[i]=*gl_import_slot(gui_imports[i]);
+// Expect our verified renderer hooks, or the five original exports for standalone GUI drawing.
+static int gui_prepare_imports(int shared_renderer) {
+    HMODULE gl=GetModuleHandleA(FPS_GL_LIBRARY);
+    for(size_t i=0;i<sizeof(gui_imports)/sizeof(gui_imports[0]);i++){
+        size_t j=0;
+        while(j<ARRAY_IMPORT_COUNT && arrays_imports[j].rva!=gui_imports[i])j++;
+        if(j==ARRAY_IMPORT_COUNT)return 0;
+        const FpsGlImport *entry=&arrays_imports[j];
+        if(shared_renderer){
+            gui_expected_imports[i]=entry->hook;
+        }else{
+            void *native=(void *)GetProcAddress(gl,entry->name),*actual=*gl_import_slot(entry->rva);
+            if(!native || actual!=native){
+                mod_import_problem(entry->name,entry->rva,actual,native);
+                return 0;
+            }
+            gui_expected_imports[i]=native;
+        }
+    }
+    return 1;
 }
 
 // Optional compatibility state and indexed queries belong to the current GL context.
