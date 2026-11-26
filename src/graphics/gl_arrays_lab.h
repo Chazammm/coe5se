@@ -230,6 +230,9 @@ static int arrays_capture_allowed(void) {
 static void arrays_invalidate(void) { arrays_allowed_cached=-1; }
 static void arrays_begin_frame(void) {
     arrays_end_frame();arrays_invalidate();
+    ++ta_sprite_cache.pass;
+    if(ta_sprite_cache.pressure && ta_context_ok && ta_current_context()==ta_context)
+        ta_trim_empty_pages(&ta_sprite_cache);
     arrays_scene_caps_known=arrays_scene_caps_on=0;
     arrays_projection_capture=0;arrays_projection_dirty=1;
     if(arrays_enabled && arrays_lazy_bindings) (void)arrays_check_context();

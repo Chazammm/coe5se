@@ -17,7 +17,7 @@ static unsigned map_captured_this_pass;
 static HGLRC map_reserve_context;
 static char map_reserve_tag[64];
 static volatile LONG map_reserve_reset;
-static int map_reserve_draining, map_reserve_failed;
+static int map_reserve_draining, map_reserve_failed, map_load_observed;
 // Keep only names for old contexts. Allow one full reserve to migrate without starving its successor.
 enum { MAP_NAME_LIMIT=2*MAP_RESERVE_SIZE };
 typedef struct { HGLRC context; unsigned texture; unsigned long long generation; } MapRetiredTile;
@@ -82,7 +82,7 @@ static void map_sync_reserve_context(HGLRC current) {
         }
         map_reserve_context=current;
         map_make_tag(map_reserve_tag,++map_generation);
-        map_retired_scan=1;map_reserve_failed=0;
+        map_retired_scan=1;map_reserve_failed=!map_load_observed;
         map_reserve_draining=map_atlas_height=map_trim_left=0;
         map_previous_box=(MapTileBox){0};
     }

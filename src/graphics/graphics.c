@@ -170,6 +170,7 @@ static void mod_map_units(int a,int b,int flags) {
     array_texture_begin_frame();arrays_begin_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
     map_texture_pass=map_bounds_active?MAP_UNITS:0;
+    if(map_texture_pass)map_copy_ticks=0;
     draw(a,b,flags);
     map_texture_pass=0;
     map_bounds_active=previous_bounds;
@@ -467,7 +468,8 @@ __declspec(dllexport) int coe5seBeforeTextureUpdate(unsigned int texture) {
     if(gui_expected)return 0;
 #endif
     if(!texture_array_enabled)return 1;
-    if(!ta_context || !ta_current_context || ta_current_context()!=ta_context ||
+    if(!ta_edit_context || atomic_load(&ta_edit_context->shared) ||
+       !ta_context || !ta_current_context || ta_current_context()!=ta_context ||
        arrays_native_open || arrays_open)return 0;
     arrays_end_frame();
     array_texture_remove(texture);
@@ -589,8 +591,8 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
     map_textures_enabled=!!(mod_features&MOD_MAP_TEXTURES);
     if(map_textures_enabled){
         map_bounds_init();
-        if(!api->observe || !api->observe(SITE_GAME_LOAD,map_load_world,NULL))
-            map_reserve_failed=1;
+        map_load_observed=api->observe && api->observe(SITE_GAME_LOAD,map_load_world,NULL);
+        map_reserve_failed=!map_load_observed;
         snprintf(line,sizeof line,"fps_mod map_texture_preparation enabled=1 terrain_reserve=%d",!map_reserve_failed);
         mod_log(line);
     }

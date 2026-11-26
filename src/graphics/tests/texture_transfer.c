@@ -99,6 +99,66 @@ static void check_edits_and_stack(unsigned source) {
     array_texture_remove(other);glDeleteTextures(1,&other);
 }
 
+// Exercise rectangle targets, deferred army copies and reclaiming empty sprite pages.
+static void check_sprite_limits(unsigned source) {
+    FpsTextureLayer layer={0};
+    if(ta_has_rectangle){
+        for(unsigned unit=0;unit<2;unit++){
+            ta_active_texture(0x84c0+unit);glEnable(TA_TEXTURE_RECTANGLE);ta_active_texture(0x84c0);
+            array_texture_begin_frame();assert(!ta_allowed_state());
+            ta_active_texture(0x84c0+unit);glDisable(TA_TEXTURE_RECTANGLE);ta_active_texture(0x84c0);
+        }
+        array_texture_begin_frame();assert(ta_allowed_state());
+    }
+    ta_scene_replace=1;
+    map_texture_pass=MAP_UNITS;map_copy_ticks=map_tick_frequency;
+    assert(!ta_prepare(&ta_sprite_cache,source,&layer,1));
+    map_copy_ticks=0;
+    assert(ta_prepare(&ta_sprite_cache,source,&layer,1));
+    map_copy_ticks=map_tick_frequency;
+    assert(ta_prepare(&ta_sprite_cache,source,&layer,0));
+    array_texture_remove(source);
+    map_texture_pass=0;map_copy_ticks=0;
+
+    GLuint tex=0;
+    glGenTextures(1,&tex);glBindTexture(GL_TEXTURE_2D,tex);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812f);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812f);
+    unsigned char pixels[64*8*4]={0};
+    for(int i=0;i<TA_MAX_PAGES+2;i++){
+        int w=4<<(i%5),h=i<5?4:8;
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+        if(!ta_prepare(&ta_sprite_cache,tex,&layer,1)){
+            assert(ta_reject_reason==FPS_CACHE_LIMIT);
+            arrays_begin_frame();assert(ta_prepare(&ta_sprite_cache,tex,&layer,1));
+        }
+        assert(layer.width==w && layer.height==h);
+        array_texture_remove(tex);
+    }
+    ta_scene_replace=0;
+    glDeleteTextures(1,&tex);assert(glGetError()==GL_NO_ERROR);
+}
+
+// Inject one failed allocation and verify the next permitted pass retries the original texture.
+static void skip_storage(unsigned t,int l,int f,int w,int h,int d,int b,unsigned fmt,unsigned type,const void *data) {
+    (void)t;(void)l;(void)f;(void)w;(void)h;(void)d;(void)b;(void)fmt;(void)type;(void)data;
+}
+static void check_allocation_retry(unsigned source) {
+    FpsTextureArrayEntry entries[4]={0};
+    FpsTextureArrayCache cache={.entries=entries,.size=4,.layer_limit=1};
+    FpsTextureLayer layer={0};
+    void (*driver)(unsigned,int,int,int,int,int,int,unsigned,unsigned,const void *)=ta_image3d;
+    ta_scene_replace=1;ta_image3d=skip_storage;
+    assert(!ta_prepare(&cache,source,&layer,1) && ta_reject_reason==FPS_ALLOCATION);
+    ta_image3d=driver;
+    cache.pass+=63;
+    assert(!ta_prepare(&cache,source,&layer,1) && cache.attempts==1);
+    ++cache.pass;
+    assert(ta_prepare(&cache,source,&layer,1) && cache.attempts==2);
+    glDeleteTextures(1,&layer.array_texture);ta_scene_replace=0;
+}
+
 // Return a private name only to its original context. Other contexts may reuse its number.
 static void check_context(HDC dc,HGLRC owner) {
     HGLRC other=wglCreateContext(dc);
@@ -126,6 +186,15 @@ static void check_context(HDC dc,HGLRC owner) {
 }
 
 typedef struct { HDC dc; HGLRC replacement; } WorkerContext;
+
+// A second initialized cache on the same GL context makes edit notifications ambiguous.
+static DWORD WINAPI check_edit_handoff(void *arg) {
+    WorkerContext *worker=arg;
+    assert(wglMakeCurrent(worker->dc,worker->replacement) && ta_initialize_context());
+    assert(!coe5seBeforeTextureUpdate(1));
+    assert(wglMakeCurrent(NULL,NULL));
+    return 0;
+}
 
 // A new rendering thread can prepare its own map tiles after the original context is destroyed.
 static DWORD WINAPI check_replacement(void *arg) {
@@ -190,7 +259,20 @@ int main(void) {
     glBindTexture(GL_TEXTURE_2D,source);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,image);
     check_copy(source);
+    map_texture_pass=0;
+    check_sprite_limits(source);
+    check_allocation_retry(source);
+    // Failed load observation must survive every context change.
+    map_sync_reserve_context(context);assert(map_reserve_failed);
+    map_sync_reserve_context(NULL);assert(map_reserve_failed);
+    map_load_observed=1;
     check_context(dc,context);
+    WorkerContext handoff={dc,context};
+    assert(wglMakeCurrent(NULL,NULL));
+    HANDLE moved=CreateThread(NULL,0,check_edit_handoff,&handoff,0,NULL);
+    assert(moved && WaitForSingleObject(moved,15000)==WAIT_OBJECT_0);
+    CloseHandle(moved);
+    assert(wglMakeCurrent(dc,context) && !coe5seBeforeTextureUpdate(source));
     map_reserve_context=context;
     map_reserve[0]=(MapReservedTile){.texture=source,.pixels=calloc(1,MAP_TILE_BYTES)};
     map_reserve_count=1;
@@ -206,5 +288,5 @@ int main(void) {
     CloseHandle(thread);FreeLibrary(glu);
     assert(wglDeleteContext(replacement));
     ReleaseDC(win,dc);DestroyWindow(win);
-    puts("Verified texture edits, retries, GL state, both layer readers and render-thread handoff.");
+    puts("Verified texture edits, rectangle targets, army budget, cache recovery, layer readers and context handoff.");
 }

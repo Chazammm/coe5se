@@ -11,4 +11,5 @@ Features
 - Native graphics plugins can call `jazzyBeforeTextureUpdate` before modifying a cached texture on the game render thread.
 
 Bugs
-- World-map texture preparation checks layer transfers, preserves other mods' GL errors, releases tile snapshots when the rendering context changes and handles external army sprite bounds with MSAA enabled.
+- World-map texture preparation checks layer transfers, preserves other mods' GL errors, releases tile snapshots when the rendering context changes and handles external army sprite bounds with MSAA enabled. Army texture copies are spread across map draws.
+- Texture batching preserves rectangle-texture rendering, reuses empty sprite pages and retries temporary allocation failures.
