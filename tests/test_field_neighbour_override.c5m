@@ -1,0 +1,4 @@
+icon "banner.tga"
+description "Isolated test fixture for owned test-field neighbour validation"
+selectterr 56
+name "Ash Field (test fixture override)"

@@ -3367,6 +3367,8 @@ function coe5.loadedContentOrigin(kind, id) end
 ---at most, and none while one lives anywhere (unique_count, unique_exists). An editor field's refusal gives its reason
 ---as the second value. On Windows, minimumWidth is an integer from 32 to 1536. Native setup may make the field wider.
 ---Read the resulting width with coe5.testFieldState().width. Omit minimumWidth for the native default.
+---On Windows, verified planar terrain profiles temporarily borrow the local plane and tiles in the main menu.
+---A changed required neighbour can return planar_neighbour_changed; an occupied staging area can refuse the request.
 ---@overload fun(field: {commander?: integer, spell?: integer, standIn?: integer, friends?: {[1]: integer, [2]?: integer}[], enemies?: {[1]: integer, [2]?: integer}[], terrain?: integer, allowMultipleUnique?: boolean, emptyEditor?: boolean, minimumWidth?: integer}): boolean, {emptyEditor: boolean|nil, commander: integer, friends: integer[], enemies: integer[]}|string|nil
 ---@param monster integer
 ---@param spell integer|nil
@@ -3440,6 +3442,16 @@ function coe5.testFieldEnvironmentInfo() end
 ---@return table|nil state
 ---@return string|nil reason
 function coe5.testFieldEnvironmentState() end
+
+---Read a loaded terrain's native name, flag bits and complete fort parts. On Windows with matching
+---game code. The low byte of fortParts is the native battle-template selector. available reports
+---the owned-field terrain policy and required template checks. Opening can still refuse unsafe
+---world state. When available, plane is the plane used by the owned field and nativeTemplate is
+---the expected stock template, if it has one. The read makes no changes and needs no open field.
+---@param id integer
+---@return {id: integer, name: string, flags: integer, fortParts: integer, available: boolean, reason?: string, plane?: integer, nativeTemplate?: string}|nil info
+---@return string|nil reason bad_terrain or game_code_differs if no record was returned
+function coe5.testFieldTerrainInfo(id) end
 
 ---Verified stock scenery definitions for Windows 5.43, without opening a field.
 ---Version 0 means unavailable. Each type has an exact loaded monster ID, owner, layer, dimensions, standable flag and role.
