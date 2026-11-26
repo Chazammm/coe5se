@@ -125,6 +125,7 @@ static void mod_terrain_finish(unsigned view,long long before) {
     mod_log(line);terrain_reported|=view;
 }
 static void mod_terrain_plane(uintptr_t a,unsigned plane) {
+    if(map_textures_enabled && map_owns_mips())map_release_detached_pixels();
     int opened=mod_operational && (!mod_render_setting || *mod_render_setting) && terrain_begin_scope();
     long long before=terrain_tiles;
     int previous=map_texture_pass;
@@ -154,12 +155,19 @@ static void mod_map_units(int a,int b,int flags) {
         draw(a,b,flags);return;
     }
     int samples=0;arrays_get_int(0x80a8,&samples);
-    if(samples){draw(a,b,flags);return;}
+    int previous_bounds=map_bounds_active;
+    map_bounds_active=map_textures_enabled && map_owns_mips() && map_owns_imports();
+    if(samples){
+        draw(a,b,flags);
+        map_bounds_active=previous_bounds;
+        return;
+    }
     array_texture_begin_frame();arrays_begin_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
-    map_texture_pass=map_textures_enabled && map_owns_mips() && map_owns_imports()?MAP_UNITS:0;
+    map_texture_pass=map_bounds_active?MAP_UNITS:0;
     draw(a,b,flags);
     map_texture_pass=0;
+    map_bounds_active=previous_bounds;
     arrays_end_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
 }

@@ -77,13 +77,26 @@ static int map_simple_upload(int row,int needed) {
     return !automatic && map_identity_transfer();
 }
 
+// A level known to be empty must acquire the width of the requested two-dimensional allocation.
+static int map_level_widths(int width,int height,int allocated) {
+    for(int level=0;;level++){
+        int w=-1;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D,level,GL_TEXTURE_WIDTH,&w);
+        if(w!=(allocated?width:0))return 0;
+        if(width==1 && height==1)return 1;
+        if(width>1)width/=2;
+        if(height>1)height/=2;
+    }
+}
+
 // Accelerate only the two input layouts validated against Windows GLU.
 static int map_build_mips(unsigned target,int internal,int w,int h,unsigned format,unsigned type,const void *source) {
     if(!map_texture_pass || map_filters_disabled || !source || target!=GL_TEXTURE_2D || format!=GL_RGBA ||
        type!=GL_UNSIGNED_BYTE || !ta_current_context || ta_current_context()!=ta_context)return 0;
     int square=internal==GL_RGBA && w==64 && h==64;
     int dw=internal==GL_RGBA4 && (h==71 || h==72)?bfTargetWidth(w):0;
-    if((!square && !dw) || !map_owns_mips() || !map_error_clear() || !map_simple_upload(w*4,square?64:dw))return 0;
+    if((!square && !dw) || !map_owns_mips() || !map_simple_upload(w*4,square?64:dw))return 0;
+    if(!map_level_widths(square?64:dw,64,0))return 0;
     int result=0;
     if(square){
         MapMipEntry *entry=map_tile_levels(source);
@@ -98,8 +111,5 @@ static int map_build_mips(unsigned target,int internal,int w,int h,unsigned form
         if(!bfScale(source,w,h,map_base_pixels,dw,64))return 0;
         result=arrays_real_gluBuild2DMipmaps(target,internal,dw,64,format,GL_UNSIGNED_SHORT,map_base_pixels);
     }
-    unsigned error=glGetError();
-    if(!error && !result)return 1;
-    map_filters_disabled=1;
-    return 0;
+    return !result && map_level_widths(square?64:dw,64,1);
 }

@@ -9,7 +9,7 @@ static _Thread_local int map_imaging, map_partial_imaging;
 static int map_textures_enabled;
 enum { MAP_TERRAIN = 1, MAP_UNITS = 2 };
 static _Thread_local int map_texture_pass;
-static _Thread_local unsigned map_saved_error;
+static _Thread_local int map_bounds_active;
 static _Thread_local long long map_copy_ticks, map_tick_frequency;
 
 // Resolve the optional copy function for the single supported rendering context.
@@ -60,24 +60,15 @@ static int map_identity_transfer(void) {
     return 1;
 }
 
-// Keep a pre-existing GL error visible through the game's normal glGetError call.
-static int map_error_clear(void) {
-    if(map_saved_error)return 0;
-    map_saved_error=glGetError();
-    return map_saved_error==GL_NO_ERROR;
-}
-
-// Copy compatible storage; the caller rewrites every level if the driver rejects it.
+// Submit compatible copies. The caller verifies storage before publishing the layer.
 static int map_copy_layer(unsigned source,unsigned destination,int layer,int width,int height,int last) {
-    if(!map_texture_pass || !map_copy_image || !map_error_clear() || !map_identity_transfer())return 0;
+    if(!map_texture_pass || !map_copy_image || !map_identity_transfer())return 0;
     for(int i=0;i<=last;i++){
         map_copy_image(source,GL_TEXTURE_2D,i,0,0,0,destination,0x8c1a,i,0,0,layer,width,height,1);
         if(width>1)width/=2;
         if(height>1)height/=2;
     }
-    if(glGetError()==GL_NO_ERROR)return 1;
-    map_copy_image=NULL;
-    return 0;
+    return 1;
 }
 
 // Measure only new layer preparation in a map terrain pass.

@@ -454,11 +454,6 @@ static int WINAPI arrays_gluBuild2DMipmaps(unsigned target,int components,int wi
 static unsigned (*arrays_real_glGetError)(void);
 static unsigned arrays_glGetError(void){
     arrays_flush();
-#ifdef _WIN32
-    if(map_saved_error && ta_current_context && ta_current_context()==ta_context){
-        unsigned error=map_saved_error; map_saved_error=0; return error;
-    }
-#endif
     return arrays_real_glGetError();
 }
 #undef ARR_WRAP0

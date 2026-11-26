@@ -18,6 +18,7 @@ static HGLRC map_reserve_context;
 static char map_reserve_tag[64];
 static volatile LONG map_reserve_reset;
 static int map_reserve_draining, map_reserve_failed;
+static int map_pixels_detached;
 
 // Invalidate immediately; delete names only on their own rendering context.
 static void map_load_world(const CallInfo *call) {
@@ -50,6 +51,21 @@ static void map_release_slot(MapReservedTile *slot,int transfer) {
     free(slot->pixels);
     *slot=(MapReservedTile){0};
     --map_reserve_count;
+}
+
+// Release host snapshots on a context change. Retire remaining GL names only on their owner.
+static void map_release_detached_pixels(void) {
+    if(!map_reserve_count || map_pixels_detached || !ta_context || !ta_current_context ||
+       ta_current_context()==ta_context)return;
+    for(unsigned i=0;i<MAP_RESERVE_SIZE;i++){
+        MapReservedTile *slot=&map_reserve[i];
+        if(!slot->pixels)continue;
+        if(slot->texture){free(slot->pixels);slot->pixels=NULL;}
+        else map_release_slot(slot,0);
+    }
+    map_reserve_draining=map_reserve_count!=0;
+    map_pixels_detached=map_reserve_draining;
+    map_atlas_height=0;
 }
 
 // Reset pass-local state. All owned pixels come from the native crop call.
@@ -123,8 +139,9 @@ static int map_prepare_slot(MapReservedTile *slot) {
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
     int result=arrays_real_gluBuild2DMipmaps(GL_TEXTURE_2D,GL_RGBA,64,64,GL_RGBA,GL_UNSIGNED_BYTE,slot->pixels);
-    unsigned error=glGetError();
-    if(result || error){glDeleteTextures(1,&name);return 0;}
+    if(result || !map_level_widths(64,64,1) || !map_owns_reserved_name(name)){
+        glDeleteTextures(1,&name);return 0;
+    }
     slot->texture=name;
     --map_reserve_pending;
     map_reserve_context=ta_context;
@@ -140,9 +157,9 @@ static void map_reserve_end(void) {
     if(map_reserve_draining){
         for(unsigned i=0,freed=0;i<MAP_RESERVE_SIZE && freed<32 && map_reserve_count;i++){
             MapReservedTile *slot=&map_reserve[map_reserve_scan++%MAP_RESERVE_SIZE];
-            if(slot->pixels){map_release_slot(slot,0);++freed;}
+            if(slot->pixels || slot->texture){map_release_slot(slot,0);++freed;}
         }
-        if(!map_reserve_count){map_reserve_draining=0;map_reserve_context=NULL;}
+        if(!map_reserve_count){map_reserve_draining=map_pixels_detached=0;map_reserve_context=NULL;}
         return;
     }
     if(map_tile_box.right>=0 && memcmp(&map_previous_box,&map_tile_box,sizeof map_tile_box)!=0){
@@ -156,7 +173,7 @@ static void map_reserve_end(void) {
             map_release_slot(slot,0);
     }
     if(!map_reserve_pending || !map_tick_frequency || arrays_open || arrays_native_open ||
-       !map_error_clear() || !map_simple_upload(256,64))return;
+       !map_simple_upload(256,64))return;
     int bound,alignment;
     glGetIntegerv(GL_TEXTURE_BINDING_2D,&bound);
     glGetIntegerv(GL_UNPACK_ALIGNMENT,&alignment);
@@ -178,10 +195,13 @@ static int map_create_tile(int w,int h,void *pixels,short kind,short extra,int a
        ta_current_context()==map_reserve_context && *(const int *)(detail_base+RVA_MAP_MAX_TILE_TEXTURE)>=64){
         MapReservedTile *tile=map_reserve_slot(map_crop_x,map_crop_y);
         if(tile->texture && tile->x==map_crop_x && tile->y==map_crop_y && !memcmp(tile->pixels,pixels,MAP_TILE_BYTES) &&
-           !arrays_open && !arrays_native_open && map_error_clear() && map_simple_upload(256,64) && map_owns_reserved_name(tile->texture)){
+           !arrays_open && !arrays_native_open && map_simple_upload(256,64) && map_owns_reserved_name(tile->texture)){
             unsigned name=tile->texture;
             map_label(GL_TEXTURE,name,0,NULL);
-            if(glGetError()==GL_NO_ERROR){
+            char label[2];
+            int length=-1;
+            map_read_label(GL_TEXTURE,name,sizeof label,&length,label);
+            if(length==0){
                 arrays_glPixelStorei(GL_UNPACK_ALIGNMENT,1);
                 arrays_bind_probe(GL_TEXTURE_2D,name);
                 map_release_slot(tile,1);

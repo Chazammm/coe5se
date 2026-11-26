@@ -37,7 +37,7 @@ static int map_external_bounds(const char *path,unsigned w,unsigned h,int *width
 
 // Use the native path for internal sprites, cache contention and unsupported dimensions.
 static void map_army_bounds(unsigned file,unsigned sprite,int *width,int *height) {
-    if(map_texture_pass==MAP_UNITS && map_try_lock && file==0x21 && sprite<0x7fbc && width && height && width!=height){
+    if(map_bounds_active && map_try_lock && file==0x21 && sprite<0x7fbc && width && height && width!=height){
         int (*replacement)(unsigned,unsigned)=(void *)(detail_base+RVA_REPLACED_SPRITE);
         int index=replacement(file,sprite);
         if((unsigned)index<4096){
