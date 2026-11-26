@@ -48,21 +48,33 @@ static void clearTestBattleSquare(int x, int y) {
     }
 }
 
-static const char *testFieldTerrainProblem(lua_State *L, int terrain) {
-    const unsigned char *record = GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE);
-    if (!*record) return "bad_terrain";
-    const TestFieldTerrainPolicy *policy = findTestFieldTerrainPolicy(terrain);
-    if (!policy) return "unsupported_terrain";
-    pushGameTerrainName(L, terrain);
+static int testFieldLoadedTerrainMatches(lua_State *L, const TestFieldTerrainPolicy *policy) {
+    if (!policy || policy->id >= TERRAIN_TABLE_MAX || policy->id > G32(RVA_LAST_TERRAIN)) return 0;
+    const unsigned char *record = GAME_PTR(RVA_TERRAIN_TABLE + (size_t)policy->id * TERRAIN_SIZE);
+    if (!*record) return 0;
+    pushGameTerrainName(L, policy->id);
     uint64_t flags;
     unsigned int fortParts;
     memcpy(&flags, record + TERRAIN_FLAGS, sizeof flags);
     memcpy(&fortParts, record + TERRAIN_FORT_PARTS, sizeof fortParts);
     int matches = testFieldTerrainPolicyMatches(policy, lua_tostring(L, -1), flags, fortParts);
     lua_pop(L, 1);
-    if (!matches) return "unsupported_terrain";
+    return matches;
+}
+
+static const char *testFieldTerrainProblem(lua_State *L, int terrain) {
+    if (terrain < 0 || terrain >= TERRAIN_TABLE_MAX || terrain > G32(RVA_LAST_TERRAIN) ||
+        !*GAME_PTR(RVA_TERRAIN_TABLE + (size_t)terrain * TERRAIN_SIZE)) return "bad_terrain";
+    const TestFieldTerrainPolicy *policy = findTestFieldTerrainPolicy(terrain);
+    if (!testFieldLoadedTerrainMatches(L, policy)) return "unsupported_terrain";
 #ifndef __APPLE__
     if (!testFieldTemplateAvailable(policy)) return "native_template_unavailable";
+    const TestFieldPlanarPolicy *planar = findTestFieldPlanarPolicy(terrain);
+    if (planar) {
+        for (int i = 0; i < 9; i++)
+            if (i != 4 && !testFieldLoadedTerrainMatches(L, findTestFieldPlanarNeighbour(planar->squares[i].terrain)))
+                return "planar_neighbour_changed";
+    }
 #endif
     return NULL;
 }
@@ -102,7 +114,9 @@ static struct {
     int minimumWidth, sizing;
 #ifndef __APPLE__
     int environmentBorrowed, settingUp, setupComplete, nativeTemplateObserved, customMapReplaced;
-    int originalTower, originalSea, originalShipsA, originalShipsD;
+    int originalTower, originalSea, originalShipsA, originalShipsD, originalSiege, originalUnderground;
+    const TestFieldPlanarPolicy *planar;
+    unsigned char planarPlane[PLANE_SIZE], planarSquares[9][SQUARE_SIZE];
     char nativeTemplate[64];
 #endif
     short army, teamA, teamB;
@@ -126,6 +140,69 @@ static const char *testFieldOpenFailure;
 static unsigned char *testFieldSquare(void) {
     return GAME_PTR(RVA_SQUARE_RECORDS + ((size_t)testField.x * MAP_COLUMN_SQUARES + testField.y) * SQUARE_SIZE);
 }
+
+#ifndef __APPLE__
+static unsigned char *testFieldPlanarSquare(int index) {
+    int x = testField.x - 1 + index / 3, y = testField.y - 1 + index % 3;
+    return GAME_PTR(RVA_SQUARE_RECORDS + ((size_t)x * MAP_COLUMN_SQUARES + y) * SQUARE_SIZE);
+}
+
+static void saveTestFieldPlanarContext(void) {
+    if (!testField.planar) return;
+    memcpy(testField.planarPlane, planeRecord(testField.planar->plane), PLANE_SIZE);
+    for (int i = 0; i < 9; i++)
+        if (i != 4) memcpy(testField.planarSquares[i], testFieldPlanarSquare(i), SQUARE_SIZE);
+}
+
+static int setTestFieldPlanarContext(void) {
+    const TestFieldPlanarPolicy *policy = testField.planar;
+    int plane = policy->plane;
+    setPlaneField(0, PLANE_W, 0);
+    memset(planeRecord(plane), 0, PLANE_SIZE);
+    snprintf((char *)planeRecord(plane), PLANE_NAME_SIZE, "%s", policy->planeName);
+    setPlaneField(plane, PLANE_X, testField.x - 1);
+    setPlaneField(plane, PLANE_Y, testField.y - 1);
+    setPlaneField(plane, PLANE_W, 3);
+    setPlaneField(plane, PLANE_H, 3);
+    if (G32(RVA_LAST_PLANE) < plane) G32(RVA_LAST_PLANE) = plane;
+    for (int i = 0; i < 9; i++) {
+        int x = testField.x - 1 + i / 3, y = testField.y - 1 + i % 3;
+        if (GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y) != plane) return 0;
+    }
+    for (int i = 0; i < 9; i++) {
+        unsigned char *square = testFieldPlanarSquare(i);
+        const TestFieldPlanarTile *tile = &policy->squares[i];
+        memset(square, 0, SQUARE_SIZE);
+        *(short *)(square + SQUARE_TERRAIN_TYPE) = tile->terrain;
+        *(short *)(square + SQUARE_GROUND) = tile->ground;
+        *(short *)(square + SQUARE_TEMPERATURE) = tile->temperature;
+    }
+    return 1;
+}
+
+static int testFieldPlanarContextMatches(void) {
+    const TestFieldPlanarPolicy *policy = testField.planar;
+    if (!policy) return 1;
+    for (int i = 0; i < 9; i++) {
+        const unsigned char *square = testFieldPlanarSquare(i);
+        const TestFieldPlanarTile *tile = &policy->squares[i];
+        int x = testField.x - 1 + i / 3, y = testField.y - 1 + i % 3;
+        if (GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y) != policy->plane ||
+            *(const short *)(square + SQUARE_TERRAIN_TYPE) != tile->terrain ||
+            *(const short *)(square + SQUARE_GROUND) != tile->ground ||
+            *(const short *)(square + SQUARE_TEMPERATURE) != tile->temperature) return 0;
+    }
+    return 1;
+}
+
+static int testFieldPlanarContextRestored(void) {
+    if (!testField.planar) return 1;
+    if (memcmp(planeRecord(testField.planar->plane), testField.planarPlane, PLANE_SIZE)) return 0;
+    for (int i = 0; i < 9; i++)
+        if (i != 4 && memcmp(testFieldPlanarSquare(i), testField.planarSquares[i], SQUARE_SIZE)) return 0;
+    return 1;
+}
+#endif
 
 static int testFieldShowFlag(void) {
 #ifdef __APPLE__
@@ -152,6 +229,13 @@ static void setTestFieldBattleOver(int on) {
 
 static void restoreTestFieldPlane(void) {
     if (!testField.planeBorrowed) return;
+#ifndef __APPLE__
+    if (testField.planar) {
+        memcpy(planeRecord(testField.planar->plane), testField.planarPlane, PLANE_SIZE);
+        for (int i = 0; i < 9; i++)
+            if (i != 4) memcpy(testFieldPlanarSquare(i), testField.planarSquares[i], SQUARE_SIZE);
+    }
+#endif
     memcpy(planeRecord(0), testField.plane, PLANE_SIZE);
     *(int *)GAME_PTR(RVA_LAST_PLANE) = testField.lastPlane;
 }
@@ -163,11 +247,43 @@ static int restoreTestFieldEnvironment(void) {
     G32(RVA_BATTLE_AT_SEA) = testField.originalSea;
     G32(RVA_BATTLE_SHIPS_A) = testField.originalShipsA;
     G32(RVA_BATTLE_SHIPS_D) = testField.originalShipsD;
+    G32(RVA_BATTLE_IS_SIEGE) = testField.originalSiege;
+    G32(RVA_BATTLE_PLANE_3_OR_4) = testField.originalUnderground;
     testField.environmentBorrowed = 0;
     return G32(RVA_BATTLE_IS_TOWER) == testField.originalTower && G32(RVA_BATTLE_AT_SEA) == testField.originalSea &&
-           G32(RVA_BATTLE_SHIPS_A) == testField.originalShipsA && G32(RVA_BATTLE_SHIPS_D) == testField.originalShipsD;
+           G32(RVA_BATTLE_SHIPS_A) == testField.originalShipsA && G32(RVA_BATTLE_SHIPS_D) == testField.originalShipsD &&
+           G32(RVA_BATTLE_IS_SIEGE) == testField.originalSiege && G32(RVA_BATTLE_PLANE_3_OR_4) == testField.originalUnderground;
 }
 #endif
+
+// Restores the borrowed world and checks it on both close and failed open.
+static int restoreTestFieldWorld(void) {
+    int x = testField.x, y = testField.y;
+    short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
+    short *teamA = &PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE);
+    short *teamB = &PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
+    memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);
+    *army = testField.army;
+    *teamA = testField.teamA;
+    *teamB = testField.teamB;
+    G32(RVA_ACTIVE_PLAYER) = testField.activePlayer;
+    G32(RVA_BATTLE_DELAY) = testField.delay;
+    G32(RVA_MAP_W) = testField.mapW;
+    G32(RVA_MAP_H) = testField.mapH;
+    restoreTestFieldPlane();
+    setTestFieldShowFlag(testField.showFlag);
+    int restored = !memcmp(testFieldSquare(), testField.square, SQUARE_SIZE) && *army == testField.army &&
+                   *teamA == testField.teamA && *teamB == testField.teamB && G32(RVA_ACTIVE_PLAYER) == testField.activePlayer &&
+                   G32(RVA_BATTLE_DELAY) == testField.delay && G32(RVA_MAP_W) == testField.mapW && G32(RVA_MAP_H) == testField.mapH &&
+                   testFieldShowFlag() == testField.showFlag &&
+                   (!testField.planeBorrowed || (!memcmp(planeRecord(0), testField.plane, PLANE_SIZE) && G32(RVA_LAST_PLANE) == testField.lastPlane));
+#ifndef __APPLE__
+    if (!testFieldPlanarContextRestored()) restored = 0;
+    if (!restoreTestFieldEnvironment()) restored = 0;
+    testField.planar = NULL;
+#endif
+    return restored;
+}
 
 static int closeTestFieldNow(void) {
     if (testFieldLife.retiring) return 0;
@@ -197,35 +313,16 @@ static int closeTestFieldNow(void) {
 #endif
         cleaned = removeTestFieldUnits() && cleaned;
     } else clearTestBattleSquare(x, y);
-    short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
-    short *teamA = &PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE), *teamB = &PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
-    memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);
-    *army = testField.army;
-    *teamA = testField.teamA;
-    *teamB = testField.teamB;
-    *(int *)GAME_PTR(RVA_ACTIVE_PLAYER) = testField.activePlayer;
-    *(int *)GAME_PTR(RVA_BATTLE_DELAY) = testField.delay;
-    *(int *)GAME_PTR(RVA_MAP_W) = testField.mapW;
-    *(int *)GAME_PTR(RVA_MAP_H) = testField.mapH;
-    restoreTestFieldPlane();
-    setTestFieldShowFlag(testField.showFlag);
+    int restored = restoreTestFieldWorld();
     testField.open = 0;
     testField.fighting = 0;
     if (!testField.editor) {
         writeLog("test_field_closed", "x=%d y=%d", x, y);
         return 1;
     }
-    int restored = !memcmp(testFieldSquare(), testField.square, SQUARE_SIZE) && *army == testField.army && G32(RVA_ACTIVE_PLAYER) == testField.activePlayer &&
-                   G32(RVA_BATTLE_DELAY) == testField.delay && G32(RVA_MAP_W) == testField.mapW && G32(RVA_MAP_H) == testField.mapH &&
-                   testFieldShowFlag() == testField.showFlag &&
-                   (!testField.spellWeaponRecord || !memcmp(testField.spellWeaponRecord, testField.spellWeaponSaved, WEAPON_SIZE)) && *teamA == testField.teamA &&
-                   *teamB == testField.teamB &&
-                   (!testField.planeBorrowed || (!memcmp(planeRecord(0), testField.plane, PLANE_SIZE) && G32(RVA_LAST_PLANE) == testField.lastPlane));
+    if (testField.spellWeaponRecord && memcmp(testField.spellWeaponRecord, testField.spellWeaponSaved, WEAPON_SIZE)) restored = 0;
     writeLog("test_field_closed", "x=%d y=%d borrowed_restored=%d neighbours_unchanged=%d actors_cleaned=%d session=%llu", x, y, restored,
              hashTestFieldNeighbours(x, y) == testField.neighbours, cleaned, testFieldLife.session);
-#ifndef __APPLE__
-    if (!restoreTestFieldEnvironment()) restored = 0;
-#endif
     if (!restored) testFieldLife.failed = testFieldLife.pending = 1;
     turnOffTestFieldLifecycle();
     return cleaned && restored;
@@ -487,16 +584,18 @@ static int refuseTestFieldOpen(const LuaScript *s, const char *call, TestFieldSp
     return 0;
 }
 
-static void undoTestFieldOpen(int editor) {
-    if (editor) {
-        removeTestFieldUnits();
-        turnOffTestFieldLifecycle();
-    } else clearTestBattleSquare(testField.x, testField.y);
-    memcpy(testFieldSquare(), testField.square, SQUARE_SIZE);
-    *(short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)testField.x * MAP_COLUMN_SQUARES + testField.y) * 2) = testField.army;
-    *(int *)GAME_PTR(RVA_MAP_W) = testField.mapW;
-    *(int *)GAME_PTR(RVA_MAP_H) = testField.mapH;
-    restoreTestFieldPlane();
+// Returns the original opening error once the owned field has been rolled back.
+static const char *undoTestFieldOpen(int editor, const char *reason) {
+    int cleaned = 1;
+    if (editor) cleaned = removeTestFieldUnits();
+    else clearTestBattleSquare(testField.x, testField.y);
+    int restored = restoreTestFieldWorld();
+    if (!editor) return reason;
+    if (!restored) testFieldLife.pending = testFieldLife.failed = 1;
+    turnOffTestFieldLifecycle();
+    writeLog("test_field_open_rollback", "reason=%s borrowed_restored=%d actors_cleaned=%d session=%llu",
+             reason, restored, cleaned, testFieldLife.session);
+    return cleaned && restored ? reason : "cleanup_unverified";
 }
 
 static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
@@ -536,10 +635,21 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     if (editor && !reason && !spec->allowMultipleUnique)
         reason = testFieldUniqueProblem((int)monster, &spec->friends, &spec->enemies, &uniqueMonster, &existingUnique, &uniqueRequested);
     if (editor && !reason && (G32(RVA_UNIT_COUNT) < -1 || G32(RVA_UNIT_COUNT) >= UNIT_TABLE_MAX)) reason = "bad_unit_table";
+#ifndef __APPLE__
+    const TestFieldPlanarPolicy *planar = spec->terrainSpecified ? findTestFieldPlanarPolicy((int)spec->terrain) : NULL;
+#endif
+    int radius = 0;
+#ifndef __APPLE__
+    if (planar) radius = 1;
+#endif
     for (int u = 0; editor && !reason && u < UNIT_TABLE_MAX; u++)
-        if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0 && G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE) == TEST_BATTLE_X &&
-            G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE + 4) == TEST_BATTLE_Y)
-            reason = "temporary_square_busy";
+        if (G16(RVA_UNIT_HP + (size_t)u * UNIT_SIZE) > 0) {
+            int dx = G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE);
+            int dy = G32(RVA_UNIT_X + (size_t)u * UNIT_SIZE + 4);
+            if (dx >= TEST_BATTLE_X - radius && dx <= TEST_BATTLE_X + radius &&
+                dy >= TEST_BATTLE_Y - radius && dy <= TEST_BATTLE_Y + radius)
+                reason = "temporary_square_busy";
+        }
     if (!reason && (spec->minimumWidth
 #ifndef __APPLE__
         || (editor && spec->terrainSpecified)
@@ -568,6 +678,7 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     testField.mapH = G32(RVA_MAP_H);
     testField.planeBorrowed = explicitTerrain;
 #ifndef __APPLE__
+    testField.planar = planar;
     testField.environmentBorrowed = editor && explicitTerrain;
     testField.setupComplete = testField.nativeTemplateObserved = testField.customMapReplaced = 0;
     testField.nativeTemplate[0] = 0;
@@ -576,11 +687,16 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
         testField.originalSea = G32(RVA_BATTLE_AT_SEA);
         testField.originalShipsA = G32(RVA_BATTLE_SHIPS_A);
         testField.originalShipsD = G32(RVA_BATTLE_SHIPS_D);
+        testField.originalSiege = G32(RVA_BATTLE_IS_SIEGE);
+        testField.originalUnderground = G32(RVA_BATTLE_PLANE_3_OR_4);
     }
 #endif
     if (explicitTerrain) {
         memcpy(testField.plane, planeRecord(0), PLANE_SIZE);
         testField.lastPlane = G32(RVA_LAST_PLANE);
+#ifndef __APPLE__
+        saveTestFieldPlanarContext();
+#endif
     }
     short *army = (short *)GAME_PTR(RVA_SQUARE_ARMY + ((size_t)x * MAP_COLUMN_SQUARES + y) * 2);
     short *teamA = &PSLOT16(RVA_SLOT_TEAM, 0, PLAYER_BLOCK_SIZE), *teamB = &PSLOT16(RVA_SLOT_TEAM, TEST_BATTLE_ENEMY_PLAYER, PLAYER_BLOCK_SIZE);
@@ -598,20 +714,30 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     if (explicitTerrain) {
         if (testField.mapW <= x + 1) *(int *)GAME_PTR(RVA_MAP_W) = x + 2;
         if (testField.mapH <= y + 1) *(int *)GAME_PTR(RVA_MAP_H) = y + 2;
-        setPlaneField(0, PLANE_X, 0);
-        setPlaneField(0, PLANE_Y, 0);
-        setPlaneField(0, PLANE_W, x + 2);
-        setPlaneField(0, PLANE_H, y + 2);
-        if (testField.lastPlane < 0) *(int *)GAME_PTR(RVA_LAST_PLANE) = 0;
-        int plane = GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y);
-        if (plane == 0) {
-            GAME_FN(void (*)(int, int, int, int), RVA_GEN_SET_FIXED_TEMPERATURE)(x, y, 1, 1);
-            GAME_FN(void (*)(int, int, int, int, int), RVA_SET_GROUND_RECT)(x, y, 1, 1, -1);
-        }
-        short ground = *(short *)(square + SQUARE_GROUND);
-        if (plane != 0 || ground < 0 || ground > SQUARE_GROUND_LAST) {
-            undoTestFieldOpen(editor);
-            return refuseTestFieldOpen(s, call, spec, "terrain_init_failed", "terrain=%d ground=%d plane=%d", terrain, ground, plane);
+#ifndef __APPLE__
+        if (planar) {
+            if (!setTestFieldPlanarContext()) {
+                reason = undoTestFieldOpen(editor, "terrain_init_failed");
+                return refuseTestFieldOpen(s, call, spec, reason, "terrain=%d expected_plane=%d", terrain, planar->plane);
+            }
+        } else
+#endif
+        {
+            setPlaneField(0, PLANE_X, 0);
+            setPlaneField(0, PLANE_Y, 0);
+            setPlaneField(0, PLANE_W, x + 2);
+            setPlaneField(0, PLANE_H, y + 2);
+            if (testField.lastPlane < 0) *(int *)GAME_PTR(RVA_LAST_PLANE) = 0;
+            int plane = GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y);
+            if (plane == 0) {
+                GAME_FN(void (*)(int, int, int, int), RVA_GEN_SET_FIXED_TEMPERATURE)(x, y, 1, 1);
+                GAME_FN(void (*)(int, int, int, int, int), RVA_SET_GROUND_RECT)(x, y, 1, 1, -1);
+            }
+            short ground = *(short *)(square + SQUARE_GROUND);
+            if (plane != 0 || ground < 0 || ground > SQUARE_GROUND_LAST) {
+                reason = undoTestFieldOpen(editor, "terrain_init_failed");
+                return refuseTestFieldOpen(s, call, spec, reason, "terrain=%d ground=%d plane=%d", terrain, ground, plane);
+            }
         }
     }
     enterTestFieldCode();
@@ -625,8 +751,8 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     leaveTestFieldCode();
     int friendGroups = spec->friends.groupCount, enemyGroups = spec->enemies.groupCount;
     if (testFieldEnemyMade < 0 || (!testField.emptyEditor && testFieldEnemyMade < 1)) {
-        undoTestFieldOpen(editor);
-        return refuseTestFieldOpen(s, call, spec, "no_free_slot", "monster=%lld friends=%d enemies=%d", (long long)monster, friendGroups, enemyGroups);
+        reason = undoTestFieldOpen(editor, "no_free_slot");
+        return refuseTestFieldOpen(s, call, spec, reason, "monster=%lld friends=%d enemies=%d", (long long)monster, friendGroups, enemyGroups);
     }
     freeTestFieldSide(&spec->friends);
     freeTestFieldSide(&spec->enemies);
@@ -684,6 +810,9 @@ static int openTestFieldFrom(lua_State *L, const char *call, int editor) {
     testField.setupComplete = 1;
     const char *invalid = testFieldEnvironmentProblem();
     if (invalid) {
+        writeLogWarning("test_field_environment_mismatch", "terrain=%d template=%s siege=%d tower=%d at_sea=%d underground=%d plane=%d",
+            terrain, testField.nativeTemplate, G32(RVA_BATTLE_IS_SIEGE), G32(RVA_BATTLE_IS_TOWER),
+            G32(RVA_BATTLE_AT_SEA), G32(RVA_BATTLE_PLANE_3_OR_4), GAME_FN(int (*)(int, int), RVA_PLANE_AT)(x, y));
         leaveTestFieldCode();
         int cleaned = closeTestFieldNow();
         return refuseTestFieldOpen(s, call, NULL, cleaned ? invalid : "cleanup_unverified", "terrain=%d", terrain);

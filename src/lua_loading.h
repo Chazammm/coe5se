@@ -12,6 +12,7 @@ static int lSetTestFieldConfiguration(lua_State *L);
 #ifndef __APPLE__
 static int lTestFieldEnvironmentInfo(lua_State *L);
 static int lTestFieldEnvironmentState(lua_State *L);
+static int lTestFieldTerrainInfo(lua_State *L);
 static int lTestFieldWaterState(lua_State *L);
 static int lSetTestFieldDeployment(lua_State *L);
 static int lTestFieldInitialDeployment(lua_State *L);
@@ -31,6 +32,7 @@ static const luaL_Reg LUA_COE5[] = {
     {"setTestFieldConfiguration", lSetTestFieldConfiguration}, {"loadedContentOrigin", lLoadedContentOrigin},
 #ifndef __APPLE__
     {"testFieldEnvironmentInfo", lTestFieldEnvironmentInfo}, {"testFieldEnvironmentState", lTestFieldEnvironmentState},
+    {"testFieldTerrainInfo", lTestFieldTerrainInfo},
     {"testFieldWaterState", lTestFieldWaterState},
     {"testFieldSceneryTypes", lTestFieldSceneryTypes}, {"testFieldSceneryState", lTestFieldSceneryState},
     {"addTestFieldScenery", lAddTestFieldScenery}, {"moveTestFieldScenery", lMoveTestFieldScenery},
