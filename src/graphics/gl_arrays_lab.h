@@ -439,14 +439,28 @@ static void arrays_glTexImage2D(unsigned target,int level,int internal,int width
     ARR_AFTER_STATE();
 }
 static int (WINAPI *arrays_real_gluBuild2DMipmaps)(unsigned,int,int,int,unsigned,unsigned,const void *);
+#ifdef _WIN32
+#include "map_mipmaps.h"
+#endif
 static int WINAPI arrays_gluBuild2DMipmaps(unsigned target,int components,int width,int height,unsigned format,unsigned type,const void *pixels) {
     arrays_end_frame();
     arrays_forget_bound_texture(target);
+#ifdef _WIN32
+    if(map_build_mips(target,components,width,height,format,type,pixels)){ARR_AFTER_STATE();return 0;}
+#endif
     int result=arrays_real_gluBuild2DMipmaps(target,components,width,height,format,type,pixels);
     ARR_AFTER_STATE();return result;
 }
 static unsigned (*arrays_real_glGetError)(void);
-static unsigned arrays_glGetError(void){arrays_flush();return arrays_real_glGetError();}
+static unsigned arrays_glGetError(void){
+    arrays_flush();
+#ifdef _WIN32
+    if(map_saved_error && ta_current_context && ta_current_context()==ta_context){
+        unsigned error=map_saved_error; map_saved_error=0; return error;
+    }
+#endif
+    return arrays_real_glGetError();
+}
 #undef ARR_WRAP0
 #undef ARR_WRAP1
 #undef ARR_WRAP2

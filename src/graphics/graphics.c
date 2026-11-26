@@ -107,7 +107,15 @@ static void mod_log_fallbacks(void) {
     mod_reported_reasons|=fresh;
 }
 #ifdef _WIN32
+#include "map_texture_work.h"
 static unsigned terrain_reported;
+// Yield to plugins that take over a participating graphics import after startup.
+static int map_owns_imports(void) {
+    if(*gl_import_slot(FPS_GLU_SLOT)!=(void *)arrays_gluBuild2DMipmaps)return 0;
+    for(size_t i=0;i<ARRAY_IMPORT_COUNT;i++)
+        if(*gl_import_slot(arrays_imports[i].rva)!=arrays_imports[i].hook)return 0;
+    return 1;
+}
 static void mod_terrain_finish(unsigned view,long long before) {
     terrain_end_scope();
     if((terrain_reported&view) || terrain_tiles==before)return;
@@ -119,8 +127,17 @@ static void mod_terrain_finish(unsigned view,long long before) {
 static void mod_terrain_plane(uintptr_t a,unsigned plane) {
     int opened=mod_operational && (!mod_render_setting || *mod_render_setting) && terrain_begin_scope();
     long long before=terrain_tiles;
+    int previous=map_texture_pass;
+    int prepare=opened && map_textures_enabled && map_owns_mips() && map_owns_imports() && ta_current_context && ta_initialize_context();
+    map_texture_pass=prepare?MAP_TERRAIN:0;
+    if(prepare){
+        map_copy_ticks=0;
+        map_reserve_begin(plane);
+    }
     ((void (*)(uintptr_t,unsigned))(detail_base+RVA_MAP_DRAW_PLANE))(a,plane);
+    map_texture_pass=previous;
     if(opened)mod_terrain_finish(1,before);
+    if(prepare)map_reserve_end();
 }
 static void mod_terrain_battle(void) {
     int opened=mod_scenes_enabled && mod_scene_kind && terrain_begin_scope();
@@ -140,7 +157,9 @@ static void mod_map_units(int a,int b,int flags) {
     if(samples){draw(a,b,flags);return;}
     array_texture_begin_frame();arrays_begin_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
+    map_texture_pass=map_textures_enabled && map_owns_mips() && map_owns_imports()?MAP_UNITS:0;
     draw(a,b,flags);
+    map_texture_pass=0;
     arrays_end_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
 }
@@ -252,7 +271,7 @@ static void mod_plane_draw(uintptr_t a,uintptr_t b,uintptr_t c) {
 }
 #endif
 // Feature groups selected once at launch.
-enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4, MOD_GUI=8 };
+enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4, MOD_GUI=8, MOD_MAP_TEXTURES=32 };
 #ifdef _WIN32
 typedef struct {
     unsigned group;
@@ -264,6 +283,10 @@ typedef struct { unsigned char *page;SIZE_T size;DWORD original; } ModCodePage;
 #include "gui_batch.h"
 static unsigned mod_features;
 static ModCall mod_calls[]={
+    {MOD_MAP_TEXTURES,RVA_MAP_ARMY_BOUNDS_CALL,RVA_SPRITE_FIGURE_SIZE,(void (*)(void))map_army_bounds,{0}},
+    {MOD_MAP_TEXTURES,RVA_MAP_BG_TILE_DRAW_CALL,RVA_MAP_BG_TILE_DRAW,(void (*)(void))map_draw_tile,{0}},
+    {MOD_MAP_TEXTURES,RVA_MAP_TILE_CREATE_CALL,RVA_TEXTURE_CREATE,(void (*)(void))map_create_tile,{0}},
+    {MOD_MAP_TEXTURES,RVA_MAP_TILE_CROP_CALL,RVA_MAP_TILE_CROP,(void (*)(void))map_tile_crop,{0}},
     {MOD_GUI,RVA_GUI_PANEL_RECT_1,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_first_panel,{0}},
     {MOD_GUI,RVA_GUI_PANEL_RECT_2,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
     {MOD_GUI,RVA_GUI_PANEL_RECT_3,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
@@ -314,10 +337,10 @@ static int mod_verify_calls(void) {
         if(site[0]!=0xe8 || site+5+rel!=detail_base+c->target) {
             char line[256];
             snprintf(line,sizeof(line),"fps_mod %sdisabled reason=game_callsite_changed site_rva=0x%llx expected_target_rva=0x%llx",
-                c->group==MOD_GUI?"gui_frame_batching ":"",(unsigned long long)c->site,(unsigned long long)c->target);
+                c->group==MOD_GUI?"gui_frame_batching ":c->group==MOD_MAP_TEXTURES?"map_texture_preparation ":"",(unsigned long long)c->site,(unsigned long long)c->target);
             mod_log(line);
-            if(c->group!=MOD_GUI)return 0;
-            mod_features&=~MOD_GUI;
+            if(c->group!=MOD_GUI && c->group!=MOD_MAP_TEXTURES)return 0;
+            mod_features&=~c->group;
             continue;
         }
         memcpy(c->original,site,5);
@@ -444,6 +467,8 @@ static unsigned mod_requested_features(const PluginApi *api) {
 #ifdef _WIN32
     const int *gui=api->setting("gui_frame_batching");
     if(gui && *gui)requested|=MOD_GUI;
+    const int *textures=api->setting("optimize_map_textures");
+    if((requested&MOD_RENDERING) && textures && *textures)requested|=MOD_MAP_TEXTURES;
 #endif
 #ifdef __APPLE__
     if(requested&MOD_SCENES)mod_log("fps_mod scene_batching disabled reason=scene_calls_unmapped_on_mac");
@@ -478,14 +503,20 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
 #endif
     mod_original_decor=(ModDecorFn)(detail_base+RVA_DRAW_SPRITE_SHEARED);
     if(!game_hash_matches()) {mod_disable();mod_log("fps_mod disabled reason=unsupported_game_hash graphics_imports_unchanged=1");return 1;}
+#ifdef _WIN32
+    if((mod_features&MOD_MAP_TEXTURES) && !fps_standard_glu(fps_expected_glu())){
+        mod_features&=~MOD_MAP_TEXTURES;
+        mod_log("fps_mod map_texture_preparation disabled reason=unrecognized_glu_provider");
+    }
+#endif
     if(!mod_verify_calls()){mod_disable();mod_log("fps_mod hook_check status=blocked graphics_imports_unchanged=1");return 1;}
     if((mod_features&(MOD_RENDERING|MOD_SCENES)) &&
        !fps_check_gl_imports(detail_base,GetModuleHandleA(FPS_GL_LIBRARY),fps_expected_glu(),mod_import_problem)){
-        mod_features&=~(MOD_RENDERING|MOD_SCENES);
+        mod_features&=~(MOD_MAP_TEXTURES|MOD_RENDERING|MOD_SCENES);
         mod_log("fps_mod map_and_scene_batching disabled reason=graphics_import_check_failed");
     }
     if((mod_features&(MOD_RENDERING|MOD_SCENES|MOD_GUI)) && !mod_initialize_original_gl()){
-        mod_features&=~(MOD_RENDERING|MOD_SCENES|MOD_GUI);
+        mod_features&=~(MOD_MAP_TEXTURES|MOD_RENDERING|MOD_SCENES|MOD_GUI);
         mod_log("fps_mod drawing disabled reason=original_gl_exports_unavailable");
     }
 #ifdef _WIN32
@@ -525,6 +556,16 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         if(!api->wrap || !api->wrap(SITE_MAP_DRAW,(void *)fps_frame_preference_map_draw,(void **)&fps_next_map_draw))mod_log("fps_mod graphics_menu map_start_callback=unavailable preference_applies_at_menu");
         if(!api->wrap || !api->wrap(SITE_MAIN_MENU_WAIT,(void *)mod_main_menu_wait,(void **)&mod_next_main_menu_wait))mod_log("fps_mod diagnostics main_menu_callback=unavailable graphics_report=first_map");
     }
+#ifdef _WIN32
+    map_textures_enabled=!!(mod_features&MOD_MAP_TEXTURES);
+    if(map_textures_enabled){
+        map_bounds_init();
+        if(!api->observe || !api->observe(SITE_GAME_LOAD,map_load_world,NULL))
+            map_reserve_failed=1;
+        snprintf(line,sizeof line,"fps_mod map_texture_preparation enabled=1 terrain_reserve=%d",!map_reserve_failed);
+        mod_log(line);
+    }
+#endif
     mod_operational=!!(mod_features&MOD_RENDERING);
     if(mod_features&MOD_SCENES)mod_install_scene_waits(api);
     snprintf(line,sizeof(line),"fps_mod initialized version=" FPS_MOD_VERSION " game=5.43 api=%d launch_settings_fixed=1 quality_unchanged=1 graphics_report=first_current_context",api->version);

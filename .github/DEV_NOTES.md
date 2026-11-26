@@ -6,4 +6,5 @@ What `dev` has gained since the last release, one line per change. CONTRIBUTING.
 
 Features
 - Windows players can enable batching for textured scrollbars and tooltip frames.
+- Windows players can enable faster world map texture preparation and reuse prepared opaque terrain when zooming or panning.
 - Content mods can benefit from an optional Windows cache for repeated numeric `+player` arguments during turn-start rule processing.

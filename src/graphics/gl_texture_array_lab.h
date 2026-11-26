@@ -211,6 +211,9 @@ static int ta_build_program(void) {
     ta_message("ready GLSL130 compatibility original UV and mip layers");return 1;
 #endif
 }
+#ifdef _WIN32
+#include "map_transfer.h"
+#endif
 static int ta_initialize_context(void) {
     HGLRC context=ta_current_context();if(!context)return ta_refuse(FPS_NO_CONTEXT);
     if(ta_context_attempted){if(context!=ta_context)return ta_refuse(FPS_CONTEXT_CHANGED);return ta_context_ok;}
@@ -228,6 +231,9 @@ static int ta_initialize_context(void) {
     ext=(const char *)ta_get_string(0x1f03);
 #ifdef __APPLE__
     ta_has_blit=major>=3 || ta_extension(ext,"GL_EXT_framebuffer_blit");
+#endif
+#ifdef _WIN32
+    map_transfer_init(major,minor,ext);
 #endif
     ta_has_aniso=ta_extension(ext,"GL_EXT_texture_filter_anisotropic") || ta_extension(ext,"GL_ARB_texture_filter_anisotropic");
     ta_has_swizzle=major>3 || (major==3 && minor>=3) || ta_extension(ext,"GL_ARB_texture_swizzle");
@@ -316,7 +322,7 @@ static int ta_allowed_state(void) {
     ta_state_ok=1;return !ta_track_state || ta_switches_allowed();
 }
 static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
-static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain) {
+static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain,int *rgba) {
     int w=0,h=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
     ta_get_level(0x0de1,0,0x1000,&w);ta_get_level(0x0de1,0,0x1001,&h);
     if(ta_scene_replace){if(w<=0 || h<=0 || w>256 || h>256 || (w&(w-1)) || (h&(h-1)))return ta_refuse(FPS_TEXTURE_SIZE);}
@@ -340,6 +346,7 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
         ta_get_level(0x0de1,level,0x1005,&border);ta_get_level(0x0de1,level,0x1003,&format);ta_get_level(0x0de1,level,0x86a1,&compressed);
         if(width!=ta_level_size(w,level) || height!=ta_level_size(h,level) || border)return ta_refuse(FPS_TEXTURE_LEVELS);
         int rgb=terrain && (format==0x8051 || format==0x1907 || format==3);
+        if(rgb)*rgba=0;
         if(compressed || (!rgb && format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
         for(unsigned attr=0x805c;attr<=0x805f;attr++) {
             int bits=0;ta_get_level(0x0de1,level,attr,&bits);
@@ -397,15 +404,23 @@ static int ta_clone(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer 
     int before2d=0,before_array=0,width=0,height=0,last=0,ok=0;unsigned min=0,mag=0;
     ta_get_int(0x8069,&before2d);ta_get_int(0x8c1d,&before_array);ta_bind(0x0de1,source);
     unsigned char *memory=NULL;
-    if(!ta_source_parameters(&width,&height,&last,&min,&mag,cache==&ta_terrain_cache))goto done;
-    memory=FPS_ALLOC((size_t)width*height*4);if(!memory){ta_refuse(FPS_ALLOCATION);goto done;}
+    int rgba=1;
+    if(!ta_source_parameters(&width,&height,&last,&min,&mag,cache==&ta_terrain_cache,&rgba))goto done;
     ta_push_client(0x00000001u);ta_packing();FpsTextureArrayPage *p=ta_find_page(cache,width,height,last,min,mag);
     if(!p){ta_pop_client();goto done;}
     int layer=ta_available_layer(p);if(layer<0){ta_pop_client();ta_refuse(FPS_CACHE_LIMIT);goto done;}
+#ifdef _WIN32
+    if(rgba && map_copy_layer(source,p->texture,layer,width,height,last))goto copied;
+#endif
+    memory=FPS_ALLOC((size_t)width*height*4);
+    if(!memory){ta_pop_client();ta_refuse(FPS_ALLOCATION);goto done;}
     for(int level=0;level<=last;level++) {
         int w=ta_level_size(width,level),h=ta_level_size(height,level);ta_bind(0x0de1,source);ta_get_image(0x0de1,level,0x1908,0x1401,memory);
         ta_bind(0x8c1a,p->texture);ta_subimage3d(0x8c1a,level,0,0,layer,w,h,1,0x1908,0x1401,memory);
     }
+#ifdef _WIN32
+copied:
+#endif
     ta_pop_client();p->occupied[layer]=1;p->used++;
     *out=(FpsTextureLayer){source,p->texture,layer,width,height,last+1,(int)(p-cache->pages)};
     if(cache==&ta_sprite_cache)ta_uploads++;
@@ -425,11 +440,19 @@ static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLaye
                   (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
         if(!e->decision || retry) {
             if(!allow_upload || !ta_copy_buffers_clear())return 0;
+#ifdef _WIN32
+            int budgeted=map_texture_pass==MAP_TERRAIN && cache==&ta_terrain_cache && map_tick_frequency;
+            if(budgeted && map_copy_ticks>=map_tick_frequency/250)return 0;
+            long long started=budgeted?map_ticks():0;
+#endif
             e->source=source;
             cache->attempts++;
             e->scene_checked=ta_scene_replace;
             e->capacity_epoch=cache->capacity_epoch;
             e->decision=ta_clone(cache,source,&e->value)?1:-1;
+#ifdef _WIN32
+            if(budgeted)map_copy_ticks+=map_ticks()-started;
+#endif
             if(e->decision<0){e->reason=ta_reject_reason;ta_rejected++;}
         }
         if(cache->pass)e->last_pass=cache->pass;

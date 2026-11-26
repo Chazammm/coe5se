@@ -49,6 +49,14 @@ parent graphics_changes
 label "Use texture array batching on the world map"
 tip "Batches map decorations at every quality, plus compatible terrain and army sprites on Windows. Preserves original detail and order. Off by default on NVIDIA. Takes effect next launch."
 
+newsetting optimize_map_textures
+onoff
+default 0
+restart
+parent graphics_changes
+label "Speed up world map texture preparation"
+tip "Requires world map batching on Windows. Reuses matching mipmaps and speeds up compatible texture copies and external army sprites. Takes effect next launch."
+
 newsetting scene_sprite_batching
 onoff
 default 0
