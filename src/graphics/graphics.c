@@ -461,9 +461,15 @@ static int mod_install_calls(void) {
 }
 #endif
 
+// Enable per-primitive state checks before another native plugin can issue direct GL calls.
+void coe5seGraphicsNativePluginLoading(void) {
+    atomic_store_explicit(&ta_external_plugin,1,memory_order_relaxed);
+}
+
 // Finish queued draws using the old pixels before a native mod edits a source texture.
 __declspec(dllexport) int coe5seBeforeTextureUpdate(unsigned int texture) {
     if(!texture)return 0;
+    coe5seGraphicsNativePluginLoading();
 #ifdef _WIN32
     if(gui_expected)return 0;
 #endif
@@ -612,4 +618,5 @@ void coe5seGraphicsMacHost(const GraphicsMacHost *host) { fps_host=host; }
 #include "graphics.h"
 
 int coe5seGraphicsInit(const PluginApi *api, const char *userFolder) { (void)api; (void)userFolder; return 1; }
+void coe5seGraphicsNativePluginLoading(void) {}
 #endif

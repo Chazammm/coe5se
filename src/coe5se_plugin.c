@@ -925,6 +925,7 @@ static void pluginLoadingDone(const char *path);
 
 __declspec(dllexport) void coe5sePluginLoading(const char *path) {
     if (path) {
+        coe5seGraphicsNativePluginLoading();
         snprintf(loadingPlugin, sizeof loadingPlugin, "%s", path);
         return;
     }

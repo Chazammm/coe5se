@@ -1,5 +1,6 @@
 // Check transfer failures, native error ownership and reserve cleanup in Windows OpenGL.
 #include "../graphics.c"
+#include <GL/glext.h>
 #include <assert.h>
 
 // Simulate an ignored driver copy or upload without changing the caller's error flag.
@@ -97,6 +98,72 @@ static void check_edits_and_stack(unsigned source) {
     }
     assert(glGetError()==GL_NO_ERROR);
     array_texture_remove(other);glDeleteTextures(1,&other);
+}
+
+// Read the state seen by the original game rectangle helper.
+static int replay_calls;
+static GLboolean replay_rectangle;
+static GLfloat replay_bias;
+static void observe_rect(float x,float y,float w,float h,float u,float v,float du,float dv) {
+    (void)x;(void)y;(void)w;(void)h;(void)u;(void)v;(void)du;(void)dv;
+    replay_rectangle=glIsEnabled(TA_TEXTURE_RECTANGLE);
+    glGetTexEnvfv(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,&replay_bias);
+    replay_calls++;
+}
+
+// A raw state change between two tiles affects only the second tile, even on the replay path.
+static void check_terrain_order(unsigned source) {
+    if(!ta_has_rectangle)return;
+    unsigned char *base=detail_base;
+    detail_base=(unsigned char *)((uintptr_t)observe_rect-RVA_FPS_TERRAIN_RECT_DRAW);
+    terrain_scope=terrain_client_ready=1;arrays_texture=source;
+    glBindTexture(GL_TEXTURE_2D,source);
+    terrain_count=1;terrain_sources[0]=source;
+    glEnable(TA_TEXTURE_RECTANGLE);glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,1.25f);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    terrain_flush();
+    assert(replay_calls==1 && !replay_rectangle && replay_bias==0.0f);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    terrain_rect(0,0,1,1,0,0,1,1);
+    assert(replay_calls==2 && replay_rectangle && replay_bias==1.25f && !terrain_count);
+    glDisable(TA_TEXTURE_RECTANGLE);glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,0);
+    terrain_scope=0;detail_base=base;array_texture_begin_frame();
+}
+
+// Loading a native plugin extends sampling checks to partially filled batches.
+static void check_sampling_boundary(void) {
+    assert(!atomic_load(&ta_external_plugin));
+    glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,0.5f);
+    assert(!ta_capture_sampling_allowed(1) && ta_capture_sampling_allowed(0));
+    coe5seGraphicsNativePluginLoading();
+    assert(!ta_capture_sampling_allowed(0));
+    glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,0);
+    assert(ta_capture_sampling_allowed(0));
+}
+
+// Shader programs, biased sampling and incomplete mip chains must reach the native renderer.
+static void check_sampling_fallbacks(void) {
+    glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,-0.5f);
+    assert(!ta_legacy_sampling_allowed());
+    glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,0);
+    if(ta_has_fragment_program){
+        glEnable(GL_FRAGMENT_PROGRAM_ARB);assert(!ta_legacy_sampling_allowed());glDisable(GL_FRAGMENT_PROGRAM_ARB);
+    }
+    if(ta_has_vertex_program){
+        glEnable(GL_VERTEX_PROGRAM_ARB);assert(!ta_legacy_sampling_allowed());glDisable(GL_VERTEX_PROGRAM_ARB);
+    }
+    assert(ta_legacy_sampling_allowed());
+    unsigned texture;glGenTextures(1,&texture);glBindTexture(GL_TEXTURE_2D,texture);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_LEVEL,1);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+    int w,h,last,rgba=1;unsigned min,mag;
+    glTexImage2D(GL_TEXTURE_2D,1,GL_RGB8,32,32,0,GL_RGB,GL_UNSIGNED_BYTE,NULL);
+    assert(!ta_source_parameters(&w,&h,&last,&min,&mag,1,&rgba) && ta_reject_reason==FPS_TEXTURE_FORMAT);
+    glTexImage2D(GL_TEXTURE_2D,1,GL_RGBA8,32,32,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+    assert(ta_source_parameters(&w,&h,&last,&min,&mag,1,&rgba) && last==1);
+    glDeleteTextures(1,&texture);assert(glGetError()==GL_NO_ERROR);
 }
 
 // Exercise rectangle targets, deferred army copies and reclaiming empty sprite pages.
@@ -284,6 +351,14 @@ static DWORD WINAPI check_replacement(void *arg) {
     return 0;
 }
 
+// Each retired rendering thread releases its claim for later contexts.
+static DWORD WINAPI claim_context(void *arg) {
+    WorkerContext *worker=arg;
+    assert(wglMakeCurrent(worker->dc,worker->replacement) && ta_initialize_context());
+    assert(wglMakeCurrent(NULL,NULL));
+    return 0;
+}
+
 // Exercise the direct-state and framebuffer layer readers on the same compatibility driver.
 int main(void) {
     HWND win=CreateWindowW(L"STATIC",L"",WS_POPUP,0,0,8,8,NULL,NULL,NULL,NULL);
@@ -296,6 +371,7 @@ int main(void) {
     map_textures_enabled=1;
     assert(mod_initialize_original_gl() && install_texture_array() && arrays_load_functions());
     assert(arrays_check_context() && ta_initialize_context() && map_copy_image);
+    check_sampling_boundary();
     ta_terrain_cache.layer_limit=1;
     static FpsTextureArrayEntry entries[16];
     ta_terrain_cache.entries=entries;
@@ -329,6 +405,8 @@ int main(void) {
     check_copy(source);
     map_texture_pass=0;
     check_sprite_limits(source);
+    check_terrain_order(source);
+    check_sampling_fallbacks();
     check_allocation_retry(source);
     check_rejected_slots(source);
     check_probe_chain();
@@ -362,6 +440,12 @@ int main(void) {
     assert(thread && WaitForSingleObject(thread,15000)==WAIT_OBJECT_0);
     CloseHandle(thread);FreeLibrary(glu);
     assert(wglDeleteContext(replacement));
+    for(unsigned i=0;i<40;i++){
+        WorkerContext next={dc,wglCreateContext(dc),0};assert(next.replacement);
+        HANDLE owner=CreateThread(NULL,0,claim_context,&next,0,NULL);
+        assert(owner && WaitForSingleObject(owner,15000)==WAIT_OBJECT_0);
+        CloseHandle(owner);assert(wglDeleteContext(next.replacement));
+    }
     ReleaseDC(win,dc);DestroyWindow(win);
     puts("Verified texture edits, rectangle targets, army budget, cache recovery, layer readers and context handoff.");
 }

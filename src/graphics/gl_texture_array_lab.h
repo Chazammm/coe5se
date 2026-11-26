@@ -31,6 +31,7 @@ typedef struct {
     long long bytes, attempts;
 } FpsTextureArrayCache;
 static int texture_array_enabled;
+static atomic_int ta_external_plugin;
 static _Thread_local int ta_multi_page=1;
 static int ta_track_state,ta_scene_program;
 #ifdef __APPLE__
@@ -46,8 +47,17 @@ static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_
 static _Thread_local int ta_fixed_units;
 static _Thread_local unsigned char (WINAPI *ta_indexed_enabled)(unsigned,unsigned);
 static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler,ta_has_rectangle;
+static _Thread_local int ta_has_vertex_program,ta_has_fragment_program;
 // Remember which contexts have exactly one initialized array cache for native texture edits.
-typedef struct { _Atomic(HGLRC) context; atomic_int shared; } TaEditContext;
+typedef struct {
+    HGLRC context;
+    atomic_int shared;
+#ifdef _WIN32
+    HANDLE owner;
+#else
+    atomic_int exited;
+#endif
+} TaEditContext;
 static TaEditContext ta_edit_contexts[32];
 static _Thread_local TaEditContext *ta_edit_context;
 
@@ -73,6 +83,8 @@ static void (*ta_get_parameter_float)(unsigned,unsigned,float *);
 static void (*ta_get_level)(unsigned,int,unsigned,int *);
 static void (*ta_get_image)(unsigned,int,unsigned,unsigned,void *);
 static void (*ta_get_env)(unsigned,unsigned,int *);
+static void (*ta_get_env_float)(unsigned,unsigned,float *);
+static void (*ta_set_env_float)(unsigned,unsigned,float);
 static void (*ta_bind)(unsigned,unsigned);
 static void (*ta_generate)(int,unsigned *);
 static void (*ta_delete)(int,const unsigned *);
@@ -228,18 +240,52 @@ static int ta_build_program(void) {
 #include "map_transfer.h"
 #include "texture_layer_check.h"
 #endif
-// Claim a new cache or retire the registered cache when another thread uses its context.
+// Only the owning thread's exit makes its slot reusable, even if the GL handle is recycled.
+// @platform-split context-lifetime: Windows waits on a thread handle; macOS marks exit via pthread TLS.
+#ifdef _WIN32
+static SRWLOCK ta_registry_lock=SRWLOCK_INIT;
+static void ta_registry_enter(void){AcquireSRWLockExclusive(&ta_registry_lock);}
+static void ta_registry_leave(void){ReleaseSRWLockExclusive(&ta_registry_lock);}
+static int ta_owner_exited(TaEditContext *slot) {
+    if(WaitForSingleObject(slot->owner,0)!=WAIT_OBJECT_0)return 0;
+    CloseHandle(slot->owner);return 1;
+}
+static int ta_register_owner(TaEditContext *slot) {
+    HANDLE process=GetCurrentProcess();
+    return DuplicateHandle(process,GetCurrentThread(),process,&slot->owner,SYNCHRONIZE,FALSE,0);
+}
+#else
+static pthread_mutex_t ta_registry_lock=PTHREAD_MUTEX_INITIALIZER;
+static pthread_key_t ta_owner_key;
+static int ta_owner_key_ready;
+static void ta_registry_enter(void){pthread_mutex_lock(&ta_registry_lock);}
+static void ta_registry_leave(void){pthread_mutex_unlock(&ta_registry_lock);}
+static void ta_thread_exited(void *value){atomic_store(&((TaEditContext *)value)->exited,1);}
+static int ta_owner_exited(TaEditContext *slot){return atomic_load(&slot->exited);}
+static int ta_register_owner(TaEditContext *slot) {
+    if(!ta_owner_key_ready && pthread_key_create(&ta_owner_key,ta_thread_exited))return 0;
+    ta_owner_key_ready=1;
+    atomic_store(&slot->exited,0);
+    return !pthread_setspecific(ta_owner_key,slot);
+}
+#endif
+// Scan past empty slots to find a live owner before assigning a replacement.
 static TaEditContext *ta_visit_context(HGLRC context,int claim) {
+    TaEditContext *available=NULL,*result=NULL;
+    ta_registry_enter();
     for(size_t i=0;i<sizeof ta_edit_contexts/sizeof *ta_edit_contexts;i++){
         TaEditContext *slot=&ta_edit_contexts[i];
-        HGLRC previous=atomic_load(&slot->context);
-        if(!previous){
-            if(!claim)return NULL;
-            if(atomic_compare_exchange_strong(&slot->context,&previous,context))return slot;
-        }
-        if(previous==context){atomic_store(&slot->shared,1);break;}
+        if(slot->context && (claim || slot->context==context) && ta_owner_exited(slot))slot->context=NULL;
+        if(slot->context==context){atomic_store(&slot->shared,1);goto done;}
+        if(!slot->context && !available)available=slot;
     }
-    return NULL;
+    if(claim && available && ta_register_owner(available)){
+        atomic_store(&available->shared,0);
+        available->context=context;result=available;
+    }
+done:
+    ta_registry_leave();
+    return result;
 }
 // An upload-only thread can also retire a cache before the rendering thread returns.
 static int ta_cache_owned(HGLRC context) {
@@ -276,6 +322,8 @@ static int ta_initialize_context(void) {
 #endif
     ta_has_rectangle=major>3 || (major==3 && minor>=1) || ta_extension(ext,"GL_ARB_texture_rectangle") ||
                      ta_extension(ext,"GL_EXT_texture_rectangle") || ta_extension(ext,"GL_NV_texture_rectangle");
+    ta_has_vertex_program=ta_extension(ext,"GL_ARB_vertex_program");
+    ta_has_fragment_program=ta_extension(ext,"GL_ARB_fragment_program");
     ta_get_int(0x84e2,&ta_fixed_units);
     if(ta_fixed_units<1 || ta_fixed_units>32)return ta_refuse(FPS_TEXTURE_UNIT);
     if(ta_has_rectangle && ta_extension(ext,"GL_EXT_direct_state_access"))
@@ -309,7 +357,7 @@ static int ta_cap_bit(unsigned cap) {
     return -1;
 }
 static void ta_note_cap(unsigned cap,int on) {
-    if(cap==TA_TEXTURE_RECTANGLE){array_texture_invalidate_state();return;}
+    if(cap==TA_TEXTURE_RECTANGLE || cap==0x8620 || cap==0x8804){array_texture_invalidate_state();return;}
     if(cap==0x0de1)ta_texture_on=on;
     int bit=ta_cap_bit(cap);
     if(bit>=0)ta_forbidden=on?ta_forbidden|(1u<<bit):ta_forbidden&~(1u<<bit);
@@ -330,6 +378,13 @@ static int ta_copy_buffers_clear(void) {
     ta_get_int(0x88ef,&value);if(value)return ta_refuse(FPS_PIXEL_BUFFER);
     return 1;
 }
+// Array sampling requires the original fixed-function shader and neutral unit LOD bias.
+static int ta_legacy_sampling_allowed(void) {
+    if((ta_has_vertex_program && ta_is_enabled(0x8620)) ||
+       (ta_has_fragment_program && ta_is_enabled(0x8804)))return ta_refuse(FPS_CUSTOM_PROGRAM);
+    float bias=0;ta_get_env_float(0x8500,0x8501,&bias);
+    return bias==0.0f || ta_refuse(FPS_TEXTURE_SAMPLING);
+}
 static int ta_allowed_state(void) {
     if(!texture_array_enabled || !ta_current_context || !ta_initialize_context())return 0;
     if(ta_state_checked)return ta_state_ok && (!ta_track_state || ta_switches_allowed());
@@ -337,6 +392,7 @@ static int ta_allowed_state(void) {
     ta_state_checked=1;ta_state_ok=0;
     int value=0;ta_get_int(0x8b8d,&value);if(value)return ta_refuse(FPS_CUSTOM_PROGRAM);
     ta_get_int(0x84e0,&value);if(value!=0x84c0)return ta_refuse(FPS_TEXTURE_UNIT);
+    if(!ta_legacy_sampling_allowed())return 0;
     if(!ta_copy_buffers_clear())return 0;
 #ifdef __APPLE__
     ta_get_int(0x8ca6,&value);if(value)return ta_refuse(FPS_FRAMEBUFFER);if(ta_has_blit){ta_get_int(0x8caa,&value);if(value)return ta_refuse(FPS_FRAMEBUFFER);}
@@ -387,6 +443,45 @@ static int ta_rectangle_units_clear(void) {
     ta_active_texture(0x84c0);
     return enabled?ta_refuse(FPS_FIXED_FUNCTION):1;
 }
+// Game state changes flush through the imports. External native code can change state between primitives.
+static int ta_capture_sampling_allowed(int first) {
+    if(!first && !atomic_load_explicit(&ta_external_plugin,memory_order_relaxed))return 1;
+    return ta_legacy_sampling_allowed() && ta_rectangle_units_clear();
+}
+// Sampling state that a native plugin may have changed since the last collected primitive.
+typedef struct { unsigned rectangles; int active,vertex_program,fragment_program; float bias; } TaReplaySampling;
+
+// Collected array primitives used ordinary 2D sampling on unit zero.
+static TaReplaySampling ta_begin_native_replay(void) {
+    TaReplaySampling saved={0};
+    ta_get_int(0x84e0,&saved.active);
+    if(ta_has_rectangle){
+        for(int i=0;i<ta_fixed_units;i++){
+            ta_active_texture(0x84c0u+(unsigned)i);
+            if(!ta_is_enabled(TA_TEXTURE_RECTANGLE))continue;
+            saved.rectangles|=1u<<i;
+            real_gl_disable(TA_TEXTURE_RECTANGLE);
+        }
+    }
+    ta_active_texture(0x84c0);
+    saved.vertex_program=ta_has_vertex_program && ta_is_enabled(0x8620);
+    saved.fragment_program=ta_has_fragment_program && ta_is_enabled(0x8804);
+    ta_get_env_float(0x8500,0x8501,&saved.bias);
+    if(saved.vertex_program)real_gl_disable(0x8620);
+    if(saved.fragment_program)real_gl_disable(0x8804);
+    if(saved.bias!=0.0f)ta_set_env_float(0x8500,0x8501,0);
+    return saved;
+}
+// Return exactly the state observed immediately before replay on this context.
+static void ta_end_native_replay(TaReplaySampling saved) {
+    if(saved.bias!=0.0f)ta_set_env_float(0x8500,0x8501,saved.bias);
+    if(saved.fragment_program)real_gl_enable(0x8804);
+    if(saved.vertex_program)real_gl_enable(0x8620);
+    for(unsigned i=0;saved.rectangles;i++,saved.rectangles>>=1){
+        if(saved.rectangles&1){ta_active_texture(0x84c0u+i);real_gl_enable(TA_TEXTURE_RECTANGLE);}
+    }
+    ta_active_texture((unsigned)saved.active);
+}
 static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
 static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain,int *rgba) {
     int w=0,h=0,base=0,max=0,s=0,t=0,mi=0,ma=0,compare=0;
@@ -406,11 +501,14 @@ static int ta_source_parameters(int *source_width,int *source_height,int *last,u
     ta_get_parameter_float(0x0de1,0x8501,&f);if(f!=0.0f)return ta_refuse(FPS_TEXTURE_SAMPLING);
     if(ta_has_aniso){ta_get_parameter_float(0x0de1,0x84fe,&f);if(!(f<=1.0f))return ta_refuse(FPS_TEXTURE_SAMPLING);}
     if(ta_has_swizzle)for(int i=0;i<4;i++){int a=0;ta_get_parameter(0x0de1,0x8e42u+(unsigned)i,&a);if(a!=0x1903+i)return ta_refuse(FPS_TEXTURE_SAMPLING);}
+    int base_format=0;
     for(int level=0;level<=*last;level++) {
         int width=0,height=0,border=0,format=0,compressed=0;
         ta_get_level(0x0de1,level,0x1000,&width);ta_get_level(0x0de1,level,0x1001,&height);
         ta_get_level(0x0de1,level,0x1005,&border);ta_get_level(0x0de1,level,0x1003,&format);ta_get_level(0x0de1,level,0x86a1,&compressed);
         if(width!=ta_level_size(w,level) || height!=ta_level_size(h,level) || border)return ta_refuse(FPS_TEXTURE_LEVELS);
+        if(!level)base_format=format;
+        else if(format!=base_format)return ta_refuse(FPS_TEXTURE_FORMAT);
         int rgb=terrain && (format==0x8051 || format==0x1907 || format==3);
         if(rgb)*rgba=0;
         if(compressed || (!rgb && format!=0x8058 && format!=0x1908 && format!=4))return ta_refuse(FPS_TEXTURE_FORMAT);
@@ -645,7 +743,7 @@ static void ta_trim_terrain_cache(FpsTextureArrayCache *cache) {
 }
 #endif
 static int array_texture_begin_draw(FpsTextureArrayCache *cache,unsigned texture) {
-    if(!ta_allowed_state() || !ta_rectangle_units_clear())return 0;
+    if(!ta_allowed_state() || !ta_legacy_sampling_allowed() || !ta_rectangle_units_clear())return 0;
     int own=0;for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==texture)own=1;if(!own)return 0;
     if(ta_multi_page) {
         if(!ta_drawing) {
@@ -693,6 +791,7 @@ static int install_texture_array(void) {
     TA_CORE(ta_get_int,"glGetIntegerv");TA_CORE(ta_get_float,"glGetFloatv");TA_CORE(ta_get_string,"glGetString");TA_CORE(ta_is_enabled,"glIsEnabled");
     TA_CORE(ta_get_parameter,"glGetTexParameteriv");TA_CORE(ta_get_parameter_float,"glGetTexParameterfv");TA_CORE(ta_get_level,"glGetTexLevelParameteriv");
     TA_CORE(ta_get_image,"glGetTexImage");TA_CORE(ta_get_env,"glGetTexEnviv");TA_CORE(ta_bind,"glBindTexture");TA_CORE(ta_generate,"glGenTextures");TA_CORE(ta_delete,"glDeleteTextures");
+    TA_CORE(ta_get_env_float,"glGetTexEnvfv");TA_CORE(ta_set_env_float,"glTexEnvf");
     TA_CORE(ta_parameter,"glTexParameteri");TA_CORE(ta_push_client,"glPushClientAttrib");TA_CORE(ta_pop_client,"glPopClientAttrib");TA_CORE(ta_pixel_store,"glPixelStorei");
 #undef TA_CORE
     ta_message("awaiting compatibility OpenGL context");return 1;

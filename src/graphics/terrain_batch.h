@@ -19,7 +19,9 @@ static _Thread_local void (*terrain_draw_elements)(unsigned,int,unsigned,const v
 static void terrain_native_rect(TerrainQuad q) {
     ((TerrainNativeRect)(detail_base+RVA_FPS_TERRAIN_RECT_DRAW))(q.x,q.y,q.w,q.h,q.u,q.v,q.du,q.dv);
 }
+// Replay captured fixed-function tiles with their original sampling state, then return it to the caller.
 static void terrain_replay(unsigned count) {
+    TaReplaySampling saved=ta_begin_native_replay();
     int restore=0;
     arrays_get_int(0x8069,&restore);
     for(unsigned i=0;i<count;i++) {
@@ -27,6 +29,7 @@ static void terrain_replay(unsigned count) {
         terrain_native_rect(terrain_quads[i]);
     }
     real_gl_bind(0x0de1,(unsigned)restore);
+    ta_end_native_replay(saved);
 }
 
 static int terrain_submission_available(void) {
@@ -51,7 +54,7 @@ static void terrain_flush(void) {
     unsigned count=terrain_count;
     if(!count)return;
     terrain_count=0;
-    if(!ta_allowed_state() || !terrain_submission_available() || !ta_rectangle_units_clear()) {terrain_replay(count);return;}
+    if(!ta_allowed_state() || !terrain_submission_available() || !ta_legacy_sampling_allowed()) {terrain_replay(count);return;}
     unsigned unit=ta_multi_page?0x84c1u:0x84c0u;
     int saved_array=0,saved_sampler=0;
     ta_active_texture(unit);
@@ -97,7 +100,8 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
     FpsTextureLayer layer;
     if(terrain_client_ready<0)terrain_client_ready=terrain_check_client();
     int allow_upload=ta_terrain_cache.attempts-terrain_upload_start<TERRAIN_UPLOADS_PER_PASS;
-    if(!terrain_client_ready || !ta_prepare(&ta_terrain_cache,arrays_texture,&layer,allow_upload)) {
+    if(!terrain_client_ready || !ta_prepare(&ta_terrain_cache,arrays_texture,&layer,allow_upload) ||
+       !ta_capture_sampling_allowed(!terrain_count)) {
         terrain_flush();terrain_native_rect(q);return;
     }
     if(terrain_count==TERRAIN_QUADS || (terrain_count && terrain_page!=layer.array_texture))terrain_flush();

@@ -191,7 +191,10 @@ static void arrays_flush(void) {
     if(!shader_ok) {
         array_texture_end_draw();
         arrays_end_client_session();
+        TaReplaySampling saved={0};
+        if(arrays_output_layered)saved=ta_begin_native_replay();
         arrays_replay();
+        if(arrays_output_layered)ta_end_native_replay(saved);
     }
     else {
         if(arrays_output_texture && !arrays_output_layered) real_gl_bind(0x0de1,arrays_output_texture);
@@ -256,6 +259,7 @@ static void arrays_begin_probe(unsigned mode) {
         if(arrays_count || arrays_capture_allowed()) {
             FpsTextureLayer layer;
             int layered=arrays_native_texture?0:array_texture_prepare(arrays_texture,&layer);
+            if(layered && !ta_capture_sampling_allowed(!arrays_count))layered=0;
             if(texture_array_enabled && !layered && !arrays_native_texture) {
                 arrays_end_frame();arrays_restore_current();
                 real_gl_begin(mode);arrays_native_open=1;return;
@@ -389,6 +393,7 @@ static void arrays_glTexEnvi(unsigned target,unsigned name,int value) {
     }else arrays_end_frame();
     arrays_real_glTexEnvi(target,name,value);
     if(target==0x2300 && name==0x2200){ta_modulate=value==0x2100;ta_env_mode=value;}
+    if(target==0x8500 && name==0x8501)array_texture_invalidate_state();
     ARR_AFTER_STATE();
 }
 static void (*arrays_real_glTexParameteri)(unsigned,unsigned,int);
