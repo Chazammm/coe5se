@@ -508,8 +508,8 @@ static int arrays_restore_imports(FpsArrayInstall *install,FpsReplaceImport repl
     return restored;
 }
 
-static int install_gl_arrays(FpsArrayInstall *install) {
-    arrays_enabled=1;arrays_lazy_bindings=1;arrays_client_sessions=1;
+// Resolve the native client-array functions without changing game imports.
+static int arrays_load_functions(void) {
     HMODULE gl=GetModuleHandleA(FPS_GL_LIBRARY);if(!gl) return 0;
 #ifdef __APPLE__
     arrays_gl=gl;
@@ -526,6 +526,13 @@ static int install_gl_arrays(FpsArrayInstall *install) {
     ARR_PROC(arrays_wgl_proc,"wglGetProcAddress");
 #endif
 #undef ARR_PROC
+    return 1;
+}
+
+static int install_gl_arrays(FpsArrayInstall *install) {
+    arrays_enabled=1;arrays_lazy_bindings=1;arrays_client_sessions=1;
+    HMODULE gl=GetModuleHandleA(FPS_GL_LIBRARY);
+    if(!arrays_load_functions())return 0;
     for(size_t i=0;i<sizeof(arrays_imports)/sizeof(arrays_imports[0]);i++) {
         void *native=(void *)GetProcAddress(gl,arrays_imports[i].name);if(!native)return 0;
         if(arrays_imports[i].save) memcpy(arrays_imports[i].save,&native,sizeof(native));

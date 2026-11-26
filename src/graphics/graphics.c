@@ -251,6 +251,8 @@ static void mod_plane_draw(uintptr_t a,uintptr_t b,uintptr_t c) {
     mod_pass_skipped=0;
 }
 #endif
+// Feature groups selected once at launch.
+enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4, MOD_GUI=8 };
 #ifdef _WIN32
 typedef struct {
     unsigned group;
@@ -259,9 +261,26 @@ typedef struct {
     unsigned char original[5];
 } ModCall;
 typedef struct { unsigned char *page;SIZE_T size;DWORD original; } ModCodePage;
-enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4 };
+#include "gui_batch.h"
 static unsigned mod_features;
 static ModCall mod_calls[]={
+    {MOD_GUI,RVA_GUI_PANEL_RECT_1,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_first_panel,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_2,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_3,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_4,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_5,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_6,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_7,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_8,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_PANEL_RECT_9,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_last_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_1,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_first_border,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_2,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_3,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_4,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_5,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_6,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_7,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_next_rect,{0}},
+    {MOD_GUI,RVA_GUI_BORDER_RECT_8,RVA_FPS_TERRAIN_RECT_DRAW,(void (*)(void))gui_last_rect,{0}},
     {MOD_RENDERING,RVA_FPS_HIGH_DECOR_CALL,RVA_FPS_HIGH_DECOR_DRAW,mod_highest,{0}},
     {MOD_RENDERING,RVA_MAP_VIEW_DRAW_CALL,RVA_MAP_DRAW_PLANE,(void (*)(void))mod_terrain_plane,{0}},
     {MOD_RENDERING,RVA_MAP_SKY_UNDERLAY_DRAW_CALL,RVA_MAP_DRAW_PLANE,(void (*)(void))mod_terrain_plane,{0}},
@@ -350,6 +369,7 @@ static int mod_install_calls(void) {
         if(!(mod_calls[i].group&mod_features))continue;
         unsigned char *site=detail_base+mod_calls[i].site;
         if(!write_relative_call(site,stubs+i*16)){ok=0;break;}
+        if(mod_calls[i].group==MOD_GUI)gui_record_site(site);
         FlushInstructionCache(GetCurrentProcess(),site,5);
     }
     if(ok && !mod_restore_page_protections(pages,page_count))ok=0;
@@ -366,7 +386,6 @@ typedef struct {
     void (*hook)(void);
     const char *name;
 } ModCall;
-enum { MOD_RENDERING=1, MOD_FRAME_CONTROLS=2, MOD_SCENES=4 };
 static unsigned mod_features;
 static ModCall mod_calls[]={
     {MOD_RENDERING,RVA_FPS_HIGH_DECOR_SPRITE_CALL_A,RVA_DRAW_SPRITE_SHEARED,(void (*)(void))mod_decor,"decor_sprite_a"},
@@ -416,6 +435,10 @@ static unsigned mod_requested_features(const PluginApi *api) {
     const int *render=api->setting("smoother_map_rendering"),*frames=api->setting("frame_controls"),*scenes=api->setting("scene_sprite_batching");
     mod_render_setting=render;
     unsigned requested=(render && *render?MOD_RENDERING:0)|(frames && *frames?MOD_FRAME_CONTROLS:0)|(scenes && *scenes?MOD_SCENES:0);
+#ifdef _WIN32
+    const int *gui=api->setting("gui_frame_batching");
+    if(gui && *gui)requested|=MOD_GUI;
+#endif
 #ifdef __APPLE__
     if(requested&MOD_SCENES)mod_log("fps_mod scene_batching disabled reason=scene_calls_unmapped_on_mac");
     requested&=~MOD_SCENES;
@@ -449,6 +472,13 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
 #endif
     mod_original_decor=(ModDecorFn)(detail_base+RVA_DRAW_SPRITE_SHEARED);
     if(!game_hash_matches()) {mod_disable();mod_log("fps_mod disabled reason=unsupported_game_hash graphics_imports_unchanged=1");return 1;}
+#ifdef _WIN32
+    if((mod_features&MOD_GUI) && (!mod_initialize_original_gl() || !arrays_load_functions() ||
+       !fps_check_gl_imports(detail_base,GetModuleHandleA(FPS_GL_LIBRARY),fps_expected_glu(),mod_import_problem))) {
+        mod_features&=~MOD_GUI;
+        mod_log("fps_mod gui_frame_batching disabled reason=graphics_functions_unavailable_or_replaced");
+    }
+#endif
     if(!mod_verify_calls()){mod_disable();mod_log("fps_mod hook_check status=blocked graphics_imports_unchanged=1");return 1;}
     if(mod_features&(MOD_RENDERING|MOD_SCENES)){
         if(!mod_initialize_original_gl()) {mod_disable();mod_log("fps_mod disabled reason=original_gl_exports_unavailable");return 1;}
@@ -457,7 +487,7 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
     {
         unsigned imports=mod_features&(MOD_RENDERING|MOD_SCENES)?(unsigned)(sizeof(arrays_imports)/sizeof(arrays_imports[0]))+1:0;
         unsigned calls=0;for(size_t i=0;i<sizeof(mod_calls)/sizeof(mod_calls[0]);i++)if(mod_calls[i].group&mod_features)calls++;
-        char line[200];snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d",imports,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES));mod_log(line);
+        char line[200];snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d gui_frames=%d",imports,calls,!!(mod_features&MOD_RENDERING),!!(mod_features&MOD_FRAME_CONTROLS),!!(mod_features&MOD_SCENES),!!(mod_features&MOD_GUI));mod_log(line);
     }
 #ifdef _WIN32
     ta_scene_program=!!(mod_features&(MOD_RENDERING|MOD_SCENES));
@@ -483,6 +513,9 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         if(!api->wrap || !api->wrap(SITE_MAP_DRAW,(void *)fps_frame_preference_map_draw,(void **)&fps_next_map_draw))mod_log("fps_mod graphics_menu map_start_callback=unavailable preference_applies_at_menu");
         if(!api->wrap || !api->wrap(SITE_MAIN_MENU_WAIT,(void *)mod_main_menu_wait,(void **)&mod_next_main_menu_wait))mod_log("fps_mod diagnostics main_menu_callback=unavailable graphics_report=first_map");
     }
+#ifdef _WIN32
+    if(mod_features&MOD_GUI)gui_record_imports();
+#endif
     mod_operational=!!(mod_features&MOD_RENDERING);
     if(mod_features&MOD_SCENES)mod_install_scene_waits(api);
     snprintf(line,sizeof(line),"fps_mod initialized version=" FPS_MOD_VERSION " game=5.43 api=%d launch_settings_fixed=1 quality_unchanged=1 graphics_report=first_current_context",api->version);

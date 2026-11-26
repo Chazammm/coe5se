@@ -50,6 +50,14 @@ parent graphics_changes
 label "Use texture array batching in battles"
 tip "Windows CoE5 5.43. Batches compatible terrain, unit sprites, spell particles and projectiles with original detail and order. Unsupported draws stay native. Takes effect next launch."
 
+newsetting gui_frame_batching
+onoff
+default 0
+restart
+parent graphics_changes
+label "Batch textured scrollbars and tooltip frames"
+tip "Windows CoE5 5.43. Groups compatible scrollbar and tooltip frame pieces using the original texture and drawing order."
+
 newsetting frame_controls
 onoff
 default 1
