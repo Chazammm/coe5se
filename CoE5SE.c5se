@@ -16,6 +16,13 @@ default 0
 label "Rehearse LAN games in single player"
 tip "For mod authors. Content mods' scripts restart at each human turn's start and end, keeping only coe5.gameData and coe5.playerData. Writes a LAN client can't make are refused during the turn."
 
+newsetting cache_player_arguments
+onoff
+default 0
+restart
+label "Reuse numeric arguments in turn-start player rules"
+tip "Windows CoE5 5.43. Speeds up repeated +player conditions in content mods. The game resolves the player for every condition."
+
 newsettingheader "Mac only"
 
 newsetting mac_workshop_list

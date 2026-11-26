@@ -5799,6 +5799,8 @@ typedef struct {
 #define SITE(name, fade, winCalls, winTarget, macCalls, macTarget) {{SITE_CALLS winCalls}, winTarget, name, fade, SITE_ON(macCalls, macTarget)}
 #endif
 static const SiteInfo SITES[SITE_COUNT] = {
+    [SITE_TURN_RULE_PLAYER_NUMBER] = SITE("turn_rule_player_number", 0,
+ (0x1c586a), RVA_EVENT_INT_ARG, (0), 0),
     [SITE_MAIN_MENU_WAIT] = SITE("main_menu_wait", 1,
  (0x192092),       0x23ec30,
  (M(0x10032e068)), M(0x100485000)),
