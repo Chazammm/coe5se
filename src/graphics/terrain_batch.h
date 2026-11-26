@@ -51,7 +51,7 @@ static void terrain_flush(void) {
     unsigned count=terrain_count;
     if(!count)return;
     terrain_count=0;
-    if(!ta_allowed_state() || !terrain_submission_available()) {terrain_replay(count);return;}
+    if(!ta_allowed_state() || !terrain_submission_available() || !ta_rectangle_units_clear()) {terrain_replay(count);return;}
     unsigned unit=ta_multi_page?0x84c1u:0x84c0u;
     int saved_array=0,saved_sampler=0;
     ta_active_texture(unit);
@@ -134,7 +134,7 @@ static int terrain_begin_scope(void) {
     }
     array_texture_begin_frame();arrays_begin_frame();
     ++ta_terrain_cache.pass;
-    if(ta_terrain_cache.pressure && !(ta_terrain_cache.pass%16) && ta_context_ok && ta_current_context()==ta_context)
+    if(ta_terrain_cache.pressure && !(ta_terrain_cache.pass%16) && ta_context_ok && ta_cache_owned(ta_current_context()))
         ta_trim_terrain_cache(&ta_terrain_cache);
     terrain_client_ready=-1;
     terrain_upload_start=ta_terrain_cache.attempts;

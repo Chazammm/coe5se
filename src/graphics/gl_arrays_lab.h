@@ -231,7 +231,7 @@ static void arrays_invalidate(void) { arrays_allowed_cached=-1; }
 static void arrays_begin_frame(void) {
     arrays_end_frame();arrays_invalidate();
     ++ta_sprite_cache.pass;
-    if(ta_sprite_cache.pressure && ta_context_ok && ta_current_context()==ta_context)
+    if(ta_sprite_cache.pressure && ta_context_ok && ta_cache_owned(ta_current_context()))
         ta_trim_empty_pages(&ta_sprite_cache);
     arrays_scene_caps_known=arrays_scene_caps_on=0;
     arrays_projection_capture=0;arrays_projection_dirty=1;
@@ -376,7 +376,8 @@ ARR_WRAP2(glHint,unsigned,unsigned) ARR_WRAP2(glLightModeli,unsigned,int) ARR_WR
 static void (*arrays_real_glDeleteTextures)(int,const unsigned *);
 static void arrays_glDeleteTextures(int n,const unsigned *ids) {
     arrays_end_frame();
-    for(int i=0;i<n;i++) {array_texture_remove(ids[i]);}
+    if(ta_current_context && ta_cache_owned(ta_current_context()))
+        for(int i=0;i<n;i++)array_texture_remove(ids[i]);
     arrays_real_glDeleteTextures(n,ids);
     for(int i=0;i<n;i++)if(ids[i]==arrays_texture){arrays_texture=0;arrays_binding_dirty=0;}
 }
@@ -392,7 +393,7 @@ static void arrays_glTexEnvi(unsigned target,unsigned name,int value) {
 }
 static void (*arrays_real_glTexParameteri)(unsigned,unsigned,int);
 static void arrays_forget_bound_texture(unsigned target) {
-    if(target!=0x0de1)return;
+    if(target!=0x0de1 || !ta_current_context || !ta_cache_owned(ta_current_context()))return;
     int binding=0;
     arrays_get_int(0x8069,&binding);
     array_texture_forget((unsigned)binding);

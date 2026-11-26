@@ -43,6 +43,8 @@ static _Thread_local unsigned ta_bound_pages[TA_MAX_PAGES];
 static _Thread_local long long ta_state_checks,ta_draw_sessions;
 static _Thread_local HGLRC ta_context;
 static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_state_ok,ta_drawing;
+static _Thread_local int ta_fixed_units;
+static _Thread_local unsigned char (WINAPI *ta_indexed_enabled)(unsigned,unsigned);
 static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler,ta_has_rectangle;
 // Remember which contexts have exactly one initialized array cache for native texture edits.
 typedef struct { _Atomic(HGLRC) context; atomic_int shared; } TaEditContext;
@@ -226,21 +228,32 @@ static int ta_build_program(void) {
 #include "map_transfer.h"
 #include "texture_layer_check.h"
 #endif
-// Registration runs once per rendering thread. Untracked contexts keep drawing with edits disabled.
-static TaEditContext *ta_register_edit_context(HGLRC context) {
+// Claim a new cache or retire the registered cache when another thread uses its context.
+static TaEditContext *ta_visit_context(HGLRC context,int claim) {
     for(size_t i=0;i<sizeof ta_edit_contexts/sizeof *ta_edit_contexts;i++){
         TaEditContext *slot=&ta_edit_contexts[i];
-        HGLRC previous=NULL;
-        if(atomic_compare_exchange_strong(&slot->context,&previous,context))return slot;
+        HGLRC previous=atomic_load(&slot->context);
+        if(!previous){
+            if(!claim)return NULL;
+            if(atomic_compare_exchange_strong(&slot->context,&previous,context))return slot;
+        }
         if(previous==context){atomic_store(&slot->shared,1);break;}
     }
     return NULL;
 }
+// An upload-only thread can also retire a cache before the rendering thread returns.
+static int ta_cache_owned(HGLRC context) {
+    if(!context)return 0;
+    if(context!=ta_context){ta_visit_context(context,0);return 0;}
+    return ta_edit_context && !atomic_load(&ta_edit_context->shared);
+}
 static int ta_initialize_context(void) {
     HGLRC context=ta_current_context();if(!context)return ta_refuse(FPS_NO_CONTEXT);
-    if(ta_context_attempted){if(context!=ta_context)return ta_refuse(FPS_CONTEXT_CHANGED);return ta_context_ok;}
+    if(ta_context_attempted)return ta_cache_owned(context)?ta_context_ok:ta_refuse(FPS_CONTEXT_CHANGED);
     ta_sprite_cache.entries=ta_entries;ta_sprite_cache.size=TA_CACHE_SIZE;ta_sprite_cache.layer_limit=256;
     ta_context_attempted=1;ta_context=context;
+    ta_edit_context=ta_visit_context(context,1);
+    if(!ta_edit_context)return ta_refuse(FPS_CONTEXT_CHANGED);
     const char *v=(const char *)ta_get_string(0x1f02),*ext;
     int major=0,minor=0;
 #ifdef __APPLE__
@@ -263,6 +276,10 @@ static int ta_initialize_context(void) {
 #endif
     ta_has_rectangle=major>3 || (major==3 && minor>=1) || ta_extension(ext,"GL_ARB_texture_rectangle") ||
                      ta_extension(ext,"GL_EXT_texture_rectangle") || ta_extension(ext,"GL_NV_texture_rectangle");
+    ta_get_int(0x84e2,&ta_fixed_units);
+    if(ta_fixed_units<1 || ta_fixed_units>32)return ta_refuse(FPS_TEXTURE_UNIT);
+    if(ta_has_rectangle && ta_extension(ext,"GL_EXT_direct_state_access"))
+        *(void **)&ta_indexed_enabled=ta_proc("glIsEnabledIndexedEXT");
     ta_has_aniso=ta_extension(ext,"GL_EXT_texture_filter_anisotropic") || ta_extension(ext,"GL_ARB_texture_filter_anisotropic");
     ta_has_swizzle=major>3 || (major==3 && minor>=3) || ta_extension(ext,"GL_ARB_texture_swizzle");
     ta_has_sampler=major>3 || (major==3 && minor>=3) || ta_extension(ext,"GL_ARB_sampler_objects");
@@ -280,7 +297,6 @@ static int ta_initialize_context(void) {
     }
 #undef TA_EXT
     if(!ta_build_program())return 0;
-    ta_edit_context=ta_register_edit_context(context);
     ta_context_ok=1;return 1;
 }
 static void array_texture_invalidate_state(void) {ta_state_checked=0;}
@@ -288,12 +304,12 @@ static void array_texture_begin_frame(void) {array_texture_invalidate_state();}
 static int ta_cap_bit(unsigned cap) {
     const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458};
     for(int i=0;i<7;i++)if(cap==caps[i])return i;
-    if(cap==TA_TEXTURE_RECTANGLE && ta_has_rectangle)return 17;
     if(cap>=0x3000 && cap<0x3006)return 7+(int)(cap-0x3000);
     if(cap>=0x0c60 && cap<=0x0c63)return 13+(int)(cap-0x0c60);
     return -1;
 }
 static void ta_note_cap(unsigned cap,int on) {
+    if(cap==TA_TEXTURE_RECTANGLE){array_texture_invalidate_state();return;}
     if(cap==0x0de1)ta_texture_on=on;
     int bit=ta_cap_bit(cap);
     if(bit>=0)ta_forbidden=on?ta_forbidden|(1u<<bit):ta_forbidden&~(1u<<bit);
@@ -302,7 +318,6 @@ static void ta_read_switches(void) {
     ta_forbidden=0;ta_texture_on=ta_is_enabled(0x0de1)!=0;
     const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458,0x3000,0x3001,0x3002,0x3003,0x3004,0x3005,0x0c60,0x0c61,0x0c62,0x0c63};
     for(size_t i=0;i<sizeof(caps)/sizeof(caps[0]);i++)if(ta_is_enabled(caps[i]))ta_note_cap(caps[i],1);
-    if(ta_has_rectangle && ta_is_enabled(TA_TEXTURE_RECTANGLE))ta_note_cap(TA_TEXTURE_RECTANGLE,1);
     ta_get_env(0x2300,0x2200,&ta_env_mode);ta_modulate=ta_env_mode==0x2100;
 }
 static int ta_switches_allowed(void) {
@@ -330,10 +345,11 @@ static int ta_allowed_state(void) {
 #endif
     ta_get_int(0x0d10,&value);if(value)return ta_refuse(FPS_PIXEL_TRANSFER);
     if(ta_has_sampler) {ta_get_int(0x8919,&value);if(value)return ta_refuse(FPS_SAMPLER_OBJECT);}
+    if(ta_has_rectangle && ta_is_enabled(TA_TEXTURE_RECTANGLE))return ta_refuse(FPS_FIXED_FUNCTION);
     if(ta_track_state)ta_read_switches();
     if(!ta_track_state) {
     if(!ta_is_enabled(0x0de1) || ta_is_enabled(0x0b50) || ta_is_enabled(0x0b57) || ta_is_enabled(0x0b60))return ta_refuse(FPS_FIXED_FUNCTION);
-    if((ta_has_rectangle && ta_is_enabled(TA_TEXTURE_RECTANGLE)) || ta_is_enabled(0x0de0) || ta_is_enabled(0x806f) || ta_is_enabled(0x8513) || ta_is_enabled(0x8458))return ta_refuse(FPS_FIXED_FUNCTION);
+    if(ta_is_enabled(0x0de0) || ta_is_enabled(0x806f) || ta_is_enabled(0x8513) || ta_is_enabled(0x8458))return ta_refuse(FPS_FIXED_FUNCTION);
     for(unsigned cap=0x3000;cap<0x3006;cap++)if(ta_is_enabled(cap))return ta_refuse(FPS_FIXED_FUNCTION);
     for(unsigned cap=0x0c60;cap<=0x0c63;cap++)if(ta_is_enabled(cap))return ta_refuse(FPS_FIXED_FUNCTION);
     ta_get_env(0x2300,0x2200,&value);if(value!=0x2100)return ta_refuse(FPS_FIXED_FUNCTION);
@@ -344,14 +360,32 @@ static int ta_allowed_state(void) {
     for(int i=0;i<16;i++)if(matrix[i]!=((i%5)==0?1.0f:0.0f))return ta_refuse(FPS_TEXTURE_MATRIX);
     const unsigned scales[]={0x0d14,0x0d18,0x0d1a,0x0d1c},biases[]={0x0d15,0x0d19,0x0d1b,0x0d1d};
     for(int i=0;i<4;i++){float f;ta_get_float(scales[i],&f);if(f!=1.0f)return ta_refuse(FPS_PIXEL_TRANSFER);ta_get_float(biases[i],&f);if(f!=0.0f)return ta_refuse(FPS_PIXEL_TRANSFER);}
-    int units=0;ta_get_int(0x84e2,&units);if(units<1 || units>32)return ta_refuse(FPS_TEXTURE_UNIT);
-    for(int unit=1;unit<units;unit++) {
+    for(int unit=1;unit<ta_fixed_units;unit++) {
         ta_active_texture(0x84c0u+(unsigned)unit);
         int enabled=ta_is_enabled(0x0de0) || ta_is_enabled(0x0de1) || ta_is_enabled(0x806f) || ta_is_enabled(0x8513) ||
                     (ta_has_rectangle && ta_is_enabled(TA_TEXTURE_RECTANGLE));
         ta_active_texture(0x84c0);if(enabled)return ta_refuse(FPS_EXTRA_TEXTURE_UNIT);
     }
     ta_state_ok=1;return !ta_track_state || ta_switches_allowed();
+}
+// Recheck raw plugin state once per submitted batch, preserving the active texture unit.
+static int ta_rectangle_units_clear(void) {
+    if(!ta_has_rectangle)return 1;
+    if(ta_indexed_enabled){
+        for(int i=0;i<ta_fixed_units;i++)
+            if(ta_indexed_enabled(TA_TEXTURE_RECTANGLE,i))return ta_refuse(FPS_FIXED_FUNCTION);
+        return 1;
+    }
+    int active=0;
+    ta_get_int(0x84e0,&active);
+    if(active!=0x84c0)return ta_refuse(FPS_TEXTURE_UNIT);
+    int enabled=ta_is_enabled(TA_TEXTURE_RECTANGLE);
+    for(int i=1;i<ta_fixed_units && !enabled;i++){
+        ta_active_texture(0x84c0u+i);
+        enabled=ta_is_enabled(TA_TEXTURE_RECTANGLE);
+    }
+    ta_active_texture(0x84c0);
+    return enabled?ta_refuse(FPS_FIXED_FUNCTION):1;
 }
 static int ta_level_size(int size,int level){int n=size>>level;return n>0?n:1;}
 static int ta_source_parameters(int *source_width,int *source_height,int *last,unsigned *min,unsigned *mag,int terrain,int *rgba) {
@@ -475,56 +509,81 @@ done:
     if(memory)FPS_FREE(memory);
     ta_bind(0x8c1a,(unsigned)before_array);ta_bind(0x0de1,(unsigned)before2d);return ok;
 }
+// Close a probe-chain gap and return the empty slot, including when the table was full.
+static FpsTextureArrayEntry *ta_close_gap(FpsTextureArrayCache *cache,FpsTextureArrayEntry *entry) {
+    unsigned mask=cache->size-1,start=(unsigned)(entry-cache->entries),gap=start;
+    for(unsigned step=1;step<cache->size;step++){
+        unsigned i=(start+step)&mask;
+        FpsTextureArrayEntry *next=&cache->entries[i];
+        if(!next->source)break;
+        unsigned home=(next->source*2654435761u)&mask;
+        if(((gap-home)&mask)<((i-home)&mask)){
+            cache->entries[gap]=*next;
+            gap=i;
+        }
+    }
+    cache->entries[gap]=(FpsTextureArrayEntry){0};
+    return &cache->entries[gap];
+}
+// A full table can admit a new texture by retiring a layerless entry.
+static FpsTextureArrayEntry *ta_source_slot(FpsTextureArrayCache *cache,unsigned source) {
+    unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
+    FpsTextureArrayEntry *spare=NULL;
+    for(unsigned i=0;i<cache->size;i++){
+        FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];
+        if(!e->source || e->source==source)return e;
+        if(!spare && e->decision<=0)spare=e;
+    }
+    return spare;
+}
 static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out,int allow_upload) {
     if(!source || !out || !ta_allowed_state() || !cache->entries)return 0;
     for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==source)return 0;
-    unsigned mask=cache->size-1,index=(source*2654435761u)&mask;
-    for(unsigned i=0;i<cache->size;i++) {
-        FpsTextureArrayEntry *e=&cache->entries[(index+i)&mask];if(e->source && e->source!=source)continue;
-        if(cache->pass && e->source)e->last_pass=cache->pass;
+    FpsTextureArrayEntry *e=ta_source_slot(cache,source);
+    if(!e){cache->pressure=1;return ta_refuse(FPS_CACHE_TABLE_FULL);}
+    int replace=e->source!=source;
+    if(!replace)e->last_pass=cache->pass;
+    int verify=0;
 #ifdef _WIN32
-        // Rebuild a layer once when a checked map pass first uses an unchecked copy.
-        if(map_texture_pass && e->decision>0 && !e->map_checked){
-            ta_release_layer(cache,&e->value);
-            e->decision=0;
-        }
+    verify=map_texture_pass && e->decision>0 && !e->map_checked;
 #endif
-        int retry=e->decision<0 && ((ta_scene_replace && !e->scene_checked) ||
-                  ((e->reason==FPS_TEXTURE_TRANSFER || e->reason==FPS_ALLOCATION) && cache->pass-e->last_retry_pass>=64) ||
-                  (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
-        if(!e->decision || retry) {
-            if(!allow_upload || !ta_copy_buffers_clear())return 0;
+    int retry=e->decision<0 && ((ta_scene_replace && !e->scene_checked) ||
+              ((e->reason==FPS_TEXTURE_TRANSFER || e->reason==FPS_ALLOCATION) && cache->pass-e->last_retry_pass>=64) ||
+              (e->reason==FPS_CACHE_LIMIT && e->capacity_epoch!=cache->capacity_epoch));
+    if(replace || !e->decision || retry || verify) {
+        if(!allow_upload || !ta_copy_buffers_clear())return 0;
 #ifdef _WIN32
-            int budgeted=map_tick_frequency && ((map_texture_pass==MAP_TERRAIN && cache==&ta_terrain_cache) ||
-                                                (map_texture_pass==MAP_UNITS && cache==&ta_sprite_cache));
-            if(budgeted && map_copy_ticks>=map_tick_frequency/250)return 0;
-            long long started=budgeted?map_ticks():0;
+        int budgeted=map_tick_frequency && ((map_texture_pass==MAP_TERRAIN && cache==&ta_terrain_cache) ||
+                                            (map_texture_pass==MAP_UNITS && cache==&ta_sprite_cache));
+        if(budgeted && map_copy_ticks>=map_tick_frequency/250)return 0;
+        long long started=budgeted?map_ticks():0;
 #endif
+        if(verify)ta_release_layer(cache,&e->value);
+        if(replace){
+            if(e->source)e=ta_close_gap(cache,e);
             e->source=source;
-            cache->attempts++;
-            e->scene_checked=ta_scene_replace;
-            e->capacity_epoch=cache->capacity_epoch;
-            e->decision=ta_clone(cache,source,&e->value)?1:-1;
+        }
+        cache->attempts++;
+        e->scene_checked=ta_scene_replace;
+        e->capacity_epoch=cache->capacity_epoch;
+        e->decision=ta_clone(cache,source,&e->value)?1:-1;
 #ifdef _WIN32
-            e->map_checked=map_texture_pass!=0 && e->decision>0;
-            if(budgeted)map_copy_ticks+=map_ticks()-started;
+        e->map_checked=map_texture_pass!=0 && e->decision>0;
+        if(budgeted)map_copy_ticks+=map_ticks()-started;
 #endif
-            if(e->decision<0){
-                e->reason=ta_reject_reason;
-                if(e->reason==FPS_CLIENT_STACK_FULL){e->decision=0;return 0;}
-                e->last_retry_pass=cache->pass;
-                ta_rejected++;
-            }
+        if(e->decision<0){
+            e->reason=ta_reject_reason;
+            if(e->reason==FPS_CLIENT_STACK_FULL){e->decision=0;return 0;}
+            e->last_retry_pass=cache->pass;
+            ta_rejected++;
         }
-        if(cache->pass)e->last_pass=cache->pass;
-        if(e->decision<0) {
-            if(e->reason==FPS_CACHE_LIMIT)cache->pressure=1;
-            fps_note_fallback(e->reason);return 0;
-        }
-        *out=e->value;ta_hits++;return 1;
     }
-    cache->pressure=1;
-    return ta_refuse(FPS_CACHE_TABLE_FULL);
+    if(cache->pass)e->last_pass=cache->pass;
+    if(e->decision<0) {
+        if(e->reason==FPS_CACHE_LIMIT)cache->pressure=1;
+        fps_note_fallback(e->reason);return 0;
+    }
+    *out=e->value;ta_hits++;return 1;
 }
 static int array_texture_prepare(unsigned source,FpsTextureLayer *out) {
     return ta_prepare(&ta_sprite_cache,source,out,1);
@@ -550,17 +609,7 @@ static void ta_remove(FpsTextureArrayCache *cache,unsigned source) {
         if(!cache->entries[index].source)return;
         if(cache->entries[index].source!=source)continue;
         ta_release_layer(cache,&cache->entries[index].value);
-        memset(&cache->entries[index],0,sizeof(cache->entries[index]));
-        for(unsigned next=1;next<cache->size;next++) {
-            unsigned current=(index+next)&mask;
-            FpsTextureArrayEntry moved=cache->entries[current];if(!moved.source)break;
-            memset(&cache->entries[current],0,sizeof(cache->entries[current]));
-            unsigned home=(moved.source*2654435761u)&mask;
-            for(unsigned probe=0;probe<cache->size;probe++) {
-                FpsTextureArrayEntry *target=&cache->entries[(home+probe)&mask];
-                if(!target->source){*target=moved;break;}
-            }
-        }
+        ta_close_gap(cache,&cache->entries[index]);
         return;
     }
 }
@@ -596,7 +645,7 @@ static void ta_trim_terrain_cache(FpsTextureArrayCache *cache) {
 }
 #endif
 static int array_texture_begin_draw(FpsTextureArrayCache *cache,unsigned texture) {
-    if(!ta_allowed_state())return 0;
+    if(!ta_allowed_state() || !ta_rectangle_units_clear())return 0;
     int own=0;for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==texture)own=1;if(!own)return 0;
     if(ta_multi_page) {
         if(!ta_drawing) {

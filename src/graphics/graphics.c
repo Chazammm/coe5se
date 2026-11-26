@@ -468,7 +468,7 @@ __declspec(dllexport) int coe5seBeforeTextureUpdate(unsigned int texture) {
     if(gui_expected)return 0;
 #endif
     if(!texture_array_enabled)return 1;
-    if(!ta_edit_context || atomic_load(&ta_edit_context->shared) ||
+    if(!ta_context_ok || !ta_edit_context || atomic_load(&ta_edit_context->shared) ||
        !ta_context || !ta_current_context || ta_current_context()!=ta_context ||
        arrays_native_open || arrays_open)return 0;
     arrays_end_frame();
