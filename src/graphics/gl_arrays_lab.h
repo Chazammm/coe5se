@@ -228,30 +228,6 @@ static void arrays_flush(void) {
 static void arrays_end_frame(void) {
     arrays_flush();array_texture_end_draw();arrays_end_client_session();
 }
-static void arrays_enter_pass(void) {
-    if(!ta_game_thread)++ta_worker_passes;
-}
-// A temporary render worker releases its own objects while its context is still current.
-static void arrays_leave_pass(void) {
-    if(ta_game_thread || --ta_worker_passes)return;
-    if(arrays_projections){FPS_FREE(arrays_projections);arrays_projections=NULL;}
-    arrays_projection_attempted=arrays_projection_capture=0;
-    if(!ta_context || ta_current_context()!=ta_context)return;
-    FpsTextureArrayCache *caches[]={&ta_sprite_cache,&ta_terrain_cache};
-    for(size_t i=0;i<2;i++){
-        FpsTextureArrayCache *cache=caches[i];
-        for(int j=0;j<cache->page_count;j++)ta_delete(1,&cache->pages[j].texture);
-    }
-    if(ta_terrain_cache.entries)FPS_FREE(ta_terrain_cache.entries);
-    ta_terrain_cache=(FpsTextureArrayCache){0};
-    ta_sprite_cache=(FpsTextureArrayCache){.entries=ta_entries,.size=TA_CACHE_SIZE,.layer_limit=256};
-    memset(ta_entries,0,sizeof ta_entries);
-    if(ta_program){ta_delete_program(ta_program);ta_program=0;}
-#ifdef _WIN32
-    if(ta_check_fbo){ta_delete_fbos(1,&ta_check_fbo);ta_check_fbo=0;}
-    if(ta_check_pack){ta_delete_buffers(1,&ta_check_pack);ta_check_pack=0;}
-#endif
-}
 static int arrays_capture_allowed(void) {
     if(arrays_allowed_cached>=0) return arrays_allowed_cached;
     if(!arrays_check_context()) return 0;
@@ -265,7 +241,9 @@ static int arrays_capture_allowed(void) {
     if(vao)fps_note_fallback(FPS_VAO_BOUND);
     if(mode!=0x1c00 || list)fps_note_fallback(FPS_RENDER_MODE);
     if(unit!=0x84c0)fps_note_fallback(FPS_TEXTURE_UNIT);
-    int fixed_state=arrays_is_enabled(0x0b50) || arrays_is_enabled(0x0b57);
+    int shade=0;
+    if(decor_scope && !arrays_native_texture)arrays_get_int(0x0b54,&shade);
+    int fixed_state=shade==0x1d00 || arrays_is_enabled(0x0b50) || arrays_is_enabled(0x0b57);
     if(fixed_state)fps_note_fallback(FPS_FIXED_FUNCTION);
     arrays_allowed_cached=!(binding || vao || mode!=0x1c00 || list || unit!=0x84c0 || fixed_state);
     if(arrays_native_texture && !ta_allowed_state())arrays_allowed_cached=0;
@@ -459,7 +437,10 @@ static void arrays_glRotatef(float a,float b,float c,float d){arrays_matrix_boun
 ARR_WRAP4(glViewport,int,int,int,int) ARR_WRAP4(glScissor,int,int,int,int)
 ARR_WRAP4(glClearColor,float,float,float,float)
 ARR_WRAP4(glVertexPointer,int,unsigned,int,const void *) ARR_WRAP4(glTexCoordPointer,int,unsigned,int,const void *)
-ARR_WRAP1(glShadeModel,unsigned)
+static void (*arrays_real_glShadeModel)(unsigned);
+static void arrays_glShadeModel(unsigned mode) {
+    arrays_end_frame();arrays_real_glShadeModel(mode);arrays_invalidate();
+}
 static void (*arrays_real_glEnable)(unsigned);
 static void arrays_cap_boundary(unsigned cap,int on) {
     const unsigned caps[]={0x0b44,0x0be2,0x0bc0,0x0b71,0x0c11};

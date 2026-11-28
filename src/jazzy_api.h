@@ -646,6 +646,15 @@ static inline const PluginApi *jazzyConnect(void) {
     return getApi ? getApi(PLUGIN_API_VERSION) : NULL;
 }
 
+// Before raw GL on the game render context, outside glBegin/glEnd. Defer on 0 (also returned by older cores).
+// On 1, draw and restore changed GL state before returning. Use jazzyBeforeTextureUpdate for texture edits.
+static inline int jazzyBeforeNativeDraw(void) {
+    typedef int (*BeforeDrawFn)(void);
+    HMODULE core = GetModuleHandleA(COE5SE_DLL);
+    BeforeDrawFn before = core ? (BeforeDrawFn)(void *)GetProcAddress(core, "coe5seBeforeNativeDraw") : NULL;
+    return before ? before() : 0;
+}
+
 // Call on the game thread and context that draw this 2D texture, before changing its pixels or sampling.
 // Call outside glBegin/glEnd and restore any GL bindings you change. 1 permits the edit now.
 // Moving this context between batching threads disables live edits. Keep editable textures on one context.

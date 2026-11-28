@@ -45,11 +45,13 @@ static _Thread_local long long ta_state_checks,ta_draw_sessions;
 static _Thread_local HGLRC ta_context,ta_probed_context;
 static _Thread_local int ta_capable;
 static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_state_ok,ta_drawing;
-// The game thread keeps its cache between frames. Worker passes release their resources before returning.
-static _Thread_local int ta_game_thread,ta_worker_passes;
+// Only the game thread has a stable lifetime for private GL names and deferred draws.
+static _Thread_local int ta_game_thread;
 static _Thread_local int ta_fixed_units,ta_has_pipeline;
 static _Thread_local void (*ta_bind_pipeline)(unsigned);
 static void (*ta_scissor)(int,int,int,int);
+static _Thread_local void (*ta_scissor_indexed)(unsigned,int,int,int,int);
+static _Thread_local void (*ta_enable_indexed)(unsigned,unsigned),(*ta_disable_indexed)(unsigned,unsigned);
 static _Thread_local unsigned char (WINAPI *ta_indexed_enabled)(unsigned,unsigned);
 static _Thread_local int ta_has_aniso,ta_has_swizzle,ta_has_sampler,ta_has_rectangle;
 static _Thread_local int ta_has_vertex_program,ta_has_fragment_program;
@@ -352,6 +354,11 @@ static int ta_load_capabilities(void) {
     ta_has_swizzle=major>3 || (major==3 && minor>=3) || ta_extension(ext,"GL_ARB_texture_swizzle");
     ta_has_sampler=major>3 || (major==3 && minor>=3) || ta_extension(ext,"GL_ARB_sampler_objects");
 #define TA_EXT(var,name) do {*(void **)&var=ta_proc(name);if(!var){ta_message("missing " name);return ta_refuse(FPS_ENTRY_POINT);}}while(0)
+    ta_scissor_indexed=NULL;
+    if(major>4 || (major==4 && minor>=1) || ta_extension(ext,"GL_ARB_viewport_array")){
+        TA_EXT(ta_scissor_indexed,"glScissorIndexed");
+        TA_EXT(ta_enable_indexed,"glEnablei");TA_EXT(ta_disable_indexed,"glDisablei");
+    }
     TA_EXT(ta_active_texture,"glActiveTexture");TA_EXT(ta_image3d,"glTexImage3D");TA_EXT(ta_subimage3d,"glTexSubImage3D");
     TA_EXT(ta_create_shader,"glCreateShader");TA_EXT(ta_shader_source,"glShaderSource");TA_EXT(ta_compile_shader,"glCompileShader");
     TA_EXT(ta_get_shader,"glGetShaderiv");TA_EXT(ta_shader_log,"glGetShaderInfoLog");TA_EXT(ta_delete_shader,"glDeleteShader");
@@ -508,8 +515,16 @@ static int ta_scissor_differs(TaScissor a,TaScissor b) {
     return a.tracked && b.tracked && (a.enabled!=b.enabled || (a.enabled && memcmp(a.box,b.box,sizeof a.box)));
 }
 // A disabled scissor still has a box that belongs to the caller.
+static void ta_set_scissor_box(const int box[4]) {
+    if(ta_scissor_indexed)ta_scissor_indexed(0,box[0],box[1],box[2],box[3]);
+    else ta_scissor(box[0],box[1],box[2],box[3]);
+}
 static void ta_apply_scissor(TaScissor s) {
-    if(s.enabled){ta_scissor(s.box[0],s.box[1],s.box[2],s.box[3]);real_gl_enable(0x0c11);}
+    if(s.enabled)ta_set_scissor_box(s.box);
+    if(ta_scissor_indexed){
+        if(s.enabled)ta_enable_indexed(0x0c11,0);
+        else ta_disable_indexed(0x0c11,0);
+    }else if(s.enabled)real_gl_enable(0x0c11);
     else real_gl_disable(0x0c11);
 }
 static TaScissor ta_enter_scissor(TaScissor captured) {
@@ -526,7 +541,7 @@ static TaScissor ta_enter_scissor(TaScissor captured) {
 }
 static void ta_leave_scissor(TaScissor restore) {
     if(!restore.tracked)return;
-    if(!restore.enabled)ta_scissor(restore.box[0],restore.box[1],restore.box[2],restore.box[3]);
+    if(!restore.enabled)ta_set_scissor_box(restore.box);
     ta_apply_scissor(restore);
 }
 // Sampling state that a native plugin may have changed since the last collected primitive.
@@ -721,9 +736,8 @@ static FpsTextureArrayEntry *ta_source_slot(FpsTextureArrayCache *cache,unsigned
     return spare;
 }
 static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out,int allow_upload) {
-    if(!source || !out || !ta_allowed_state() || !cache->entries)return 0;
+    if(!ta_game_thread || !source || !out || !ta_allowed_state() || !cache->entries)return 0;
     if(!ta_program){
-        if(ta_program_failed || (!ta_game_thread && !ta_worker_passes))return 0;
         if(!ta_build_program()){ta_program_failed=1;ta_drop_claim();return 0;}
     }
     for(int i=0;i<cache->page_count;i++)if(cache->pages[i].texture==source)return 0;

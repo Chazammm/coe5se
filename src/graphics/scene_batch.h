@@ -81,10 +81,10 @@ static void mod_install_scene_waits(const PluginApi *api) {
 }
 
 static void coe5seGraphicsDrawScene(void (*draw)(void)) {
-    if(!mod_scenes_enabled || !mod_scene_kind || mod_scene_drawing){draw();return;}
+    if(!ta_game_thread || !mod_scenes_enabled || !mod_scene_kind || mod_scene_drawing){draw();return;}
     int previous_highest=in_highest,previous_scope=decor_scope,previous_scene_scope=arrays_scene_scope,previous_replace=ta_scene_replace,previous_native_texture=arrays_native_texture;
     arrays_end_frame();mod_scene_drawing=1;in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;arrays_native_texture=mod_scene_vfx_pass!=0;
-    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
+    array_texture_begin_frame();arrays_begin_frame();
     long long before_vertices=arrays_vertex_count;
     draw();
     arrays_end_frame();mod_scene_drawing=0;in_highest=previous_highest;decor_scope=previous_scope;arrays_scene_scope=previous_scene_scope;ta_scene_replace=previous_replace;arrays_native_texture=previous_native_texture;
@@ -92,5 +92,5 @@ static void coe5seGraphicsDrawScene(void (*draw)(void)) {
     if(arrays_vertex_count>before_vertices && !(reported[mod_scene_vfx_pass]&(1u<<mod_scene_kind))){
         char line[240];snprintf(line,sizeof(line),"fps_mod scene_renderer_ready scene=%s quality=%d pass=%s original_uv=1 original_mips=1 original_order=1",mod_scene_kind==1?"battle":"location",*(int *)(detail_base+RVA_GRAPHICS_DETAIL),mod_scene_vfx_pass==1?"particles":(mod_scene_vfx_pass==2?"projectiles":"field"));mod_log(line);reported[mod_scene_vfx_pass]|=1u<<mod_scene_kind;
     }
-    mod_log_graphics();mod_log_fallbacks();arrays_leave_pass();
+    mod_log_graphics();mod_log_fallbacks();
 }

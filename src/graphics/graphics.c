@@ -126,6 +126,8 @@ static void mod_terrain_finish(unsigned view,long long before) {
     mod_log(line);terrain_reported|=view;
 }
 static void mod_terrain_plane(uintptr_t a,unsigned plane) {
+    void (*draw)(uintptr_t,unsigned)=(void *)(detail_base+RVA_MAP_DRAW_PLANE);
+    if(!ta_game_thread){draw(a,plane);return;}
     int opened=mod_operational && (!mod_render_setting || *mod_render_setting) && terrain_begin_scope();
     long long before=terrain_tiles;
     int previous=map_texture_pass;
@@ -138,7 +140,7 @@ static void mod_terrain_plane(uintptr_t a,unsigned plane) {
         map_copy_ticks=0;
         map_reserve_begin(plane);
     }
-    ((void (*)(uintptr_t,unsigned))(detail_base+RVA_MAP_DRAW_PLANE))(a,plane);
+    draw(a,plane);
     map_texture_pass=previous;
     if(opened)mod_terrain_finish(1,before);
     if(prepare)map_reserve_end();
@@ -154,7 +156,7 @@ static void mod_terrain_battle(void) {
 // @platform-split map-units: the complete draw call is mapped on Windows.
 static void mod_map_units(int a,int b,int flags) {
     void (*draw)(int,int,int)=(void (*)(int,int,int))(detail_base+RVA_MAP_DRAW_UNITS);
-    if(!mod_operational || (mod_render_setting && !*mod_render_setting) || in_highest || terrain_scope || mod_scene_drawing ||
+    if(!ta_game_thread || !mod_operational || (mod_render_setting && !*mod_render_setting) || in_highest || terrain_scope || mod_scene_drawing ||
        !ta_current_context || !ta_initialize_context()){
         draw(a,b,flags);return;
     }
@@ -168,7 +170,7 @@ static void mod_map_units(int a,int b,int flags) {
         if(locked)ReleaseSRWLockExclusive(&map_work_lock);
         return;
     }
-    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
+    array_texture_begin_frame();arrays_begin_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
     map_texture_pass=map_bounds_active?MAP_UNITS:0;
     if(map_texture_pass)map_copy_ticks=0;
@@ -177,7 +179,6 @@ static void mod_map_units(int a,int b,int flags) {
     map_bounds_active=previous_bounds;
     arrays_end_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
-    arrays_leave_pass();
     if(locked)ReleaseSRWLockExclusive(&map_work_lock);
 }
 #endif
@@ -207,7 +208,7 @@ static void mod_decor(int file,int sprite,uintptr_t unused,float x,float y,float
     decor_scope=previous;
 }
 static void mod_render_pass(void (*draw)(void),const char *path) {
-    if(mod_scene_drawing){draw();return;}
+    if(!ta_game_thread || mod_scene_drawing){draw();return;}
     mod_log_graphics();
     int enabled=mod_operational && (!mod_render_setting || *mod_render_setting);
     if(mod_reported_setting!=enabled) {
@@ -222,7 +223,7 @@ static void mod_render_pass(void (*draw)(void),const char *path) {
     if(bit && !(mod_reported_qualities&bit)){
         char line[200];snprintf(line,sizeof(line),"fps_mod map_renderer quality=%d path=%s batching_requested=1 quality_unchanged=1",quality,path);mod_log(line);mod_reported_qualities|=bit;
     }
-    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
+    array_texture_begin_frame();arrays_begin_frame();
     int previous_terrain=terrain_scope;
     terrain_scope=0;
     in_highest=1;
@@ -237,7 +238,7 @@ static void mod_render_pass(void (*draw)(void),const char *path) {
         snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,path,ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
-    mod_log_fallbacks();arrays_leave_pass();
+    mod_log_fallbacks();
 }
 static void mod_highest(void){mod_render_pass(mod_original_highest,"highest_ultra");}
 static void mod_high(void){mod_render_pass(mod_original_high,"low_medium_high");}
@@ -255,7 +256,7 @@ static void mod_pass_begin(const char *path) {
     if(bit && !(mod_reported_qualities&bit)){
         char line[200];snprintf(line,sizeof(line),"fps_mod map_renderer quality=%d path=%s batching_requested=1 quality_unchanged=1",quality,path);mod_log(line);mod_reported_qualities|=bit;
     }
-    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
+    array_texture_begin_frame();arrays_begin_frame();
     in_highest=1;mod_pass_open=1;
 }
 static void mod_pass_end(void) {
@@ -266,10 +267,10 @@ static void mod_pass_end(void) {
         snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,quality>=12?"highest_ultra":"low_medium_high",ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
-    mod_log_fallbacks();arrays_leave_pass();
+    mod_log_fallbacks();
 }
 static void mod_decor_sprite(const char *path,int file,int sprite,uintptr_t unused,float x,float y,float width,float height,float skew) {
-    if(mod_scene_drawing){mod_original_decor(file,sprite,unused,x,y,width,height,skew);return;}
+    if(!ta_game_thread || mod_scene_drawing){mod_original_decor(file,sprite,unused,x,y,width,height,skew);return;}
     if(mod_operational && !mod_pass_open && !mod_pass_skipped)mod_pass_begin(path);
     decor_scope=in_highest;
     mod_original_decor(file,sprite,unused,x,y,width,height,skew);
@@ -283,6 +284,7 @@ static void mod_decor_low(int file,int sprite,uintptr_t unused,float x,float y,f
 }
 static void mod_plane_draw(uintptr_t a,uintptr_t b,uintptr_t c) {
     mod_original_plane(a,b,c);
+    if(!ta_game_thread)return;
     if(mod_pass_open)mod_pass_end();
     mod_pass_skipped=0;
 }
@@ -466,6 +468,25 @@ static int mod_install_calls(void) {
 // Enable per-primitive state checks before another native plugin can issue direct GL calls.
 void coe5seGraphicsNativePluginLoading(void) {
     atomic_store_explicit(&ta_external_plugin,1,memory_order_relaxed);
+}
+
+// Native draws share the game's command stream. Submit pending work before the caller uses GL.
+__declspec(dllexport) int coe5seBeforeNativeDraw(void) {
+    coe5seGraphicsNativePluginLoading();
+#ifdef _WIN32
+    if(gui_expected)return 0;
+#endif
+    if(!arrays_enabled)return 1;
+    HGLRC current=arrays_current_context?arrays_current_context():NULL;
+    if(!current || arrays_open || arrays_native_open)return 0;
+    int pending=arrays_count || arrays_client_session || arrays_binding_dirty || arrays_color_dirty || arrays_uv_dirty || ta_drawing;
+#ifdef _WIN32
+    pending=pending || terrain_count;
+#endif
+    if(pending && current!=arrays_context)return 0;
+    arrays_end_frame();
+    arrays_invalidate();array_texture_invalidate_state();
+    return 1;
 }
 
 // Finish queued draws using the old pixels before a native mod edits a source texture.

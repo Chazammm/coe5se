@@ -129,7 +129,7 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
 }
 
 static int terrain_begin_scope(void) {
-    if(!arrays_enabled || !texture_array_enabled || terrain_scope || in_highest)return 0;
+    if(!ta_game_thread || !arrays_enabled || !texture_array_enabled || terrain_scope || in_highest)return 0;
     if(!ta_initialize_context())return 0;
     if(!ta_terrain_cache.entries) {
         *(void **)&terrain_draw_elements=(void *)GetProcAddress(ta_gl,"glDrawElements");
@@ -144,7 +144,6 @@ static int terrain_begin_scope(void) {
             memcpy(terrain_indices+i*6,indices,sizeof(indices));
         }
     }
-    arrays_enter_pass();
     array_texture_begin_frame();arrays_begin_frame();
     ++ta_terrain_cache.pass;
     if(ta_terrain_cache.pressure && !(ta_terrain_cache.pass%16) && ta_context_ok && ta_cache_owned(ta_current_context()))
@@ -156,5 +155,4 @@ static int terrain_begin_scope(void) {
 
 static void terrain_end_scope(void) {
     terrain_flush();terrain_scope=0;
-    arrays_leave_pass();
 }

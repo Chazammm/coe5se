@@ -145,11 +145,29 @@ static void check_sampling_boundary(void) {
     glScissor(1,2,3,4);glEnable(GL_SCISSOR_TEST);
     TaScissor captured=ta_read_scissor();
     glDisable(GL_SCISSOR_TEST);glScissor(4,3,2,1);
+    // A plugin can keep an independent, enabled clip rectangle on viewport one.
+    GLint viewports=0;
+    PFNGLGETINTEGERI_VPROC get_indexed=(void *)ta_proc("glGetIntegeri_v");
+    PFNGLISENABLEDIPROC is_indexed=(void *)ta_proc("glIsEnabledi");
+    const int other_box[]={7,9,11,13};
+    if(ta_scissor_indexed){
+        glGetIntegerv(GL_MAX_VIEWPORTS,&viewports);
+        assert(get_indexed && is_indexed);
+        if(viewports>1){
+            ta_scissor_indexed(1,7,9,11,13);
+            ta_enable_indexed(GL_SCISSOR_TEST,1);
+        }
+    }
     TaScissor restore=ta_enter_scissor(captured);
     int box[4];glGetIntegerv(GL_SCISSOR_BOX,box);
     assert(glIsEnabled(GL_SCISSOR_TEST) && !memcmp(box,captured.box,sizeof box));
     ta_leave_scissor(restore);glGetIntegerv(GL_SCISSOR_BOX,box);
     assert(!glIsEnabled(GL_SCISSOR_TEST) && !memcmp(box,(int[]){4,3,2,1},sizeof box));
+    if(viewports>1){
+        get_indexed(GL_SCISSOR_BOX,1,box);
+        assert(is_indexed(GL_SCISSOR_TEST,1) && !memcmp(box,other_box,sizeof box));
+        ta_disable_indexed(GL_SCISSOR_TEST,1);
+    }
     if(ta_has_pipeline){
         void (WINAPI *gen)(int,unsigned *)=(void *)ta_proc("glGenProgramPipelines");
         void (WINAPI *del)(int,const unsigned *)=(void *)ta_proc("glDeleteProgramPipelines");
@@ -159,6 +177,51 @@ static void check_sampling_boundary(void) {
         assert(!ta_pipeline_binding());ta_end_native_replay(saved);
         assert((unsigned)ta_pipeline_binding()==pipe);ta_bind_pipeline(0);del(1,&pipe);
     }
+}
+
+// Compare native and batched pixels for smooth and flat sprites, then issue a raw draw.
+static void check_native_draw(unsigned texture) {
+    const float vertices[][2]={{-1,-1},{1,-1},{1,1},{-1,1}};
+    const float colors[][3]={{1,0,0},{0,1,0},{0,0,1},{1,1,1}};
+    unsigned char pixels[2][4];
+    arrays_enabled=decor_scope=in_highest=ta_scene_replace=1;
+    gui_expected=GUI_PANEL_RECTS;
+    assert(!coe5seBeforeNativeDraw());
+    gui_expected=0;
+    arrays_real_glShadeModel=glShadeModel;
+    for(int flat=0;flat<=1;flat++){
+        arrays_glShadeModel(flat?GL_FLAT:GL_SMOOTH);
+        for(int batch=0;batch<=1;batch++){
+            glClearColor(0,0,0,0);glClear(GL_COLOR_BUFFER_BIT);
+            if(batch){
+                array_texture_begin_frame();arrays_begin_frame();
+                arrays_bind_probe(GL_TEXTURE_2D,texture);arrays_begin_probe(GL_QUADS);
+                assert(!!arrays_open==!flat && !coe5seBeforeNativeDraw());
+            }else{glBindTexture(GL_TEXTURE_2D,texture);glBegin(GL_QUADS);}
+            for(int i=0;i<4;i++){
+                if(batch){
+                    arrays_color3_probe(colors[i][0],colors[i][1],colors[i][2]);
+                    arrays_vertex3_probe(vertices[i][0],vertices[i][1],0);
+                }else{glColor3fv(colors[i]);glVertex2fv(vertices[i]);}
+            }
+            if(batch){
+                arrays_end_probe();
+                assert(coe5seBeforeNativeDraw() && !arrays_count && !arrays_client_session && !ta_drawing);
+            }else glEnd();
+            glReadPixels(4,4,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixels[batch]);
+            if(batch && !flat){
+                glClearColor(1,0,1,1);glClear(GL_COLOR_BUFFER_BIT);
+                arrays_end_frame();
+                unsigned char overlay[4];glReadPixels(4,4,1,1,GL_RGBA,GL_UNSIGNED_BYTE,overlay);
+                assert(overlay[0]==255 && overlay[1]==0 && overlay[2]==255);
+            }
+        }
+        assert(!memcmp(pixels[0],pixels[1],4) && pixels[0][0]);
+    }
+    arrays_glShadeModel(GL_SMOOTH);glColor4f(1,1,1,1);
+    arrays_enabled=decor_scope=in_highest=ta_scene_replace=0;
+    arrays_invalidate();array_texture_begin_frame();
+    assert(!glGetError());
 }
 
 // Shader programs, biased sampling and incomplete mip chains must reach the native renderer.
@@ -371,27 +434,22 @@ static DWORD WINAPI check_replacement(void *arg) {
     return 0;
 }
 
-// The same GL context may outlive a temporary renderer and be used by the next worker.
+// Temporary threads may release the GL context during the game call, before the pass returns.
 static DWORD WINAPI check_worker_cache(void *arg) {
     WorkerContext *worker=arg;
     assert(wglMakeCurrent(worker->dc,worker->replacement) && arrays_check_context());
-    glEnable(GL_TEXTURE_2D);
-    assert(terrain_begin_scope());
+    assert(!terrain_begin_scope());
     unsigned texture=0;glGenTextures(1,&texture);glBindTexture(GL_TEXTURE_2D,texture);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    unsigned char pixels[64*64*4]={0};
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
-    ta_terrain_cache.layer_limit=1;
-    FpsTextureLayer layer;assert(ta_prepare(&ta_terrain_cache,texture,&layer,1));
-    unsigned program=ta_program;
-    GLboolean (WINAPI *is_program)(unsigned)=(void *)ta_proc("glIsProgram");
-    assert(is_program(program) && glIsTexture(layer.array_texture));
-    arrays_enter_pass();arrays_leave_pass();assert(is_program(program));
-    terrain_end_scope();
-    assert(!is_program(program) && !glIsTexture(layer.array_texture) && !ta_terrain_cache.entries);
-    assert(glIsTexture(texture));glDeleteTextures(1,&texture);
+    FpsTextureLayer layer;
+    assert(!ta_prepare(&ta_sprite_cache,texture,&layer,1));
+    glClearColor(0,1,0,1);glClear(GL_COLOR_BUFFER_BIT);
+    unsigned char pixel[4];glReadPixels(1,1,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0 && glIsTexture(texture));
+    assert(wglMakeCurrent(NULL,NULL));
+    assert(!coe5seBeforeNativeDraw());
+    assert(!ta_terrain_cache.entries && !ta_program && !ta_sprite_cache.page_count && !arrays_projections);
+    assert(wglMakeCurrent(worker->dc,worker->replacement));
+    glDeleteTextures(1,&texture);
     assert(!glGetError() && wglMakeCurrent(NULL,NULL));
     return 0;
 }
@@ -454,6 +512,7 @@ int main(void) {
     FpsTextureLayer seed={0};
     assert(ta_clone(&ta_terrain_cache,source,&seed));
     assert(glGetError()==GL_NO_ERROR);
+    check_native_draw(source);
     assert(map_copy_layer(source,seed.array_texture,99,64,64,0));
     assert(glGetError()==GL_INVALID_VALUE && map_copy_image);
     ta_release_layer(&ta_terrain_cache,&seed);
