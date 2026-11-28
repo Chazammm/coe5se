@@ -117,11 +117,12 @@ static int map_owns_imports(void) {
     return 1;
 }
 static void mod_terrain_finish(unsigned view,long long before) {
+    double mib=ta_terrain_cache.bytes/(1024.0*1024.0);
     terrain_end_scope();
     if((terrain_reported&view) || terrain_tiles==before)return;
     char line[200];
     snprintf(line,sizeof(line),"fps_mod terrain_ready view=%s tiles=%lld cache_mib=%.2f original_mips=1 original_order=1",
-        view==1?"map":view==2?"battle":"location",terrain_tiles-before,ta_terrain_cache.bytes/(1024.0*1024.0));
+        view==1?"map":view==2?"battle":"location",terrain_tiles-before,mib);
     mod_log(line);terrain_reported|=view;
 }
 static void mod_terrain_plane(uintptr_t a,unsigned plane) {
@@ -167,7 +168,7 @@ static void mod_map_units(int a,int b,int flags) {
         if(locked)ReleaseSRWLockExclusive(&map_work_lock);
         return;
     }
-    array_texture_begin_frame();arrays_begin_frame();
+    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=1;
     map_texture_pass=map_bounds_active?MAP_UNITS:0;
     if(map_texture_pass)map_copy_ticks=0;
@@ -176,6 +177,7 @@ static void mod_map_units(int a,int b,int flags) {
     map_bounds_active=previous_bounds;
     arrays_end_frame();
     in_highest=decor_scope=arrays_scene_scope=ta_scene_replace=0;
+    arrays_leave_pass();
     if(locked)ReleaseSRWLockExclusive(&map_work_lock);
 }
 #endif
@@ -220,7 +222,7 @@ static void mod_render_pass(void (*draw)(void),const char *path) {
     if(bit && !(mod_reported_qualities&bit)){
         char line[200];snprintf(line,sizeof(line),"fps_mod map_renderer quality=%d path=%s batching_requested=1 quality_unchanged=1",quality,path);mod_log(line);mod_reported_qualities|=bit;
     }
-    array_texture_begin_frame();arrays_begin_frame();
+    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
     int previous_terrain=terrain_scope;
     terrain_scope=0;
     in_highest=1;
@@ -235,7 +237,7 @@ static void mod_render_pass(void (*draw)(void),const char *path) {
         snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,path,ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
-    mod_log_fallbacks();
+    mod_log_fallbacks();arrays_leave_pass();
 }
 static void mod_highest(void){mod_render_pass(mod_original_highest,"highest_ultra");}
 static void mod_high(void){mod_render_pass(mod_original_high,"low_medium_high");}
@@ -253,7 +255,7 @@ static void mod_pass_begin(const char *path) {
     if(bit && !(mod_reported_qualities&bit)){
         char line[200];snprintf(line,sizeof(line),"fps_mod map_renderer quality=%d path=%s batching_requested=1 quality_unchanged=1",quality,path);mod_log(line);mod_reported_qualities|=bit;
     }
-    array_texture_begin_frame();arrays_begin_frame();
+    arrays_enter_pass();array_texture_begin_frame();arrays_begin_frame();
     in_highest=1;mod_pass_open=1;
 }
 static void mod_pass_end(void) {
@@ -264,7 +266,7 @@ static void mod_pass_end(void) {
         snprintf(line,sizeof(line),"fps_mod renderer_ready version=" FPS_MOD_VERSION " game=5.43 api=%d quality=%d path=%s original_uv=1 original_mips=1 quality_unchanged=1 multi_page=%d state_tracking=%d uploads=%lld cache_mib=%.2f",PLUGIN_API_VERSION,quality,quality>=12?"highest_ultra":"low_medium_high",ta_multi_page,ta_track_state,ta_uploads,(double)ta_sprite_cache.bytes/(1024.0*1024.0));
         mod_log(line);
     }
-    mod_log_fallbacks();
+    mod_log_fallbacks();arrays_leave_pass();
 }
 static void mod_decor_sprite(const char *path,int file,int sprite,uintptr_t unused,float x,float y,float width,float height,float skew) {
     if(mod_scene_drawing){mod_original_decor(file,sprite,unused,x,y,width,height,skew);return;}

@@ -25,6 +25,8 @@ static _Thread_local int arrays_projection_capture,arrays_projection_dirty,array
 static _Thread_local float arrays_saved_coordinates[4][4];
 static _Thread_local int arrays_projection_session;
 static _Thread_local unsigned arrays_count;
+static _Thread_local TaScissor arrays_scissor;
+static _Thread_local int arrays_native_env;
 static _Thread_local int arrays_open, arrays_native_open, arrays_color_known, arrays_uv_known;
 static _Thread_local int arrays_color_dirty, arrays_uv_dirty, arrays_has_extended_arrays;
 static _Thread_local int arrays_allowed_cached=-1;
@@ -126,7 +128,8 @@ static void arrays_restore_current(void) {
 }
 static void arrays_replay(void) {
     fps_note_fallback(FPS_BATCH_REPLAY);
-    unsigned bound=0,env=(unsigned)ta_env_mode;int open=0,projected=0,saved_mode=0;
+    unsigned original_env=arrays_output_layered?0x2100u:(unsigned)ta_env_mode;
+    unsigned bound=0,env=original_env;int open=0,projected=0,saved_mode=0;
     float saved_projection[16];
     for(unsigned i=0;arrays_output_layered && i<arrays_count;i++)if(arrays_vertices[i].uv[2]<0){projected=1;break;}
     if(projected){arrays_get_int(0x0ba0,&saved_mode);arrays_get_float(0x0ba7,saved_projection);}
@@ -145,7 +148,7 @@ static void arrays_replay(void) {
     }
     if(open) real_gl_end();
     if(projected){arrays_raw_matrix_mode(0x1701);arrays_load_matrix(saved_projection);arrays_raw_matrix_mode((unsigned)saved_mode);}
-    if(env!=(unsigned)ta_env_mode)real_gl_tex_env(0x2300,0x2200,ta_env_mode);
+    if(env!=original_env)real_gl_tex_env(0x2300,0x2200,(int)original_env);
     real_gl_bind(0x0de1,arrays_texture);arrays_replays++;
 }
 static void arrays_end_client_session(void) {
@@ -184,8 +187,19 @@ static void arrays_flush(void) {
     terrain_flush();
     if(!arrays_count) { if(!arrays_open && !arrays_native_open) arrays_restore_current();return; }
     long long begin=now_ticks();
+    TaScissor restore=ta_enter_scissor(arrays_scissor);
     int complete=(arrays_count%4)==0;
-    if(!arrays_output_layered)array_texture_end_draw();
+    int restore_pipeline=0,restore_env=0;
+    if(!arrays_output_layered){
+        array_texture_end_draw();
+        restore_pipeline=ta_pipeline_binding();
+        if(restore_pipeline)ta_bind_pipeline(0);
+        if(arrays_scissor.tracked){
+            ta_get_env(0x2300,0x2200,&restore_env);
+            if(restore_env!=arrays_native_env)real_gl_tex_env(0x2300,0x2200,arrays_native_env);
+            else restore_env=0;
+        }
+    }
     int shader_ok=complete && (arrays_client_session || ta_client_stack_room()) &&
         (!arrays_output_layered || array_texture_begin_draw(&ta_sprite_cache,arrays_output_texture));
     if(!shader_ok) {
@@ -205,11 +219,38 @@ static void arrays_flush(void) {
         arrays_draw_calls++;
     }
     if(arrays_output_layered && shader_ok && !ta_multi_page) array_texture_end_draw();
+    if(restore_pipeline)ta_bind_pipeline((unsigned)restore_pipeline);
+    if(restore_env)real_gl_tex_env(0x2300,0x2200,restore_env);
+    ta_leave_scissor(restore);
     arrays_vertex_count+=arrays_count;arrays_count=0;arrays_color_dirty=1;arrays_uv_dirty=1;
     arrays_restore_current();arrays_draw_ticks+=now_ticks()-begin;
 }
 static void arrays_end_frame(void) {
     arrays_flush();array_texture_end_draw();arrays_end_client_session();
+}
+static void arrays_enter_pass(void) {
+    if(!ta_game_thread)++ta_worker_passes;
+}
+// A temporary render worker releases its own objects while its context is still current.
+static void arrays_leave_pass(void) {
+    if(ta_game_thread || --ta_worker_passes)return;
+    if(arrays_projections){FPS_FREE(arrays_projections);arrays_projections=NULL;}
+    arrays_projection_attempted=arrays_projection_capture=0;
+    if(!ta_context || ta_current_context()!=ta_context)return;
+    FpsTextureArrayCache *caches[]={&ta_sprite_cache,&ta_terrain_cache};
+    for(size_t i=0;i<2;i++){
+        FpsTextureArrayCache *cache=caches[i];
+        for(int j=0;j<cache->page_count;j++)ta_delete(1,&cache->pages[j].texture);
+    }
+    if(ta_terrain_cache.entries)FPS_FREE(ta_terrain_cache.entries);
+    ta_terrain_cache=(FpsTextureArrayCache){0};
+    ta_sprite_cache=(FpsTextureArrayCache){.entries=ta_entries,.size=TA_CACHE_SIZE,.layer_limit=256};
+    memset(ta_entries,0,sizeof ta_entries);
+    if(ta_program){ta_delete_program(ta_program);ta_program=0;}
+#ifdef _WIN32
+    if(ta_check_fbo){ta_delete_fbos(1,&ta_check_fbo);ta_check_fbo=0;}
+    if(ta_check_pack){ta_delete_buffers(1,&ta_check_pack);ta_check_pack=0;}
+#endif
 }
 static int arrays_capture_allowed(void) {
     if(arrays_allowed_cached>=0) return arrays_allowed_cached;
@@ -257,15 +298,18 @@ static void arrays_begin_frame(void) {
 static void arrays_begin_probe(unsigned mode) {
     if(arrays_enabled && decor_scope && mode==7 && !arrays_native_open && !arrays_open) {
         if(arrays_count || arrays_capture_allowed()) {
+            TaScissor clip=ta_read_scissor();
+            if(arrays_count && ta_scissor_differs(arrays_scissor,clip))arrays_end_frame();
             FpsTextureLayer layer;
             int layered=arrays_native_texture?0:array_texture_prepare(arrays_texture,&layer);
-            if(layered && !ta_capture_sampling_allowed(!arrays_count))layered=0;
-            if(texture_array_enabled && !layered && !arrays_native_texture) {
+            int compatible=(layered || arrays_native_texture) && ta_capture_sampling_allowed(!arrays_count);
+            if(texture_array_enabled && !compatible) {
                 arrays_end_frame();arrays_restore_current();
                 real_gl_begin(mode);arrays_native_open=1;return;
             }
             unsigned output=layered?layer.array_texture:arrays_texture;
             if(arrays_count && ((arrays_output_texture!=output && !(layered && arrays_output_layered && ta_multi_page)) || arrays_output_layered!=layered)) arrays_flush();
+            if(!arrays_count){arrays_scissor=clip;arrays_native_env=ta_env_mode;}
             arrays_output_texture=output;arrays_output_layered=layered;arrays_layer_current=layered;
             if(layered) arrays_layer=layer;
             if(!arrays_color_known) { arrays_get_float(0x0b00,arrays_color);arrays_color_known=1; }

@@ -15,6 +15,7 @@ static _Thread_local long long map_copy_ticks, map_tick_frequency;
 // Resolve the optional copy function for the single supported rendering context.
 static void map_transfer_init(int major,int minor,const char *extensions) {
     if(!map_textures_enabled)return;
+    map_copy_image=NULL;map_label=NULL;map_read_label=NULL;map_partial_imaging=0;
     map_imaging=ta_extension(extensions,"GL_ARB_imaging");
     if(!map_imaging){
         const char *optional[]={"GL_EXT_histogram","GL_EXT_convolution","GL_SGI_color_matrix",

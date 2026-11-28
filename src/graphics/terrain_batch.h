@@ -12,6 +12,7 @@ static _Thread_local unsigned terrain_sources[TERRAIN_QUADS];
 static _Thread_local unsigned short terrain_indices[TERRAIN_QUADS*6];
 static _Thread_local unsigned terrain_count,terrain_page;
 static _Thread_local int terrain_client_ready;
+static _Thread_local TaScissor terrain_scissor;
 static _Thread_local long long terrain_upload_start;
 static _Thread_local long long terrain_batches,terrain_tiles;
 static _Thread_local void (*terrain_draw_elements)(unsigned,int,unsigned,const void *);
@@ -54,7 +55,10 @@ static void terrain_flush(void) {
     unsigned count=terrain_count;
     if(!count)return;
     terrain_count=0;
-    if(!ta_allowed_state() || !terrain_submission_available() || !ta_legacy_sampling_allowed()) {terrain_replay(count);return;}
+    TaScissor restore=ta_enter_scissor(terrain_scissor);
+    if(!ta_allowed_state() || !terrain_submission_available() || !ta_legacy_sampling_allowed()) {
+        terrain_replay(count);ta_leave_scissor(restore);return;
+    }
     unsigned unit=ta_multi_page?0x84c1u:0x84c0u;
     int saved_array=0,saved_sampler=0;
     ta_active_texture(unit);
@@ -78,6 +82,7 @@ static void terrain_flush(void) {
     if(ta_multi_page && ta_has_sampler)ta_bind_sampler(unit-0x84c0u,(unsigned)saved_sampler);
     ta_active_texture(0x84c0);
     arrays_color_known=0;arrays_uv_known=0;
+    ta_leave_scissor(restore);
     terrain_batches++;terrain_tiles+=count;
 }
 
@@ -104,7 +109,9 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
        !ta_capture_sampling_allowed(!terrain_count)) {
         terrain_flush();terrain_native_rect(q);return;
     }
-    if(terrain_count==TERRAIN_QUADS || (terrain_count && terrain_page!=layer.array_texture))terrain_flush();
+    TaScissor clip=ta_read_scissor();
+    if(terrain_count==TERRAIN_QUADS || (terrain_count && (terrain_page!=layer.array_texture || ta_scissor_differs(terrain_scissor,clip))))terrain_flush();
+    if(!terrain_count)terrain_scissor=clip;
     terrain_page=layer.array_texture;
     unsigned index=terrain_count++;
     terrain_sources[index]=arrays_texture;
@@ -123,6 +130,7 @@ static void terrain_rect(float x,float y,float w,float h,float u,float v,float d
 
 static int terrain_begin_scope(void) {
     if(!arrays_enabled || !texture_array_enabled || terrain_scope || in_highest)return 0;
+    if(!ta_initialize_context())return 0;
     if(!ta_terrain_cache.entries) {
         *(void **)&terrain_draw_elements=(void *)GetProcAddress(ta_gl,"glDrawElements");
         if(!terrain_draw_elements)return 0;
@@ -136,6 +144,7 @@ static int terrain_begin_scope(void) {
             memcpy(terrain_indices+i*6,indices,sizeof(indices));
         }
     }
+    arrays_enter_pass();
     array_texture_begin_frame();arrays_begin_frame();
     ++ta_terrain_cache.pass;
     if(ta_terrain_cache.pressure && !(ta_terrain_cache.pass%16) && ta_context_ok && ta_cache_owned(ta_current_context()))
@@ -147,4 +156,5 @@ static int terrain_begin_scope(void) {
 
 static void terrain_end_scope(void) {
     terrain_flush();terrain_scope=0;
+    arrays_leave_pass();
 }

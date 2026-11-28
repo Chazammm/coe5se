@@ -139,6 +139,26 @@ static void check_sampling_boundary(void) {
     assert(!ta_capture_sampling_allowed(0));
     glTexEnvf(GL_TEXTURE_FILTER_CONTROL,GL_TEXTURE_LOD_BIAS,0);
     assert(ta_capture_sampling_allowed(0));
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
+    assert(!ta_capture_sampling_allowed(0));
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
+    glScissor(1,2,3,4);glEnable(GL_SCISSOR_TEST);
+    TaScissor captured=ta_read_scissor();
+    glDisable(GL_SCISSOR_TEST);glScissor(4,3,2,1);
+    TaScissor restore=ta_enter_scissor(captured);
+    int box[4];glGetIntegerv(GL_SCISSOR_BOX,box);
+    assert(glIsEnabled(GL_SCISSOR_TEST) && !memcmp(box,captured.box,sizeof box));
+    ta_leave_scissor(restore);glGetIntegerv(GL_SCISSOR_BOX,box);
+    assert(!glIsEnabled(GL_SCISSOR_TEST) && !memcmp(box,(int[]){4,3,2,1},sizeof box));
+    if(ta_has_pipeline){
+        void (WINAPI *gen)(int,unsigned *)=(void *)ta_proc("glGenProgramPipelines");
+        void (WINAPI *del)(int,const unsigned *)=(void *)ta_proc("glDeleteProgramPipelines");
+        unsigned pipe;gen(1,&pipe);ta_bind_pipeline(pipe);
+        assert(!ta_capture_sampling_allowed(1));
+        TaReplaySampling saved=ta_begin_native_replay();
+        assert(!ta_pipeline_binding());ta_end_native_replay(saved);
+        assert((unsigned)ta_pipeline_binding()==pipe);ta_bind_pipeline(0);del(1,&pipe);
+    }
 }
 
 // Shader programs, biased sampling and incomplete mip chains must reach the native renderer.
@@ -351,6 +371,41 @@ static DWORD WINAPI check_replacement(void *arg) {
     return 0;
 }
 
+// The same GL context may outlive a temporary renderer and be used by the next worker.
+static DWORD WINAPI check_worker_cache(void *arg) {
+    WorkerContext *worker=arg;
+    assert(wglMakeCurrent(worker->dc,worker->replacement) && arrays_check_context());
+    glEnable(GL_TEXTURE_2D);
+    assert(terrain_begin_scope());
+    unsigned texture=0;glGenTextures(1,&texture);glBindTexture(GL_TEXTURE_2D,texture);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    unsigned char pixels[64*64*4]={0};
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+    ta_terrain_cache.layer_limit=1;
+    FpsTextureLayer layer;assert(ta_prepare(&ta_terrain_cache,texture,&layer,1));
+    unsigned program=ta_program;
+    GLboolean (WINAPI *is_program)(unsigned)=(void *)ta_proc("glIsProgram");
+    assert(is_program(program) && glIsTexture(layer.array_texture));
+    arrays_enter_pass();arrays_leave_pass();assert(is_program(program));
+    terrain_end_scope();
+    assert(!is_program(program) && !glIsTexture(layer.array_texture) && !ta_terrain_cache.entries);
+    assert(glIsTexture(texture));glDeleteTextures(1,&texture);
+    assert(!glGetError() && wglMakeCurrent(NULL,NULL));
+    return 0;
+}
+
+static DWORD WINAPI check_rejected_context(void *arg) {
+    WorkerContext *worker=arg;
+    assert(wglMakeCurrent(worker->dc,worker->replacement));
+    assert(!ta_initialize_context() && !ta_edit_context);
+    for(unsigned i=0;i<sizeof ta_edit_contexts/sizeof *ta_edit_contexts;i++)
+        assert(ta_edit_contexts[i].context!=worker->replacement);
+    assert(wglMakeCurrent(NULL,NULL));
+    return 0;
+}
+
 // Each retired rendering thread releases its claim for later contexts.
 static DWORD WINAPI claim_context(void *arg) {
     WorkerContext *worker=arg;
@@ -371,6 +426,16 @@ int main(void) {
     map_textures_enabled=1;
     assert(mod_initialize_original_gl() && install_texture_array() && arrays_load_functions());
     assert(arrays_check_context() && ta_initialize_context() && map_copy_image);
+    HGLRC (WINAPI *create_attribs)(HDC,HGLRC,const int *)=(void *)wglGetProcAddress("wglCreateContextAttribsARB");
+    if(create_attribs){
+        const int core33[]={0x2091,3,0x2092,3,0x9126,1,0};
+        WorkerContext rejected={dc,create_attribs(dc,NULL,core33),0};
+        if(rejected.replacement){
+            HANDLE thread=CreateThread(NULL,0,check_rejected_context,&rejected,0,NULL);
+            assert(thread && WaitForSingleObject(thread,15000)==WAIT_OBJECT_0);
+            CloseHandle(thread);assert(wglDeleteContext(rejected.replacement));
+        }
+    }
     check_sampling_boundary();
     ta_terrain_cache.layer_limit=1;
     static FpsTextureArrayEntry entries[16];
@@ -439,6 +504,12 @@ int main(void) {
     HANDLE thread=CreateThread(NULL,0,check_replacement,&worker,0,NULL);
     assert(thread && WaitForSingleObject(thread,15000)==WAIT_OBJECT_0);
     CloseHandle(thread);FreeLibrary(glu);
+    arrays_enabled=1;
+    for(unsigned i=0;i<3;i++){
+        HANDLE renderer=CreateThread(NULL,0,check_worker_cache,&worker,0,NULL);
+        assert(renderer && WaitForSingleObject(renderer,15000)==WAIT_OBJECT_0);
+        CloseHandle(renderer);
+    }
     assert(wglDeleteContext(replacement));
     for(unsigned i=0;i<40;i++){
         WorkerContext next={dc,wglCreateContext(dc),0};assert(next.replacement);
