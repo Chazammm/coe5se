@@ -646,7 +646,8 @@ static inline const PluginApi *jazzyConnect(void) {
     return getApi ? getApi(PLUGIN_API_VERSION) : NULL;
 }
 
-// Before raw GL on the game render context, outside glBegin/glEnd. Defer on 0 (also returned by older cores).
+// Call on the game render thread outside glBegin/glEnd, before raw GL or releasing its context.
+// Defer on 0 (also returned by older cores). A worker cannot flush the render thread's pending draws.
 // On 1, draw and restore changed GL state before returning. Use jazzyBeforeTextureUpdate for texture edits.
 static inline int jazzyBeforeNativeDraw(void) {
     typedef int (*BeforeDrawFn)(void);

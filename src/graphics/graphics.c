@@ -473,10 +473,13 @@ void coe5seGraphicsNativePluginLoading(void) {
 // Native draws share the game's command stream. Submit pending work before the caller uses GL.
 __declspec(dllexport) int coe5seBeforeNativeDraw(void) {
     coe5seGraphicsNativePluginLoading();
+    int batching=arrays_enabled;
 #ifdef _WIN32
     if(gui_expected)return 0;
+    batching|=gui_batch_active;
 #endif
-    if(!arrays_enabled)return 1;
+    if(!batching)return 1;
+    if(!ta_game_thread)return 0;
     HGLRC current=arrays_current_context?arrays_current_context():NULL;
     if(!current || arrays_open || arrays_native_open)return 0;
     int pending=arrays_count || arrays_client_session || arrays_binding_dirty || arrays_color_dirty || arrays_uv_dirty || ta_drawing;
@@ -494,10 +497,10 @@ __declspec(dllexport) int coe5seBeforeTextureUpdate(unsigned int texture) {
     if(!texture)return 0;
     coe5seGraphicsNativePluginLoading();
 #ifdef _WIN32
-    if(gui_expected)return 0;
+    if(gui_expected || (gui_batch_active && !ta_game_thread))return 0;
 #endif
     if(!texture_array_enabled)return 1;
-    if(!ta_context_ok || !ta_edit_context || atomic_load(&ta_edit_context->shared) ||
+    if(!ta_game_thread || !ta_context_ok || !ta_edit_context || atomic_load(&ta_edit_context->shared) ||
        !ta_context || !ta_current_context || ta_current_context()!=ta_context ||
        arrays_native_open || arrays_open)return 0;
     arrays_end_frame();
@@ -606,6 +609,9 @@ int coe5seGraphicsInit(const PluginApi *api,const char *userFolder) {
         mod_log("fps_mod disabled reason=call_patch_transaction_failed module_retained=1");return 1;
     }
     if(!mod_features){mod_log("fps_mod disabled reason=no_compatible_features hooks_installed=0");return 1;}
+#ifdef _WIN32
+    if(mod_features&MOD_GUI){gui_batch_active=1;ta_game_thread=1;}
+#endif
     {
         unsigned calls=0;for(size_t i=0;i<sizeof(mod_calls)/sizeof(mod_calls[0]);i++)if(mod_calls[i].group&mod_features)calls++;
         snprintf(line,sizeof(line),"fps_mod hook_check status=passed imports=%u callsites=%u rendering=%d frame_controls=%d scene_batching=%d gui_frames=%d",

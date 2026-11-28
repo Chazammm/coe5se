@@ -12,6 +12,7 @@ typedef struct {
     unsigned installed;
 } GuiFrameSites;
 static GuiFrameSites gui_panel,gui_border;
+static int gui_batch_active;
 
 // The five imports read by the native rectangle helper.
 static const uintptr_t gui_imports[]={RVA_GL_ENABLE_CLIENT_STATE,RVA_GL_DISABLE_CLIENT_STATE,
@@ -167,7 +168,7 @@ static _Thread_local unsigned gui_count,gui_expected;
 
 // Start only outside the map, scene and terrain renderer's deferred passes.
 static void gui_start(const GuiFrameSites *sites,unsigned count,TerrainQuad q) {
-    if(in_highest || terrain_scope || arrays_native_open || arrays_open || arrays_count ||
+    if(!ta_game_thread || in_highest || terrain_scope || arrays_native_open || arrays_open || arrays_count ||
        arrays_client_session || ta_drawing || arrays_binding_dirty || arrays_uv_dirty || arrays_color_dirty ||
        !gui_owns_group(sites,count)){
         terrain_native_rect(q);return;

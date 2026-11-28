@@ -279,7 +279,8 @@ static void arrays_begin_probe(unsigned mode) {
             TaScissor clip=ta_read_scissor();
             if(arrays_count && ta_scissor_differs(arrays_scissor,clip))arrays_end_frame();
             FpsTextureLayer layer;
-            int layered=arrays_native_texture?0:array_texture_prepare(arrays_texture,&layer);
+            if(!arrays_uv_known){arrays_get_float(0x0b03,arrays_uv);arrays_uv_known=1;}
+            int layered=!arrays_native_texture && arrays_uv[3]==1.0f && array_texture_prepare(arrays_texture,&layer);
             int compatible=(layered || arrays_native_texture) && ta_capture_sampling_allowed(!arrays_count);
             if(texture_array_enabled && !compatible) {
                 arrays_end_frame();arrays_restore_current();
@@ -291,7 +292,6 @@ static void arrays_begin_probe(unsigned mode) {
             arrays_output_texture=output;arrays_output_layered=layered;arrays_layer_current=layered;
             if(layered) arrays_layer=layer;
             if(!arrays_color_known) { arrays_get_float(0x0b00,arrays_color);arrays_color_known=1; }
-            if(!arrays_uv_known) { arrays_get_float(0x0b03,arrays_uv);arrays_uv_known=1; }
             arrays_open=1;return;
         }
     }
@@ -331,6 +331,7 @@ static void arrays_color_probe(float r,float g,float b,float a) {
 }
 static void arrays_color3_probe(float r,float g,float b) { arrays_color_probe(r,g,b,1); }
 static void arrays_bind_probe(unsigned target,unsigned texture) {
+    if(ta_context && ta_current_context()!=ta_context){real_gl_bind(target,texture);return;}
 #ifdef _WIN32
     if(terrain_scope && target==0x0de1) {
         real_gl_bind(target,texture);arrays_texture=texture;arrays_binding_dirty=0;return;
@@ -399,13 +400,28 @@ static void (*arrays_real_glAlphaFunc)(unsigned,float);
 static void arrays_glAlphaFunc(unsigned function,float reference){arrays_fragment_boundary();arrays_real_glAlphaFunc(function,reference);ARR_AFTER_STATE();}
 ARR_WRAP2(glFogfv,unsigned,const float *) ARR_WRAP2(glFogf,unsigned,float) ARR_WRAP2(glFogi,unsigned,int)
 ARR_WRAP2(glHint,unsigned,unsigned) ARR_WRAP2(glLightModeli,unsigned,int) ARR_WRAP2(glColorMaterial,unsigned,unsigned)
+// Flush only on the owning context. Other contexts publish completed game texture edits by name.
+enum { ARR_NO_CONTEXT, ARR_LOCAL_EDIT, ARR_FOREIGN_EDIT };
+static int arrays_begin_texture_edit(void) {
+    HGLRC current=ta_current_context?ta_current_context():NULL;
+    if(!current)return ARR_NO_CONTEXT;
+    if(ta_game_thread && (!ta_context || current==ta_context)){
+        arrays_end_frame();return ARR_LOCAL_EDIT;
+    }
+    (void)ta_cache_owned(current);
+    return ARR_FOREIGN_EDIT;
+}
 static void (*arrays_real_glDeleteTextures)(int,const unsigned *);
 static void arrays_glDeleteTextures(int n,const unsigned *ids) {
-    arrays_end_frame();
-    if(ta_current_context && ta_cache_owned(ta_current_context()))
-        for(int i=0;i<n;i++)array_texture_remove(ids[i]);
+    int edit=arrays_begin_texture_edit();
     arrays_real_glDeleteTextures(n,ids);
-    for(int i=0;i<n;i++)if(ids[i]==arrays_texture){arrays_texture=0;arrays_binding_dirty=0;}
+    for(int i=0;i<n;i++){
+        if(edit==ARR_FOREIGN_EDIT)ta_queue_texture_edit(ids[i]);
+        if(edit==ARR_LOCAL_EDIT){
+            array_texture_remove(ids[i]);
+            if(ids[i]==arrays_texture){arrays_texture=0;arrays_binding_dirty=0;}
+        }
+    }
 }
 ARR_MATRIX3(glScalef) ARR_MATRIX3(glTranslatef)
 static void (*arrays_real_glTexEnvi)(unsigned,unsigned,int);
@@ -419,16 +435,19 @@ static void arrays_glTexEnvi(unsigned target,unsigned name,int value) {
     ARR_AFTER_STATE();
 }
 static void (*arrays_real_glTexParameteri)(unsigned,unsigned,int);
-static void arrays_forget_bound_texture(unsigned target) {
-    if(target!=0x0de1 || !ta_current_context || !ta_cache_owned(ta_current_context()))return;
+// Return a foreign name for publication after the driver call completes.
+static unsigned arrays_edit_binding(unsigned target,int edit) {
+    if(target!=0x0de1 || edit==ARR_NO_CONTEXT)return 0;
     int binding=0;
     arrays_get_int(0x8069,&binding);
+    if(edit==ARR_FOREIGN_EDIT)return (unsigned)binding;
     array_texture_forget((unsigned)binding);
+    return 0;
 }
 static void arrays_glTexParameteri(unsigned target,unsigned name,int value) {
-    arrays_end_frame();
-    arrays_forget_bound_texture(target);
+    unsigned foreign=arrays_edit_binding(target,arrays_begin_texture_edit());
     arrays_real_glTexParameteri(target,name,value);
+    if(foreign)ta_queue_texture_edit(foreign);
     ARR_AFTER_STATE();
 }
 ARR_WRAP3(glMaterialfv,unsigned,unsigned,const float *) ARR_WRAP3(glLightfv,unsigned,unsigned,const float *)
@@ -468,9 +487,9 @@ static void (*arrays_real_glOrtho)(double,double,double,double,double,double);
 static void arrays_glOrtho(double a,double b,double c,double d,double e,double f){arrays_matrix_boundary();arrays_real_glOrtho(a,b,c,d,e,f);arrays_matrix_changed();}
 static void (*arrays_real_glTexImage2D)(unsigned,int,int,int,int,int,unsigned,unsigned,const void *);
 static void arrays_glTexImage2D(unsigned target,int level,int internal,int width,int height,int border,unsigned format,unsigned type,const void *pixels) {
-    arrays_end_frame();
-    arrays_forget_bound_texture(target);
+    unsigned foreign=arrays_edit_binding(target,arrays_begin_texture_edit());
     arrays_real_glTexImage2D(target,level,internal,width,height,border,format,type,pixels);
+    if(foreign)ta_queue_texture_edit(foreign);
     ARR_AFTER_STATE();
 }
 static int (WINAPI *arrays_real_gluBuild2DMipmaps)(unsigned,int,int,int,unsigned,unsigned,const void *);
@@ -478,12 +497,13 @@ static int (WINAPI *arrays_real_gluBuild2DMipmaps)(unsigned,int,int,int,unsigned
 #include "map_mipmaps.h"
 #endif
 static int WINAPI arrays_gluBuild2DMipmaps(unsigned target,int components,int width,int height,unsigned format,unsigned type,const void *pixels) {
-    arrays_end_frame();
-    arrays_forget_bound_texture(target);
+    int edit=arrays_begin_texture_edit();
+    unsigned foreign=arrays_edit_binding(target,edit);
 #ifdef _WIN32
-    if(map_build_mips(target,components,width,height,format,type,pixels)){ARR_AFTER_STATE();return 0;}
+    if(edit==ARR_LOCAL_EDIT && map_build_mips(target,components,width,height,format,type,pixels)){ARR_AFTER_STATE();return 0;}
 #endif
     int result=arrays_real_gluBuild2DMipmaps(target,components,width,height,format,type,pixels);
+    if(foreign)ta_queue_texture_edit(foreign);
     ARR_AFTER_STATE();return result;
 }
 static unsigned (*arrays_real_glGetError)(void);

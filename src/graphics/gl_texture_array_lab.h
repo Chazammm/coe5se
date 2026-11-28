@@ -47,7 +47,7 @@ static _Thread_local int ta_capable;
 static _Thread_local int ta_context_ok,ta_context_attempted,ta_state_checked,ta_state_ok,ta_drawing;
 // Only the game thread has a stable lifetime for private GL names and deferred draws.
 static _Thread_local int ta_game_thread;
-static _Thread_local int ta_fixed_units,ta_has_pipeline;
+static _Thread_local int ta_fixed_units,ta_clip_planes,ta_has_pipeline;
 static _Thread_local void (*ta_bind_pipeline)(unsigned);
 static void (*ta_scissor)(int,int,int,int);
 static _Thread_local void (*ta_scissor_indexed)(unsigned,int,int,int,int);
@@ -345,6 +345,7 @@ static int ta_load_capabilities(void) {
     }
     ta_has_vertex_program=ta_extension(ext,"GL_ARB_vertex_program");
     ta_has_fragment_program=ta_extension(ext,"GL_ARB_fragment_program");
+    ta_get_int(0x0d32,&ta_clip_planes);
     ta_get_int(0x84e2,&ta_fixed_units);
     if(ta_fixed_units<1 || ta_fixed_units>32)return ta_refuse(FPS_TEXTURE_UNIT);
     ta_indexed_enabled=NULL;
@@ -394,19 +395,18 @@ static void array_texture_begin_frame(void) {array_texture_invalidate_state();}
 static int ta_cap_bit(unsigned cap) {
     const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458};
     for(int i=0;i<7;i++)if(cap==caps[i])return i;
-    if(cap>=0x3000 && cap<0x3006)return 7+(int)(cap-0x3000);
-    if(cap>=0x0c60 && cap<=0x0c63)return 13+(int)(cap-0x0c60);
+    if(cap>=0x0c60 && cap<=0x0c63)return 7+(int)(cap-0x0c60);
     return -1;
 }
 static void ta_note_cap(unsigned cap,int on) {
-    if(cap==TA_TEXTURE_RECTANGLE || cap==0x8620 || cap==0x8804){array_texture_invalidate_state();return;}
+    if((cap>=0x3000 && cap-0x3000<(unsigned)ta_clip_planes) || cap==TA_TEXTURE_RECTANGLE || cap==0x8620 || cap==0x8804){array_texture_invalidate_state();return;}
     if(cap==0x0de1)ta_texture_on=on;
     int bit=ta_cap_bit(cap);
     if(bit>=0)ta_forbidden=on?ta_forbidden|(1u<<bit):ta_forbidden&~(1u<<bit);
 }
 static void ta_read_switches(void) {
     ta_forbidden=0;ta_texture_on=ta_is_enabled(0x0de1)!=0;
-    const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458,0x3000,0x3001,0x3002,0x3003,0x3004,0x3005,0x0c60,0x0c61,0x0c62,0x0c63};
+    const unsigned caps[]={0x0b50,0x0b57,0x0b60,0x0de0,0x806f,0x8513,0x8458,0x0c60,0x0c61,0x0c62,0x0c63};
     for(size_t i=0;i<sizeof(caps)/sizeof(caps[0]);i++)if(ta_is_enabled(caps[i]))ta_note_cap(caps[i],1);
     ta_get_env(0x2300,0x2200,&ta_env_mode);ta_modulate=ta_env_mode==0x2100;
 }
@@ -450,11 +450,11 @@ static int ta_allowed_state(void) {
     ta_get_int(0x0d10,&value);if(value)return ta_refuse(FPS_PIXEL_TRANSFER);
     if(ta_has_sampler) {ta_get_int(0x8919,&value);if(value)return ta_refuse(FPS_SAMPLER_OBJECT);}
     if(ta_has_rectangle && ta_is_enabled(TA_TEXTURE_RECTANGLE))return ta_refuse(FPS_FIXED_FUNCTION);
+    for(int i=0;i<ta_clip_planes;i++)if(ta_is_enabled(0x3000u+i))return ta_refuse(FPS_FIXED_FUNCTION);
     if(ta_track_state)ta_read_switches();
     if(!ta_track_state) {
     if(!ta_is_enabled(0x0de1) || ta_is_enabled(0x0b50) || ta_is_enabled(0x0b57) || ta_is_enabled(0x0b60))return ta_refuse(FPS_FIXED_FUNCTION);
     if(ta_is_enabled(0x0de0) || ta_is_enabled(0x806f) || ta_is_enabled(0x8513) || ta_is_enabled(0x8458))return ta_refuse(FPS_FIXED_FUNCTION);
-    for(unsigned cap=0x3000;cap<0x3006;cap++)if(ta_is_enabled(cap))return ta_refuse(FPS_FIXED_FUNCTION);
     for(unsigned cap=0x0c60;cap<=0x0c63;cap++)if(ta_is_enabled(cap))return ta_refuse(FPS_FIXED_FUNCTION);
     ta_get_env(0x2300,0x2200,&value);if(value!=0x2100)return ta_refuse(FPS_FIXED_FUNCTION);
     }
@@ -735,8 +735,48 @@ static FpsTextureArrayEntry *ta_source_slot(FpsTextureArrayCache *cache,unsigned
     }
     return spare;
 }
+// Foreign contexts can share game textures. Drain edits on the render thread before reusing layers.
+enum { TA_EDIT_LIMIT=TA_CACHE_SIZE+TA_TERRAIN_CACHE_SIZE };
+static unsigned ta_edited_sources[TA_EDIT_LIMIT],ta_edit_count;
+static atomic_int ta_edits_pending;
+static void arrays_end_frame(void);
+static void array_texture_remove(unsigned source);
+
+static void ta_queue_texture_edit(unsigned source) {
+    if(!source)return;
+    ta_registry_enter();
+    if(ta_edit_count<=TA_EDIT_LIMIT && (!ta_edit_count || ta_edited_sources[ta_edit_count-1]!=source)){
+        if(ta_edit_count<TA_EDIT_LIMIT)ta_edited_sources[ta_edit_count]=source;
+        ta_edit_count++;
+    }
+    atomic_store_explicit(&ta_edits_pending,1,memory_order_release);
+    ta_registry_leave();
+}
+
+// A burst exceeding both cache tables retires their entries but retains their pages.
+static void ta_clear_entries(FpsTextureArrayCache *cache) {
+    if(!cache->entries)return;
+    for(unsigned i=0;i<cache->size;i++){
+        FpsTextureArrayEntry *entry=&cache->entries[i];
+        if(entry->source)ta_release_layer(cache,&entry->value);
+    }
+    memset(cache->entries,0,cache->size*sizeof *cache->entries);
+}
+static void ta_apply_texture_edits(void) {
+    arrays_end_frame();
+    ta_registry_enter();
+    if(ta_edit_count>TA_EDIT_LIMIT){
+        ta_clear_entries(&ta_sprite_cache);ta_clear_entries(&ta_terrain_cache);
+    }else{
+        for(unsigned i=0;i<ta_edit_count;i++)array_texture_remove(ta_edited_sources[i]);
+    }
+    ta_edit_count=0;
+    atomic_store_explicit(&ta_edits_pending,0,memory_order_relaxed);
+    ta_registry_leave();
+}
 static int ta_prepare(FpsTextureArrayCache *cache,unsigned source,FpsTextureLayer *out,int allow_upload) {
     if(!ta_game_thread || !source || !out || !ta_allowed_state() || !cache->entries)return 0;
+    if(atomic_load_explicit(&ta_edits_pending,memory_order_acquire))ta_apply_texture_edits();
     if(!ta_program){
         if(!ta_build_program()){ta_program_failed=1;ta_drop_claim();return 0;}
     }

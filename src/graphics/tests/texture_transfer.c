@@ -219,6 +219,12 @@ static void check_native_draw(unsigned texture) {
         assert(!memcmp(pixels[0],pixels[1],4) && pixels[0][0]);
     }
     arrays_glShadeModel(GL_SMOOTH);glColor4f(1,1,1,1);
+    glTexCoord4f(.75f,.5f,0,2);
+    array_texture_begin_frame();arrays_begin_frame();arrays_bind_probe(GL_TEXTURE_2D,texture);
+    arrays_begin_probe(GL_QUADS);
+    assert(arrays_native_open && !arrays_open);
+    arrays_tex2_probe(.25f,.5f);arrays_end_probe();
+    arrays_begin_probe(GL_QUADS);assert(arrays_open);arrays_end_probe();arrays_end_frame();
     arrays_enabled=decor_scope=in_highest=ta_scene_replace=0;
     arrays_invalidate();array_texture_begin_frame();
     assert(!glGetError());
@@ -401,10 +407,62 @@ static void check_context(HDC dc,HGLRC owner) {
 
 typedef struct { HDC dc; HGLRC replacement; GLuint source; } WorkerContext;
 
+// A second sharing context edits one source while the terrain and sprite copies live on the owner.
+static DWORD WINAPI edit_shared_texture(void *arg) {
+    WorkerContext *edit=arg;
+    assert(wglMakeCurrent(edit->dc,edit->replacement));
+    arrays_bind_probe(GL_TEXTURE_2D,edit->source);
+    unsigned char pixels[64*64*4];memset(pixels,201,sizeof pixels);
+    arrays_glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+    assert(!glGetError() && wglMakeCurrent(NULL,NULL));
+    return 0;
+}
+static void check_shared_texture(HDC dc,HGLRC shared,GLuint source) {
+    FpsTextureLayer terrain,sprite,unchanged;
+    ta_scene_replace=1;
+    GLuint other;glGenTextures(1,&other);glBindTexture(GL_TEXTURE_2D,other);
+    unsigned char pixels[64*64*4],actual[sizeof pixels];memset(pixels,133,sizeof pixels);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,64,64,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    assert(ta_prepare(&ta_sprite_cache,other,&unchanged,1));
+    assert(ta_prepare(&ta_terrain_cache,source,&terrain,1) && ta_prepare(&ta_sprite_cache,source,&sprite,1));
+    arrays_real_glTexImage2D=(void *)glTexImage2D;
+    WorkerContext edit={dc,shared,source};
+    HANDLE thread=CreateThread(NULL,0,edit_shared_texture,&edit,0,NULL);
+    assert(thread && WaitForSingleObject(thread,15000)==WAIT_OBJECT_0);CloseHandle(thread);
+    for(unsigned i=0;i<100;i++)ta_queue_texture_edit(90000+i);
+    long long attempts=ta_sprite_cache.attempts;
+    assert(ta_prepare(&ta_sprite_cache,other,&unchanged,0) && attempts==ta_sprite_cache.attempts);
+    assert(!ta_prepare(&ta_terrain_cache,source,&terrain,0) && !ta_prepare(&ta_sprite_cache,source,&sprite,0));
+    assert(ta_prepare(&ta_sprite_cache,source,&sprite,1));
+    memset(pixels,201,sizeof pixels);
+    assert(ta_layer_matches(sprite.array_texture,sprite.layer,0,64,64,pixels,actual));
+    for(unsigned i=0;i<=TA_EDIT_LIMIT;i++)ta_queue_texture_edit(90000+i);
+    assert(!ta_prepare(&ta_sprite_cache,other,&unchanged,0));
+    assert(ta_prepare(&ta_sprite_cache,other,&unchanged,1));
+    array_texture_remove(other);glDeleteTextures(1,&other);ta_scene_replace=0;
+}
+
+// Every clipping plane supported by this driver makes the array shader ineligible.
+static void check_clip_planes(void) {
+    int limit=0;glGetIntegerv(GL_MAX_CLIP_PLANES,&limit);
+    assert(limit==ta_clip_planes && limit>=6);
+    arrays_real_glEnable=glEnable;arrays_real_glDisable=glDisable;
+    for(int i=0;i<limit;i++){
+        assert(ta_allowed_state());
+        arrays_glEnable(GL_CLIP_PLANE0+i);assert(!ta_allowed_state());
+        arrays_glDisable(GL_CLIP_PLANE0+i);assert(ta_allowed_state());
+    }
+    assert(!glGetError());
+}
+
 // A game upload on a second thread retires the old cache even before that thread starts drawing.
 static DWORD WINAPI check_edit_handoff(void *arg) {
     WorkerContext *worker=arg;
     assert(wglMakeCurrent(worker->dc,worker->replacement));
+    assert(!coe5seBeforeNativeDraw());
     glBindTexture(GL_TEXTURE_2D,worker->source);
     unsigned char pixels[64*64*4];memset(pixels,193,sizeof pixels);
     arrays_real_glTexImage2D=(void *)glTexImage2D;
@@ -480,7 +538,8 @@ int main(void) {
         .dwFlags=PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL,.iPixelType=PFD_TYPE_RGBA,.cColorBits=32};
     assert(win && dc && SetPixelFormat(dc,ChoosePixelFormat(dc,&pf),&pf));
     HGLRC context=wglCreateContext(dc);
-    assert(context && wglMakeCurrent(dc,context));
+    HGLRC shared=wglCreateContext(dc);
+    assert(context && shared && wglShareLists(context,shared) && wglMakeCurrent(dc,context));
     map_textures_enabled=1;
     assert(mod_initialize_original_gl() && install_texture_array() && arrays_load_functions());
     assert(arrays_check_context() && ta_initialize_context() && map_copy_image);
@@ -521,6 +580,9 @@ int main(void) {
     check_copy(source);
     ta_terrain_cache.layer_limit=4;
     check_edits_and_stack(source);
+    check_clip_planes();
+    map_texture_pass=0;check_shared_texture(dc,shared,source);map_texture_pass=MAP_TERRAIN;
+    assert(wglDeleteContext(shared));
     array_texture_remove(source);
     ta_read_subimage=NULL;
     ta_init_layer_reader(3,0,"");
@@ -541,6 +603,7 @@ int main(void) {
     check_context(dc,context);
     ta_scene_replace=1;
     assert(ta_prepare(&ta_sprite_cache,source,&seed,1));
+    arrays_enabled=1;
     WorkerContext handoff={dc,context,source};
     assert(wglMakeCurrent(NULL,NULL));
     HANDLE moved=CreateThread(NULL,0,check_edit_handoff,&handoff,0,NULL);
@@ -577,5 +640,5 @@ int main(void) {
         CloseHandle(owner);assert(wglDeleteContext(next.replacement));
     }
     ReleaseDC(win,dc);DestroyWindow(win);
-    puts("Verified texture edits, rectangle targets, army budget, cache recovery, layer readers and context handoff.");
+    puts("Verified texture edits across contexts, clip planes, projective UVs, native draw handoff and cache recovery.");
 }
